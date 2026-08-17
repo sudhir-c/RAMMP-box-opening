@@ -1,0 +1,14 @@
+# Measured bench geometry — PLACEHOLDERS copied from RAMMP-CuRobo's
+# world_real_bench.yaml. MEASURE AT PHASE-1 BENCH TIME (tape measure from
+# base_link: +x forward, +z up; err TALL on the table — too tall costs
+# reachable volume, never safety). After reconciliation this file is the
+# single source of truth; generated variants extend it (worlds.py).
+base_frame: base_link
+
+obstacles:
+  - name: pedestal
+    position: [0.0, 0.0, -0.05]
+    dims: [0.14, 0.14, 0.04]
+  - name: table
+    position: [0.15, 0.0, -0.10]
+    dims: [1.3, 1.4, 0.06]
