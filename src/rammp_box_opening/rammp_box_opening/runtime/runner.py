@@ -13,7 +13,11 @@ from pathlib import Path
 
 from rammp_curobo.geometry import ang_diff
 
-from rammp_box_opening.constants import DRIFT_REPLAN_RAD, SANITY_MARGIN_RAD
+from rammp_box_opening.constants import (
+    CONTACT_SPEED,
+    DRIFT_REPLAN_RAD,
+    SANITY_MARGIN_RAD,
+)
 from rammp_box_opening.runtime import confirm
 from rammp_box_opening.runtime.guards import TorqueGuard, sanity_violations
 from rammp_box_opening.runtime.legs import (
@@ -70,9 +74,17 @@ class Runner:
     # -- gates (checked BEFORE anything executes) ---------------------------
     def _refusal(self, leg):
         if leg.kind is Kind.MOTION:
-            if leg.guard is None and not leg.world.startswith("full"):
+            # Transit-speed legs require the full world. Slow (contact-speed)
+            # unguarded legs are the one exception: a post-contact retreat
+            # must plan against the interaction world its descent used — in
+            # the full world its start would read as inside the container.
+            if (
+                leg.guard is None
+                and leg.speed > CONTACT_SPEED
+                and not leg.world.startswith("full")
+            ):
                 return (
-                    "unguarded MOTION leg planned against %r — full world "
+                    "transit-speed MOTION leg planned against %r — full world "
                     "required (spec §6)" % leg.world
                 )
             if leg.traj is not None:
@@ -197,10 +209,12 @@ class Runner:
         ok = self._leg_ok(lead, outcome)
         detail = info.get("message", "")
         if lead.verify is not None:
+            g_ok, g_pos, _ = self.client.gripper_cmd(None)  # query only
             ok, detail = lead.verify(
                 VerifyCtx(
                     outcome=outcome,
                     depth_m=depth,
+                    gripper_pos=g_pos if g_ok else None,
                     progress=info.get("progress"),
                     torque_peak=info.get("torque_peak"),
                 )
