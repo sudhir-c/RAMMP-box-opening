@@ -1,0 +1,140 @@
+"""Contact guard, trajectory sanity gate, and guarded-descent bookkeeping.
+
+TorqueGuard is the palm-demo pattern with the spec §6 hardening: the
+baseline is anchored at the first ExecuteTrajectory feedback with
+progress > 0 (never at goal-accept), and guarded runs REFUSE to start
+without effort fields (enforced by the Runner, which owns the streams).
+"""
+
+import copy
+from dataclasses import dataclass
+
+from trajectory_msgs.msg import JointTrajectory
+
+from rammp_curobo.geometry import ang_diff
+
+from rammp_box_opening.constants import (
+    BASELINE_TRAVEL_M,
+    POSE_UNCERTAINTY_M,
+    TIP_BIAS_M,
+)
+
+
+class TorqueGuard:
+    def __init__(self, touch_nm):
+        self.touch_nm = float(touch_nm)
+        self.armed = False
+        self._baseline = None
+        self.peak = 0.0
+
+    def on_progress(self, progress):
+        if progress > 0.0:
+            self.armed = True
+
+    def on_efforts(self, wrist_efforts):
+        if not self.armed or wrist_efforts is None:
+            return False
+        if self._baseline is None:
+            self._baseline = [float(v) for v in wrist_efforts]
+            return False
+        dev = max(abs(a - b) for a, b in zip(wrist_efforts, self._baseline))
+        self.peak = max(self.peak, dev)
+        return dev > self.touch_nm
+
+
+@dataclass(frozen=True)
+class GuardSpec:
+    touch_nm: float
+    trip: str  # "press" | "obstruction" | "setdown"
+    depth_window: tuple = None  # "press" only, m below nominal contact z
+    target_z: float = None  # nominal contact z (base_link) for depth calc
+
+
+def sanity_violations(traj, margin_rad):
+    """Per-joint excursion beyond |start->end| + margin: planner wandered.
+
+    Wrap-aware: reported positions wrap to (-pi, pi], so the series is
+    unwrapped by accumulating ang_diff deltas before measuring excursion
+    (joint_3 sits AT +pi at home — spec §3)."""
+    out = []
+    for j, name in enumerate(traj.joint_names):
+        pos = [p.positions[j] for p in traj.points]
+        unwrapped = [pos[0]]
+        for prev, cur in zip(pos, pos[1:]):
+            unwrapped.append(unwrapped[-1] + ang_diff(cur, prev))
+        allowed = abs(unwrapped[-1] - unwrapped[0]) + margin_rad
+        excursion = max(unwrapped) - min(unwrapped)
+        if excursion > allowed:
+            out.append(
+                "%s excursion %.3f rad > |Δ| + margin %.3f" % (name, excursion, allowed)
+            )
+    return out
+
+
+def min_standoff():
+    """Below this the guard baseline could be captured already in contact."""
+    return POSE_UNCERTAINTY_M + TIP_BIAS_M + BASELINE_TRAVEL_M
+
+
+def check_standoff(hover_z, contact_z):
+    gap = hover_z - contact_z
+    if gap < min_standoff():
+        raise ValueError(
+            "hover standoff %.3f m < required %.3f m — the guard baseline "
+            "could be captured in contact (spec §6)" % (gap, min_standoff())
+        )
+
+
+def classify_press(depth_m, window):
+    lo, hi = window
+    return "pressed" if lo <= depth_m <= hi else "rim"
+
+
+def press_outcome(outcome, depth_m, window):
+    if outcome == "touch":
+        if depth_m is None:
+            return False, "trip depth unknown (no tool z)"
+        verdict = classify_press(depth_m, window)
+        if verdict == "pressed":
+            return True, "button pressed at depth %.4f m" % depth_m
+        return False, "rim/edge contact at depth %.4f m (before window)" % depth_m
+    if outcome == "arrived":
+        return False, "reached depth_window.max untripped — no click detected"
+    return False, "descent %s" % outcome
+
+
+def in_band(pos, band):
+    lo, hi = band
+    return lo <= float(pos) <= hi
+
+
+def reverse_retrace(traj, progress):
+    """Plan-free retreat: the executed portion of a descent, reversed.
+
+    Used when post-contact planning fails (the start may read as
+    in-collision, spec §6). Revalidated by the server's own gates."""
+    end = traj.points[-1].time_from_start
+    total = end.sec + end.nanosec * 1e-9
+    cut = total * float(progress)
+    done = [
+        p
+        for p in traj.points
+        if p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 <= cut
+    ]
+    # Round UP one waypoint: cancel latency means the arm traveled beyond
+    # the last fully-elapsed point; the retrace must cover that stretch.
+    if len(done) < len(traj.points):
+        done.append(traj.points[len(done)])
+    out = JointTrajectory()
+    out.joint_names = list(traj.joint_names)
+    times = [p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 for p in done]
+    t_deep = times[-1]
+    for p, t in zip(reversed(done), reversed(times)):
+        q = copy.deepcopy(p)
+        q.velocities = [0.0] * len(p.positions)
+        q.accelerations = [0.0] * len(p.positions)
+        t_new = t_deep - t
+        q.time_from_start.sec = int(t_new)
+        q.time_from_start.nanosec = int(round((t_new - int(t_new)) * 1e9))
+        out.points.append(q)
+    return out
