@@ -113,6 +113,14 @@ class PlannerClient:
                 rclpy.spin_once(self.node, timeout_sec=0.1)
         return None
 
+    def planner_reachable(self, timeout_s=5.0):
+        """True when all three planner action servers respond."""
+        return (
+            self._plan_pose.wait_for_server(timeout_sec=timeout_s)
+            and self._plan_joints.wait_for_server(timeout_sec=2.0)
+            and self._execute.wait_for_server(timeout_sec=2.0)
+        )
+
     # -- planning ----------------------------------------------------------
     def _call(self, client, goal, timeout_s=120.0):
         if not client.wait_for_server(timeout_sec=5.0):

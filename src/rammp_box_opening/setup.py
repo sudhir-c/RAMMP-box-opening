@@ -26,6 +26,18 @@ setup(
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
-        "console_scripts": [],
+        "console_scripts": [
+            "open_container = rammp_box_opening.tasks.open_container:main",
+            "pickup_container = rammp_box_opening.tasks.pickup_container:main",
+            "approach = rammp_box_opening.tasks.primitive_clis:main_approach",
+            "press = rammp_box_opening.tasks.primitive_clis:main_press",
+            "grasp = rammp_box_opening.tasks.primitive_clis:main_grasp",
+            "lift = rammp_box_opening.tasks.primitive_clis:main_lift",
+            "place = rammp_box_opening.tasks.primitive_clis:main_place",
+            "retreat = rammp_box_opening.tasks.primitive_clis:main_retreat",
+            "home_arm = rammp_box_opening.tasks.primitive_clis:main_home",
+            "smoke_plan = rammp_box_opening.tasks.smoke_plan:main",
+            "preflight = rammp_box_opening.tasks.preflight:main",
+        ],
     },
 )
