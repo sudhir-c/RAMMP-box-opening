@@ -40,6 +40,7 @@ class Leg:
     invalidates_downstream: bool = False
     verify: object = None  # Callable[[VerifyCtx], tuple[bool, str]] | None
     gripper_cmd: float = None
+    world_path: str = None  # generated world YAML to push (SetWorld wants a path)
     stale: bool = field(default=False, compare=False)  # set by the Runner
 
 
