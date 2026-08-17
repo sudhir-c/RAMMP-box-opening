@@ -11,7 +11,10 @@ from rammp_box_opening.constants import HOME
 from rammp_box_opening.models.container import wrist_flat_quat
 from rammp_box_opening.runtime.client import PlannerClient
 
-TARGET = [0.45, 0.0, 0.35]  # benign frontal pose, well above any bench
+# Benign frontal pose, well above any bench. NOT closer/lower: at
+# r=0.45, z=0.35 the wrist-flat goal has no collision-free IK (verified
+# against the live planner — the flange sits 12 cm behind the fingertip).
+TARGET = [0.55, 0.0, 0.40]
 
 
 def main():
