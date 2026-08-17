@@ -38,9 +38,6 @@ prerequisites exist.
   with ros2_kortex from `~/RAMMP-Kinova/ros2_ws`, launched by the human.
 - No autonomous motion from agent sessions, ever. Motion CLIs are run by
   the human, dry-run by default, with a human on the physical e-stop.
-- No neural perception, no model downloads (disk: <4 GB free, 94% —
-  re-check `df -h /` before any install). Phase 2 is fiducial-based;
-  tag-free detection is a possible follow-on, not planned here.
 
 ## 2. The planning service we consume (contract summary)
 
@@ -84,7 +81,6 @@ Client-relevant server behavior (verified in `planner_node.py`):
   explicitly (non-interactive shells skip `~/.zshrc`).
 - Arm: Gen3 at 192.168.1.10, ros2_kortex bringup from RAMMP-Kinova ws.
   Exactly one arm stack at a time.
-- Disk: <4 GB free (94%). Phases 0–1 install nothing.
 - Joint reports wrap to (−π, π]; joint_3 sits AT +π at home — every angle
   comparison goes through `ang_diff`.
 - Quaternion orders: ROS interfaces are xyzw; cuRobo — and the helpers
@@ -253,7 +249,8 @@ Neither task computes a pose itself. All poses derive from
 button offset from container origin, lid-rim and body grasp
 offsets/widths, expected grip bands, press depth window — measured at
 Phase-1 bench time) combined with a `PoseSource`: Phase 1 a hand-measured
-container pose in config, Phase 2 a fiducial detection. Same interface,
+container pose in config, Phase 2 a perception-based detection
+(method chosen at Phase-2 planning). Same interface,
 so task code does not change between phases. The one pose that is not
 container-derived — the lid set-down spot — lives in the task section of
 the container config (`open_container.lid_place`), overridable by CLI
@@ -418,12 +415,12 @@ Phase-3 metrics source and the hardware debugging record.
   second view for container pose when the wrist camera is occluded or too
   close during interaction — its driver is ALREADY installed system-wide
   (`ros-humble-orbbec-camera 2.8.6`, `gemini_330_series.launch.py`), so
-  the remaining cost is configuration and extrinsics, not disk.
-  Depth→base_link via the recovered `scan_common.py` pipeline. Fiducial:
-  **ArUco via the installed opencv-contrib** (approved deviation from the
-  brief's "AprilTag" — same fiducial-first intent, zero new installs).
-  Tag pose → derived button/lid/grasp poses + container cuboid pushed via
-  `set_world`. Planned separately after Phase 1.
+  the remaining cost is configuration and extrinsics.
+  Depth→base_link via the recovered `scan_common.py` pipeline. Detection
+  method is chosen at Phase-2 planning on task merit — fiducial (ArUco /
+  AprilTag) and tag-free / learned detection are all in scope. Detected
+  container pose → derived button/lid/grasp poses + container cuboid
+  pushed via `set_world`. Planned separately after Phase 1.
 - **Phase 3 — robustness + task 2:** randomized placement within reach,
   per-primitive retry with verification, `pickup_container`. Success
   metric: **5 consecutive** open+pickup cycles from random placements
@@ -437,14 +434,18 @@ Phase-3 metrics source and the hardware debugging record.
 2. Scope: box opening ONLY — package named `rammp_box_opening`, no ADL
    generalization.
 3. Interfaces: overlay `~/RAMMP-CuRobo/install` — no copy, no submodule.
-   Docker rejected for this bench (disk; and it wouldn't remove the
-   client-side interfaces need anyway).
+   Docker rejected for this bench (it wouldn't remove the client-side
+   interfaces need anyway).
 4. Phase-2 cameras: both — D405 (will be plugged in, wrist) and Orbbec
    Gemini 336L (static second view).
-5. Fiducial: ArUco via existing opencv-contrib instead of an AprilTag
-   install.
+5. ~~Fiducial: ArUco via existing opencv-contrib instead of an AprilTag
+   install.~~ Superseded 2026-08-17 (see 7).
 6. Git: repo-local identity `RAMMP <chrisman4247@gmail.com>`; local
    commits only until a remote is chosen (`gh` not installed).
+7. (2026-08-17) Disk constraint lifted — more Jetson storage is coming,
+   so "no model downloads / zero new installs" no longer gates design
+   choices. Phase-2 detection method is picked on task merit at Phase-2
+   planning; decision 5's install-driven rationale is superseded.
 
 ## 10. Risks and open items
 
@@ -464,7 +465,7 @@ Phase-3 metrics source and the hardware debugging record.
   change).
 - **Triple OpenCV installs** (`opencv-python` 4.10, `opencv-python-headless`
   4.10, `opencv-contrib-python` 4.11) risk shadowing; today `import cv2`
-  resolves to 4.11 with `cv2.aruco` present — Phase 2 must re-verify
-  before relying on it.
+  resolves to 4.11 with `cv2.aruco` present — if Phase 2 chooses ArUco,
+  re-verify before relying on it.
 - **Gripper feedback bands** for lid-rim vs body grasps are unknown until
   measured; `expect_band` values live in the container model config.
