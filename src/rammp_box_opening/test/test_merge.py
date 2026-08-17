@@ -94,8 +94,7 @@ def test_can_merge_is_symmetric_gate():
 def test_merge_trajectories_offsets_time():
     merged = merge_trajectories([_traj([0.0, 0.1]), _traj([0.1, 0.2])])
     times = [
-        p.time_from_start.sec + p.time_from_start.nanosec * 1e-9
-        for p in merged.points
+        p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 for p in merged.points
     ]
     assert times == sorted(times)
     assert times[-1] == pytest.approx(2.0)  # 1 s + 1 s, offset applied

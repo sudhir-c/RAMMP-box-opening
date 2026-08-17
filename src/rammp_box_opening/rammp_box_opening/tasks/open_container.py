@@ -39,12 +39,12 @@ def build_legs(ctx, lid_place=None):
     )
     legs = []
     for prim in [
-        Approach(hover_above(button, m.hover_standoff), press_quat,
-                 "approach:button"),
+        Approach(hover_above(button, m.hover_standoff), press_quat, "approach:button"),
         Press(),
         Retreat(m.hover_standoff),
-        Approach(hover_above(lid_grasp_pt, m.hover_standoff), grasp_quat,
-                 "approach:lid"),
+        Approach(
+            hover_above(lid_grasp_pt, m.hover_standoff), grasp_quat, "approach:lid"
+        ),
         Grasp(m.lid_grasp, "grasp:lid"),
         Lift(LIFT_DZ, band=m.lid_grasp.expect_band),
     ]:

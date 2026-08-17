@@ -84,9 +84,9 @@ def test_approach_targets_hover_not_contact():
 def test_chaining_start_joints_flow():
     c = ctx()
     st = state()
-    legs_a, st = Approach(
-        [0.45, 0.0, 0.1], [0.5, 0.5, 0.5, 0.5], "approach:a"
-    ).plan(c, st)
+    legs_a, st = Approach([0.45, 0.0, 0.1], [0.5, 0.5, 0.5, 0.5], "approach:a").plan(
+        c, st
+    )
     legs_b, st = Home().plan(c, st)
     # same chain (no contact between them) and b planned from a's end
     assert legs_a[0].chain == legs_b[0].chain

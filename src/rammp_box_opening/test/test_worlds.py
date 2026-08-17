@@ -58,8 +58,9 @@ def test_reduction_plane_below_deepest_command():
 def test_interaction_ring_leaves_corridor_but_blocks_lateral():
     m, cp = _model_pose()
     tx = [0.45, 0.0, 0.09]
-    w = interaction_world(_bench(), m, cp, target_xyz=tx, contact_z=0.09,
-                          depth_max=0.012)
+    w = interaction_world(
+        _bench(), m, cp, target_xyz=tx, contact_z=0.09, depth_max=0.012
+    )
     cs = _cuboids(w)
     ring = [o for n, o in cs.items() if n.startswith("ring_")]
     assert len(ring) == 4

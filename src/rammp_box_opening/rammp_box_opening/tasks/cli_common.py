@@ -42,23 +42,30 @@ def make_parser(desc):
         description=desc, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument(
-        "--execute", action="store_true",
+        "--execute",
+        action="store_true",
         help="after previewing, offer to execute (planner must be launched "
         "with execute:=true for arm motion; NOTE: gripper closes go over "
         "the direct gripper action — the runner refuses them while the "
         "planner is dry-run, planner dry-run alone does not prevent them)",
     )
     ap.add_argument(
-        "--container", default=None,
+        "--container",
+        default=None,
         help="container config YAML (default: installed oxo_pop.yaml)",
     )
     ap.add_argument(
-        "--bench-world", default=None,
+        "--bench-world",
+        default=None,
         help="bench world YAML (default: installed world_bench.yaml)",
     )
     ap.add_argument(
-        "--lid-place", type=float, nargs=3, metavar=("X", "Y", "Z"),
-        default=None, help="override the lid set-down spot (base_link, m)",
+        "--lid-place",
+        type=float,
+        nargs=3,
+        metavar=("X", "Y", "Z"),
+        default=None,
+        help="override the lid set-down spot (base_link, m)",
     )
     return ap
 

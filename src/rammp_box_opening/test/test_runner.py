@@ -71,11 +71,14 @@ class FakeClient:
         if self.exec_script:
             outcome, info = self.exec_script.pop(0)
         else:
-            outcome, info = "arrived", {
-                "message": "ok",
-                "progress": 1.0,
-                "torque_peak": 0.0,
-            }
+            outcome, info = (
+                "arrived",
+                {
+                    "message": "ok",
+                    "progress": 1.0,
+                    "torque_peak": 0.0,
+                },
+            )
         if outcome != "failed":
             self.live = list(traj.points[-1].positions)
         return outcome, info
@@ -98,8 +101,19 @@ class FakeStore:
         return name, name + ".yaml"
 
 
-def leg(name, start=Q0, end=Q1, chain=0, speed=0.25, world="full", guard=None,
-        kind=Kind.MOTION, verify=None, invalidates=False, cmd=None):
+def leg(
+    name,
+    start=Q0,
+    end=Q1,
+    chain=0,
+    speed=0.25,
+    world="full",
+    guard=None,
+    kind=Kind.MOTION,
+    verify=None,
+    invalidates=False,
+    cmd=None,
+):
     return Leg(
         name=name,
         kind=kind,
@@ -155,8 +169,9 @@ def test_gripper_gate_reads_planner_param(tmp_path):
 def test_guarded_leg_refused_without_efforts(tmp_path):
     c = FakeClient()
     c.efforts = False
-    g = GuardSpec(touch_nm=3.0, trip="press", depth_window=(0.004, 0.012),
-                  target_z=0.09)
+    g = GuardSpec(
+        touch_nm=3.0, trip="press", depth_window=(0.004, 0.012), target_z=0.09
+    )
     res = runner(c, tmp_path).run(
         [leg("press", guard=g, world="interaction_b")], execute=True, assume_yes=True
     )
@@ -193,8 +208,10 @@ def test_no_motion_retry_once(tmp_path):
 def test_other_failure_stops_without_retry(tmp_path):
     c = FakeClient()
     c.exec_script = [
-        ("failed", {"message": "controller rejected", "progress": 0.4,
-                    "torque_peak": None})
+        (
+            "failed",
+            {"message": "controller rejected", "progress": 0.4, "torque_peak": None},
+        )
     ]
     res = runner(c, tmp_path).run(
         [leg("a"), leg("b", Q1, Q2)], execute=True, assume_yes=True
@@ -224,8 +241,9 @@ def test_press_verify_uses_depth(tmp_path):
 
     c = FakeClient()
     c.tool_z = 0.082  # 8 mm below target_z 0.09
-    g = GuardSpec(touch_nm=3.0, trip="press", depth_window=(0.004, 0.012),
-                  target_z=0.09)
+    g = GuardSpec(
+        touch_nm=3.0, trip="press", depth_window=(0.004, 0.012), target_z=0.09
+    )
     c.exec_script = [
         ("touch", {"message": "contact", "progress": 0.6, "torque_peak": 4.2})
     ]

@@ -46,7 +46,8 @@ def main():
 
     parser = cli_common.make_parser(__doc__)
     parser.add_argument(
-        "--hold", action="store_true",
+        "--hold",
+        action="store_true",
         help="keep the container lifted instead of placing it back",
     )
     args = parser.parse_args()

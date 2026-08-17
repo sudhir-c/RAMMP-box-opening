@@ -59,8 +59,9 @@ def reduction_plane_z(contact_z, depth_max):
     return contact_z - depth_max - PLANE_MARGIN_M
 
 
-def interaction_world(bench, model, cpose, target_xyz, contact_z, depth_max,
-                      lid_at=None):
+def interaction_world(
+    bench, model, cpose, target_xyz, contact_z, depth_max, lid_at=None
+):
     obstacles = _bench_obstacles(bench)
     plane = reduction_plane_z(contact_z, depth_max)
     if plane > cpose.xyz[2]:  # body below the plane stays solid
@@ -99,14 +100,28 @@ class WorldStore:
         )
         self._dir.mkdir(parents=True, exist_ok=True)
 
-    def push_name(self, kind, model=None, cpose=None, target_xyz=None,
-                  contact_z=None, depth_max=None, lid_at=None, tag=""):
+    def push_name(
+        self,
+        kind,
+        model=None,
+        cpose=None,
+        target_xyz=None,
+        contact_z=None,
+        depth_max=None,
+        lid_at=None,
+        tag="",
+    ):
         if kind == "full":
             world = full_world(self._bench, model, cpose, lid_at=lid_at)
             name = "full" + (("_" + tag) if tag else "")
         elif kind == "interaction":
             world = interaction_world(
-                self._bench, model, cpose, target_xyz, contact_z, depth_max,
+                self._bench,
+                model,
+                cpose,
+                target_xyz,
+                contact_z,
+                depth_max,
                 lid_at=lid_at,
             )
             name = "interaction" + (("_" + tag) if tag else "")

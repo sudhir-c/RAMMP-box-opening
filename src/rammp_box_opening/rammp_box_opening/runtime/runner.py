@@ -131,8 +131,9 @@ class Runner:
             if lead.world != self._last_world:
                 ok, msg = self.client.set_world(lead.world_path or lead.world)
                 if not ok:
-                    res = LegResult(lead.name, "refused", False,
-                                    "set_world failed: " + msg)
+                    res = LegResult(
+                        lead.name, "refused", False, "set_world failed: " + msg
+                    )
                     self._log(res, lead)
                     results.append(res)
                     return results
@@ -144,8 +145,9 @@ class Runner:
                 if stale or self._drifted(group):
                     group, next_chain = self._replan_group(group, next_chain)
                     if group is None:
-                        res = LegResult(lead.name, "failed", False,
-                                        "re-plan from live state failed")
+                        res = LegResult(
+                            lead.name, "failed", False, "re-plan from live state failed"
+                        )
                         self._log(res, lead)
                         results.append(res)
                         return results
@@ -168,9 +170,7 @@ class Runner:
     def _drifted(self, group):
         start = group[0].traj.points[0].positions
         live = self.client.joints()
-        return (
-            max(abs(ang_diff(a, b)) for a, b in zip(live, start)) > DRIFT_REPLAN_RAD
-        )
+        return max(abs(ang_diff(a, b)) for a, b in zip(live, start)) > DRIFT_REPLAN_RAD
 
     def _replan_group(self, group, next_chain):
         """Re-plan each leg of the group from live state, same targets."""

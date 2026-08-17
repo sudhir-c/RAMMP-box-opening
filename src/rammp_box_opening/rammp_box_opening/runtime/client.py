@@ -47,7 +47,9 @@ class PlannerClient:
         self._eff = None
         self._gripper_pos = None
         node.create_subscription(JointState, "/joint_states", self._js_cb, 10)
-        self._plan_pose = ActionClient(node, PlanToPose, NODE_NAMESPACE + "/plan_to_pose")
+        self._plan_pose = ActionClient(
+            node, PlanToPose, NODE_NAMESPACE + "/plan_to_pose"
+        )
         self._plan_joints = ActionClient(
             node, PlanToJoints, NODE_NAMESPACE + "/plan_to_joints"
         )

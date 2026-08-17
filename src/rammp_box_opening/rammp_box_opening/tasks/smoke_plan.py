@@ -20,9 +20,7 @@ def main():
     client = PlannerClient(node)
     plan = client.plan_to_pose(TARGET, wrist_flat_quat(TARGET), HOME)
     if plan is None or not plan.success:
-        raise SystemExit(
-            "SMOKE FAILED: %s" % getattr(plan, "message", "no response")
-        )
+        raise SystemExit("SMOKE FAILED: %s" % getattr(plan, "message", "no response"))
     last = plan.trajectory.points[-1].time_from_start
     print(
         "SMOKE OK: %d points, %.2f s at full speed (planning %.2f s)"

@@ -86,8 +86,9 @@ def _interaction_world(ctx, target_xyz, contact_z, depth_max, tag):
     )
 
 
-def _plan_motion(ctx, state, name, target, world, speed, guard=None,
-                 invalidates=False, verify=None):
+def _plan_motion(
+    ctx, state, name, target, world, speed, guard=None, invalidates=False, verify=None
+):
     world_name, world_path = world
     kind, *rest = target
     if kind == "pose":
@@ -116,9 +117,7 @@ def _plan_motion(ctx, state, name, target, world, speed, guard=None,
         verify=verify,
     )
     next_chain = state.chain + 1 if invalidates else state.chain
-    return leg, PlanState(
-        joints=end, chain=next_chain, contact_broke_chain=invalidates
-    )
+    return leg, PlanState(joints=end, chain=next_chain, contact_broke_chain=invalidates)
 
 
 def _gripper_leg(ctx, state, name, cmd, world, verify=None):
@@ -150,8 +149,12 @@ class Approach:
     def plan(self, ctx, state):
         world = _full_world(ctx)
         leg, state = _plan_motion(
-            ctx, state, self.name, ("pose", self.target_xyz, self.quat),
-            world, TRANSIT_SPEED,
+            ctx,
+            state,
+            self.name,
+            ("pose", self.target_xyz, self.quat),
+            world,
+            TRANSIT_SPEED,
         )
         return [leg], state
 
@@ -173,7 +176,9 @@ class Press:
         close = _gripper_leg(ctx, state, "press:close", GRIPPER_CMD_CLOSED, world)
         target = [button[0], button[1], button[2] - window[1]]
         guard = GuardSpec(
-            touch_nm=m.touch_nm, trip="press", depth_window=window,
+            touch_nm=m.touch_nm,
+            trip="press",
+            depth_window=window,
             target_z=button[2],
         )
 
@@ -181,8 +186,15 @@ class Press:
             return press_outcome(v.outcome, v.depth_m, window)
 
         descend, state = _plan_motion(
-            ctx, state, "press:down", ("pose", target, quat), world,
-            CONTACT_SPEED, guard=guard, invalidates=True, verify=verify,
+            ctx,
+            state,
+            "press:down",
+            ("pose", target, quat),
+            world,
+            CONTACT_SPEED,
+            guard=guard,
+            invalidates=True,
+            verify=verify,
         )
         return [close, descend], state
 
@@ -202,15 +214,22 @@ class Grasp:
         check_standoff(point[2] + m.hover_standoff, point[2])
         world = _interaction_world(ctx, point, point[2], 0.0, self.name)
         ctx.last_world = world
-        guard = GuardSpec(touch_nm=m.touch_nm, trip="obstruction",
-                          target_z=point[2])
+        guard = GuardSpec(touch_nm=m.touch_nm, trip="obstruction", target_z=point[2])
         descend, state = _plan_motion(
-            ctx, state, self.name + ":down", ("pose", point, quat), world,
-            CONTACT_SPEED, guard=guard,
+            ctx,
+            state,
+            self.name + ":down",
+            ("pose", point, quat),
+            world,
+            CONTACT_SPEED,
+            guard=guard,
         )
         close = _gripper_leg(
-            ctx, state, self.name + ":close",
-            m.width_to_command(self.spec.width_m), world,
+            ctx,
+            state,
+            self.name + ":close",
+            m.width_to_command(self.spec.width_m),
+            world,
             verify=band_verify(self.spec.expect_band),
         )
         return [descend, close], state
@@ -234,8 +253,13 @@ class Lift:
         world = ctx.last_world or _full_world(ctx)
         verify = band_verify(self.band) if self.band is not None else None
         leg, state = _plan_motion(
-            ctx, state, self.name, ("pose", target, list(quat)), world,
-            CONTACT_SPEED, verify=verify,
+            ctx,
+            state,
+            self.name,
+            ("pose", target, list(quat)),
+            world,
+            CONTACT_SPEED,
+            verify=verify,
         )
         return [leg], state
 
@@ -253,30 +277,37 @@ class Place:
 
     def plan(self, ctx, state):
         m = ctx.model
-        hover = hover_above(
-            self.target_xyz, m.hover_standoff + m.lid_dims[2]
-        )
+        hover = hover_above(self.target_xyz, m.hover_standoff + m.lid_dims[2])
         full = _full_world(ctx)
         transit, state = _plan_motion(
-            ctx, state, self.name + ":transit", ("pose", hover, self.quat),
-            full, TRANSIT_SPEED,
+            ctx,
+            state,
+            self.name + ":transit",
+            ("pose", hover, self.quat),
+            full,
+            TRANSIT_SPEED,
         )
         world = _interaction_world(
             ctx, self.target_xyz, self.target_xyz[2], 0.0, self.name
         )
         ctx.last_world = world
-        guard = GuardSpec(touch_nm=m.touch_nm, trip="setdown",
-                          target_z=self.target_xyz[2])
+        guard = GuardSpec(
+            touch_nm=m.touch_nm, trip="setdown", target_z=self.target_xyz[2]
+        )
         descend, state = _plan_motion(
-            ctx, state, self.name + ":down",
-            ("pose", self.target_xyz, self.quat), world, CONTACT_SPEED,
-            guard=guard, invalidates=True,
+            ctx,
+            state,
+            self.name + ":down",
+            ("pose", self.target_xyz, self.quat),
+            world,
+            CONTACT_SPEED,
+            guard=guard,
+            invalidates=True,
         )
         legs = [transit, descend]
         if self.open_after:
             legs.append(
-                _gripper_leg(ctx, state, self.name + ":open", GRIPPER_CMD_OPEN,
-                             world)
+                _gripper_leg(ctx, state, self.name + ":open", GRIPPER_CMD_OPEN, world)
             )
         return legs, state
 
@@ -298,7 +329,11 @@ class Retreat:
         target = [xyz[0], xyz[1], xyz[2] + self.dz]
         world = ctx.last_world or _full_world(ctx)
         leg, state = _plan_motion(
-            ctx, state, self.name, ("pose", target, list(quat)), world,
+            ctx,
+            state,
+            self.name,
+            ("pose", target, list(quat)),
+            world,
             CONTACT_SPEED,
         )
         return [leg], state

@@ -96,8 +96,9 @@ def main_grasp():
         point = from_container(cp, spec.offset)
         quat = attitude_quat(spec.attitude_rpy_deg, cp.yaw)
         return [
-            Approach(hover_above(point, m.hover_standoff), quat,
-                     "approach:" + args.grasp),
+            Approach(
+                hover_above(point, m.hover_standoff), quat, "approach:" + args.grasp
+            ),
             Grasp(spec, "grasp:" + args.grasp),
         ]
 
@@ -137,9 +138,7 @@ def main_retreat():
         xyz = ctx.client.tool_xyz()
         if xyz is None:
             raise SystemExit("no TF for tool_frame — is the arm bringup running?")
-        ctx.last_pose = (
-            xyz, attitude_quat(m.press_attitude_rpy_deg, cp.yaw)
-        )
+        ctx.last_pose = (xyz, attitude_quat(m.press_attitude_rpy_deg, cp.yaw))
         return [Retreat(args.dz)]
 
     _run(args, prims)

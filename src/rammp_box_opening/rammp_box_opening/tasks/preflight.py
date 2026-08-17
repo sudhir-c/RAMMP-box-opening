@@ -21,7 +21,9 @@ def _controllers(node):
 
         from rammp_box_opening.runtime.client import spin_until_done
 
-        cli = node.create_client(ListControllers, "/controller_manager/list_controllers")
+        cli = node.create_client(
+            ListControllers, "/controller_manager/list_controllers"
+        )
         if not cli.wait_for_service(timeout_sec=3.0):
             return None
         resp = spin_until_done(node, cli.call_async(ListControllers.Request()), 5.0)
@@ -49,8 +51,10 @@ def main():
         client.joints()
         fresh = time.monotonic() - t0
         efforts = client.efforts_present()
-        print("PASS  /joint_states fresh (%.1f s) — efforts %s"
-              % (fresh, "present" if efforts else "MISSING"))
+        print(
+            "PASS  /joint_states fresh (%.1f s) — efforts %s"
+            % (fresh, "present" if efforts else "MISSING")
+        )
         if not efforts:
             print("FAIL  effort fields absent — guarded primitives will refuse")
             failures += 1
