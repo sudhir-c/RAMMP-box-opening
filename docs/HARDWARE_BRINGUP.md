@@ -56,8 +56,14 @@ With the container at its bench spot:
 5. `press.depth_window`: press the button by hand with a caliper —
    `min` = travel where the seal audibly/tactilely releases, `max` = full
    bottom-out travel plus ~3 mm cancel-latency budget.
-6. `bench_pose`: container bottom-center in base_link + yaw.
-7. `open_container.lid_place`: a clear spot ≥ container-width away.
+6. `bench_pose`: container bottom-center in base_link + yaw. **Place it
+   inside the measured tool-down reach band** (README "Where the
+   container may sit"; raw map `docs/reach_map.json`): button x between
+   0.25 and ~0.70 m radial, y within ±0.45. After reconciling the bench
+   geometry (2a), re-run `python3 scripts/reach_probe.py` (~2 min,
+   offline) and re-check before committing the pose.
+7. `open_container.lid_place`: a clear spot ≥ container-width away —
+   also inside the reach band.
 8. `hover_standoff`: keep ≥ 0.06 (must exceed the 0.051 m guard floor:
    2 cm pose uncertainty + 2.1 cm tip bias + 1 cm baseline travel).
 
@@ -86,8 +92,13 @@ With the container at its bench spot:
    `execute` param and controller states print as INFO.
 2. **Abort drill** (every session, no exceptions): start
    `ros2 run rammp_box_opening home_arm --execute` (type `yes`), then
-   Ctrl+C mid-motion. PASS = the arm stops and holds immediately.
-   A session does not proceed past a failed drill.
+   Ctrl+C mid-motion. PASS = the arm stops and holds immediately AND the
+   CLI prints `cancel delivered; controller stops and holds` (that line
+   is the server's confirmation, not a hope). A session does not proceed
+   past a failed drill. The software half is stub-proven off-bench by
+   `python3 scripts/abort_e2e.py` (isolated domain, no arm) — run it
+   after any client/runner/CLI change, BEFORE burning bench time on the
+   live drill.
 
 ## 4. The attended ladder (Phase 1, spec §8)
 
