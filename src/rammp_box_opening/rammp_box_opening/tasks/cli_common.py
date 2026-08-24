@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import rclpy
+from rclpy.signals import SignalHandlerOptions
 
 from rammp_box_opening.models.container import (
     ConfigPoseSource,
@@ -18,6 +19,7 @@ from rammp_box_opening.models.container import (
     ContainerPose,
 )
 from rammp_box_opening.primitives.core import Ctx
+from rammp_box_opening.runtime.abort import AbortFlag, install_sigint
 from rammp_box_opening.runtime.client import PlannerClient
 from rammp_box_opening.runtime.runner import Runner
 from rammp_box_opening.worlds import WorldStore
@@ -86,9 +88,14 @@ def build_ctx(args):
             "Phase-1 measurement worksheet (docs/HARDWARE_BRINGUP.md) and "
             "flip it before any hardware execution (dry-run is fine)."
         )
-    rclpy.init()
+    # own SIGINT: an in-flight stroke must get its cancel delivered on a
+    # live context before we exit (runtime/abort.py; proven by
+    # scripts/abort_e2e.py — rclpy's default handler makes it a race)
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    abort = AbortFlag()
+    install_sigint(abort)
     node = rclpy.create_node("rammp_box_opening")
-    client = PlannerClient(node)
+    client = PlannerClient(node, abort=abort)
     ctx = Ctx(
         model=model,
         cpose=ConfigPoseSource(cfg).container_pose(),
@@ -103,7 +110,10 @@ def build_ctx(args):
 def run_task(args, build_legs, **kwargs):
     ctx, runner = build_ctx(args)
     legs = build_legs(ctx, **{k: v for k, v in kwargs.items() if v is not None})
-    results = runner.run(legs, execute=args.execute)
+    try:
+        results = runner.run(legs, execute=args.execute)
+    except KeyboardInterrupt:
+        sys.exit(130)  # the abort path already reported what was confirmed
     bad = [r for r in results if not r.ok]
     if bad:
         sys.exit(1)

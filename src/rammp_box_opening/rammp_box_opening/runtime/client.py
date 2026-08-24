@@ -41,8 +41,9 @@ def spin_until_done(node, future, timeout_s):
 
 
 class PlannerClient:
-    def __init__(self, node):
+    def __init__(self, node, abort=None):
         self.node = node
+        self._abort = abort  # AbortFlag when the CLI owns SIGINT (abort.py)
         self._q = None
         self._eff = None
         self._gripper_pos = None
@@ -153,6 +154,19 @@ class PlannerClient:
         return self._call(self._plan_joints, g)
 
     # -- execution ---------------------------------------------------------
+    def _cancel_confirm(self, send, result_future):
+        """Ctrl+C path: cancel on a live context and report what the server
+        actually confirmed — never claim a stop that wasn't answered."""
+        spin_until_done(self.node, send.cancel_goal_async(), 5.0)
+        wrapped = spin_until_done(self.node, result_future, 10.0)
+        if wrapped is not None:
+            print("\nCtrl+C — cancel delivered; controller stops and holds")
+        else:
+            print(
+                "\nCtrl+C — cancel sent; no result confirmation in 10 s — "
+                "check the arm"
+            )
+
     def execute(self, traj, speed, guard=None):
         """Run one trajectory; outcome 'arrived' | 'touch' | 'failed'.
 
@@ -160,6 +174,8 @@ class PlannerClient:
         feed it; a trip cancels the goal (controller stops and holds)."""
         info = {"message": "", "progress": 0.0, "torque_peak": None}
         goal = ExecuteTrajectory.Goal(trajectory=traj, speed_scale=float(speed))
+        if self._abort is not None and self._abort.requested:
+            raise KeyboardInterrupt  # aborted before this leg ever started
         if not self._execute.wait_for_server(timeout_sec=5.0):
             info["message"] = "execute_trajectory server not available"
             return "failed", info
@@ -169,31 +185,50 @@ class PlannerClient:
             if guard is not None:
                 guard.on_progress(info["progress"])
 
-        send = spin_until_done(
-            self.node, self._execute.send_goal_async(goal, feedback_callback=_fb), 10.0
-        )
-        if send is None or not send.accepted:
-            info["message"] = "goal not accepted"
-            return "failed", info
-        result_future = send.get_result_async()
-        contact = False
-        t0 = time.monotonic()
+        # goal_in_flight makes SIGINT set the flag instead of raising: the
+        # loop below then delivers the cancel on a LIVE context (abort.py)
+        if self._abort is not None:
+            self._abort.goal_in_flight = True
         try:
-            while not result_future.done():
-                rclpy.spin_once(self.node, timeout_sec=0.05)
-                if guard is not None and guard.on_efforts(self.wrist_efforts()):
-                    contact = True
-                    spin_until_done(self.node, send.cancel_goal_async(), 3.0)
-                    spin_until_done(self.node, result_future, 10.0)
-                    break
-                if time.monotonic() - t0 > 240:
-                    spin_until_done(self.node, send.cancel_goal_async(), 3.0)
-                    info["message"] = "execution watchdog timeout (240 s)"
-                    return "failed", info
-        except KeyboardInterrupt:
-            spin_until_done(self.node, send.cancel_goal_async(), 3.0)
-            print("\nCtrl+C — goal cancelled, arm holds")
-            raise
+            send = spin_until_done(
+                self.node,
+                self._execute.send_goal_async(goal, feedback_callback=_fb),
+                10.0,
+            )
+            if send is None or not send.accepted:
+                info["message"] = "goal not accepted"
+                return "failed", info
+            result_future = send.get_result_async()
+            contact = False
+            aborted = False
+            t0 = time.monotonic()
+            try:
+                while not result_future.done():
+                    if self._abort is not None and self._abort.requested:
+                        self._cancel_confirm(send, result_future)
+                        aborted = True
+                        break
+                    rclpy.spin_once(self.node, timeout_sec=0.05)
+                    if guard is not None and guard.on_efforts(self.wrist_efforts()):
+                        contact = True
+                        spin_until_done(self.node, send.cancel_goal_async(), 3.0)
+                        spin_until_done(self.node, result_future, 10.0)
+                        break
+                    if time.monotonic() - t0 > 240:
+                        spin_until_done(self.node, send.cancel_goal_async(), 3.0)
+                        info["message"] = "execution watchdog timeout (240 s)"
+                        return "failed", info
+            except KeyboardInterrupt:
+                # backstop: default-handler CLIs and the second-Ctrl+C
+                # escalation land here; try the cancel, promise nothing
+                spin_until_done(self.node, send.cancel_goal_async(), 3.0)
+                print("\nCtrl+C — cancel sent (unconfirmed; check the arm)")
+                raise
+            if aborted:
+                raise KeyboardInterrupt  # unwind AFTER the confirmed cancel
+        finally:
+            if self._abort is not None:
+                self._abort.goal_in_flight = False
         if guard is not None:
             info["torque_peak"] = guard.peak
         if contact:

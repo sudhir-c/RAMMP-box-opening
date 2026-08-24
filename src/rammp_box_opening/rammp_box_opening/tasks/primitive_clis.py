@@ -38,7 +38,10 @@ def _run(args, prims_of):
     for prim in prims_of(ctx):
         new, state = prim.plan(ctx, state)
         legs += new
-    results = runner.run(legs, execute=args.execute)
+    try:
+        results = runner.run(legs, execute=args.execute)
+    except KeyboardInterrupt:
+        raise SystemExit(130)  # abort path already reported what it confirmed
     if any(not r.ok for r in results):
         raise SystemExit(1)
 
