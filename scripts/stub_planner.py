@@ -7,6 +7,9 @@ ROS_DOMAIN_ID (the harnesses enforce this) — it serves the real names.
 
 STUB_PLAN_S env shortens the fake plan duration (default 6 s) so flow
 harnesses finish quickly while abort harnesses keep long strokes.
+STUB_TRIP_EXEC_N=<n> spikes the published wrist efforts partway through
+exec goal #n, so harnesses can exercise the torque-guard trip + cancel
+path (the press's primary designed outcome).
 """
 
 import os
@@ -31,6 +34,7 @@ from rammp_curobo_interfaces.srv import SetWorld
 START = [0.4, 0.262, 3.142, -2.269, 0.0, 0.960, 1.571]  # off-home: real move
 NAMES = ["joint_%d" % i for i in range(1, 8)]
 PLAN_S = float(os.environ.get("STUB_PLAN_S", "6.0"))
+TRIP_EXEC_N = int(os.environ.get("STUB_TRIP_EXEC_N", "0"))
 
 
 def interp_traj(q0, q1, n=40, dur=PLAN_S):
@@ -59,6 +63,7 @@ class StubPlanner(Node):
         self.q = list(START)
         self.plan_goals = 0
         self.exec_goals = 0
+        self.spike = False  # STUB_TRIP_EXEC_N: efforts spike mid-goal
         # RELIABLE depth 10, like the real joint_state_broadcaster (the
         # client subscribes RELIABLE; sensor-data QoS would never connect)
         self.pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -107,7 +112,7 @@ class StubPlanner(Node):
         m.name = NAMES + ["robotiq_85_left_knuckle_joint"]
         m.position = list(self.q) + [0.0]
         m.velocity = [0.0] * 8
-        m.effort = [0.0] * 8
+        m.effort = [9.0 if self.spike else 0.0] * 8
         self.pub.publish(m)
 
     def _set_world(self, req, resp):
@@ -177,15 +182,20 @@ class StubPlanner(Node):
         )
         t0 = time.monotonic()
         k = 0
+        goal_n = self.exec_goals
         while time.monotonic() - t0 < dur:
             el = time.monotonic() - t0
             while k < len(times) - 1 and times[k] < el:
                 k += 1
             self.q = list(pts[k].positions)
+            if goal_n == TRIP_EXEC_N and el / dur > 0.4 and not self.spike:
+                print("EFFORT SPIKE injected (goal #%d)" % goal_n, flush=True)
+                self.spike = True
             fb = ExecuteTrajectory.Feedback()
             fb.progress = float(el / dur)
             gh.publish_feedback(fb)
             if gh.is_cancel_requested:
+                self.spike = False
                 print("STOPPED at %.1f of %.1f s" % (el, dur), flush=True)
                 gh.canceled()
                 res = ExecuteTrajectory.Result()
@@ -193,6 +203,7 @@ class StubPlanner(Node):
                 res.message = "cancelled — controller stops and holds"
                 return res
             time.sleep(0.05)
+        self.spike = False
         self.q = list(pts[-1].positions)
         print("RAN TO COMPLETION", flush=True)
         gh.succeed()

@@ -275,3 +275,23 @@ def test_transit_gate_accepts_bench_world_pre_detection(tmp_path):
     r = runner(c, tmp_path)
     assert r._refusal(leg("scan", world="bench")) is None
     assert "full or bench" in r._refusal(leg("weird", world="interaction_button"))
+
+
+def test_replanned_trajectories_pass_the_sanity_gate(tmp_path):
+    c = FakeClient()
+    r = runner(c, tmp_path)
+    wandering = _traj(Q0, Q1)
+    mid = JointTrajectoryPoint()
+    mid.positions = [1.5] + [0.05] * 6  # joint_1 wanders way out and back
+    mid.time_from_start.sec = 1
+    wandering.points.insert(1, mid)
+    wandering.points[-1].time_from_start.sec = 2
+
+    class R:
+        success = True
+        message = "ok"
+        trajectory = wandering
+
+    c.plans = [R]
+    group, chain = r._replan_group([leg("a", invalidates=True)], next_chain=5)
+    assert group is None  # wandering replan refused, same gate as pre-built

@@ -151,3 +151,17 @@ def test_press_fixed_verify_trip_or_full_travel_both_pass():
     assert ok and "no trip" in detail
     ok, _ = press.verify(VerifyCtx(outcome="failed"))
     assert not ok
+
+
+def test_worlds_are_pushed_at_plan_time():
+    # spec §6: the planner must hold the leg's world BEFORE the plan is
+    # requested — execution-time pushes alone mean every trajectory was
+    # planned against the previous world (2026-08-24 review, critical)
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.primitives.core import PressFixed
+
+    c = ctx()
+    Approach([0.45, 0.0, 0.3], attitude_quat([180.0, 0.0, 0.0], 0.0)).plan(c, state())
+    assert c.client.worlds_pushed == ["full.yaml"]
+    PressFixed(load_press_demo(CFG)).plan(c, state())
+    assert c.client.worlds_pushed == ["full.yaml", "interaction_button.yaml"]

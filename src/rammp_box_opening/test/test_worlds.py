@@ -100,3 +100,16 @@ def test_bench_world_is_bench_only(tmp_path):
     store = WorldStore(BENCH, out_dir=tmp_path)
     n, p = store.push_name("bench")
     assert n == "bench" and p.exists()
+
+
+def test_bench_world_keepout_band_when_container_unseen():
+    from rammp_box_opening.worlds import ERR_TALL_M, bench_world
+
+    m, _cp = _model_pose()
+    w = bench_world(_bench(), unseen_model=m)
+    band = _cuboids(w)["unseen_container_band"]
+    top = band["position"][2] + band["dims"][2] / 2
+    table = _cuboids(w)["table"]
+    table_top = table["position"][2] + table["dims"][2] / 2
+    assert top == pytest.approx(table_top + m.dims[2] + ERR_TALL_M)
+    assert band["dims"][0] >= 0.5 and band["dims"][1] >= 0.9  # covers the band

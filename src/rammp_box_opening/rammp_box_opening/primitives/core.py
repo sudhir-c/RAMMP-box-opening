@@ -41,6 +41,7 @@ class Ctx:
     config_path: str = None
     last_pose: tuple = None  # (xyz, quat_xyzw) of the last commanded pose
     last_world: tuple = None  # (name, path) of the last interaction world
+    pushed_world: str = None  # last world path pushed at PLAN time
 
 
 @dataclass
@@ -90,6 +91,16 @@ def _plan_motion(
     ctx, state, name, target, world, speed, guard=None, invalidates=False, verify=None
 ):
     world_name, world_path = world
+    # Worlds are a PLAN-time concern (spec §6): the planner must hold this
+    # leg's world BEFORE the plan is requested — SetWorld only at execution
+    # time means every trajectory was actually planned against the previous
+    # world (2026-08-24 review, critical). The Runner still re-pushes per
+    # executed group, which keeps drift-replans correct.
+    if str(world_path) != ctx.pushed_world:
+        ok, msg = ctx.client.set_world(world_path)
+        if not ok:
+            raise RuntimeError("set_world before planning %s failed: %s" % (name, msg))
+        ctx.pushed_world = str(world_path)
     kind, *rest = target
     if kind == "pose":
         plan = ctx.client.plan_to_pose(rest[0], rest[1], state.joints)

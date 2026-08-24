@@ -40,12 +40,40 @@ def _lid_cuboid(model, lid_at):
     }
 
 
-def bench_world(bench):
-    """Bench obstacles only — the pre-detection world: no container has
-    been seen yet, so none may be modeled (press_demo scan/no-tag legs)."""
+PLACEMENT_BAND_X = (0.15, 0.75)  # where a container may sit (reach map)
+PLACEMENT_BAND_Y = (-0.50, 0.50)
+
+
+def _table_top_z(bench):
+    t = next(o for o in bench["obstacles"] if o["name"] == "table")
+    return t["position"][2] + t["dims"][2] / 2
+
+
+def bench_world(bench, unseen_model=None):
+    """The pre-detection world (press_demo scan / no-tag legs).
+
+    No container POSE is known yet, but one is PRESENT somewhere: with a
+    model given, the whole placement band is blocked to container height
+    so pre-detection transits stay above anything that could be standing
+    there — a failed detection must not mean a blind sweep through the
+    container (2026-08-24 review). Scan/home poses live well above the
+    band."""
+    obstacles = _bench_obstacles(bench)
+    if unseen_model is not None:
+        top = _table_top_z(bench)
+        h = unseen_model.dims[2] + ERR_TALL_M
+        x0, x1 = PLACEMENT_BAND_X
+        y0, y1 = PLACEMENT_BAND_Y
+        obstacles.append(
+            {
+                "name": "unseen_container_band",
+                "position": [(x0 + x1) / 2, (y0 + y1) / 2, top + h / 2],
+                "dims": [x1 - x0, y1 - y0, h],
+            }
+        )
     return {
         "base_frame": bench.get("base_frame", "base_link"),
-        "obstacles": _bench_obstacles(bench),
+        "obstacles": obstacles,
         "objects": [],
         "targets": [],
     }
@@ -123,7 +151,7 @@ class WorldStore:
         tag="",
     ):
         if kind == "bench":
-            world = bench_world(self._bench)
+            world = bench_world(self._bench, unseen_model=model)
             name = "bench" + (("_" + tag) if tag else "")
         elif kind == "full":
             world = full_world(self._bench, model, cpose, lid_at=lid_at)

@@ -51,9 +51,10 @@ def _state(joints):
 
 
 def build_scan_leg(ctx, cfg, start_joints):
-    """Tool-down look pose over the bench, planned in the bench-only
-    world: no container may be modeled before one is seen."""
-    world = ctx.worlds.push_name("bench")
+    """Tool-down look pose over the bench. The bench world carries the
+    unseen-container keep-out band: a container is somewhere, its pose
+    unknown, so pre-detection transits stay above container height."""
+    world = ctx.worlds.push_name("bench", model=ctx.model)
     bearing = math.atan2(cfg.scan_xyz[1], cfg.scan_xyz[0])
     quat = attitude_quat([180.0, 0.0, 0.0], bearing)
     leg, _ = _plan_motion(
@@ -68,8 +69,8 @@ def build_scan_leg(ctx, cfg, start_joints):
 
 
 def build_home_leg(ctx, start_joints):
-    """No-tag exit: back to HOME through the bench-only world."""
-    world = ctx.worlds.push_name("bench")
+    """No-tag exit: back to HOME above the unseen-container band."""
+    world = ctx.worlds.push_name("bench", model=ctx.model)
     leg, _ = _plan_motion(
         ctx,
         _state(start_joints),
@@ -105,7 +106,12 @@ def build_demo_legs(ctx, cfg):
 
 
 def wait_for_fix(node, watcher, cfg):
-    """Spin (the watcher ticks on its timer) until a fresh stable fix."""
+    """Spin (the watcher ticks on its timer) until a fresh stable fix.
+
+    The window is purged first: sightings gathered while the arm was
+    still moving carry TF/depth timing skew — only parked-camera frames
+    may commit the fix the press will trust."""
+    watcher.reset()
     t0 = time.monotonic()
     while time.monotonic() - t0 < cfg.timeout_s:
         rclpy.spin_once(node, timeout_sec=0.1)

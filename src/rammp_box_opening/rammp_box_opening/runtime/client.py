@@ -202,6 +202,7 @@ class PlannerClient:
             contact = False
             aborted = False
             t0 = time.monotonic()
+            efforts_ok_at = time.monotonic()
             try:
                 while not result_future.done():
                     if self._abort is not None and self._abort.requested:
@@ -209,11 +210,25 @@ class PlannerClient:
                         aborted = True
                         break
                     rclpy.spin_once(self.node, timeout_sec=0.05)
-                    if guard is not None and guard.on_efforts(self.wrist_efforts()):
-                        contact = True
-                        spin_until_done(self.node, send.cancel_goal_async(), 3.0)
-                        spin_until_done(self.node, result_future, 10.0)
-                        break
+                    if guard is not None:
+                        eff = self.wrist_efforts()
+                        if eff is not None:
+                            efforts_ok_at = time.monotonic()
+                        elif time.monotonic() - efforts_ok_at > 1.0:
+                            # a guard that has lost its senses is no guard:
+                            # stop the stroke instead of pressing blind
+                            spin_until_done(self.node, send.cancel_goal_async(), 3.0)
+                            spin_until_done(self.node, result_future, 10.0)
+                            info["message"] = (
+                                "effort stream lost during guarded leg — "
+                                "cancelled (guard blind > 1 s)"
+                            )
+                            return "failed", info
+                        if guard.on_efforts(eff):
+                            contact = True
+                            spin_until_done(self.node, send.cancel_goal_async(), 3.0)
+                            spin_until_done(self.node, result_future, 10.0)
+                            break
                     if time.monotonic() - t0 > 240:
                         spin_until_done(self.node, send.cancel_goal_async(), 3.0)
                         info["message"] = "execution watchdog timeout (240 s)"

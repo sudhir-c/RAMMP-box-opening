@@ -144,6 +144,10 @@ everything; the abort drill above is the proof it does).
    fix, staging, hover, one press stroke ("guard stopped" or "full
    travel" both = pressed — the lid should visibly release), retreat,
    home, exit 0. No tag → the arm parks home and it exits 2.
+   Pre-detection legs (scan, no-tag home) plan above an
+   unseen-container keep-out band covering the whole placement zone to
+   container height — a failed detection never sweeps low through the
+   container it could not see. Keep OTHER tall objects out of the band.
 6. Repeat from different container positions in the band. Exit
    criterion: repeatable pressed-and-released runs, verified in
    `~/.ros/rammp_box_opening/runs/run-*.jsonl`.

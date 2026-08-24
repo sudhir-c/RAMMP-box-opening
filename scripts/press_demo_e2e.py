@@ -3,23 +3,29 @@
 
     python3 scripts/press_demo_e2e.py           # isolates on ROS_DOMAIN_ID=77
 
-Two scenarios, both with a stub planner (scripts/stub_planner.py) and a
-synthetic D405 (scripts/stub_d405.py) publishing REAL rendered ArUco
-frames + the mount-consistent static TF, so the CLI's whole perception
-path (detect -> PnP -> TF -> depth refinement -> container pose) runs
-for real:
+Three scenarios, each with a stub planner (scripts/stub_planner.py) and
+a synthetic D405 (scripts/stub_d405.py) publishing REAL rendered ArUco
+frames + mount-consistent TF, so the CLI's whole perception path
+(detect -> PnP -> TF -> depth refinement -> container pose) runs for
+real. Depth is spatially structured (tag range only at the tag's
+pixels) and the tag carries a 30 deg yaw plus a nonzero tag->button
+offset, so wrong-pixel depth sampling and wrong rotation composition
+both move the recovered origin and FAIL the 5 mm / 3 deg checks.
 
-  tag:     full flow — scan, fix, staging, close, hover, press, retreat,
-           home. Must exit 0 with 6 exec goals, 1 gripper goal, no
-           cancels, and a recovered container origin within 5 mm of the
-           geometry the synthetic camera encoded.
-  no-tag:  tagless frames — scan, detect timeout, home, exit 2, exactly
-           2 exec goals.
+  tag:    full flow, no trip — exit 0, 6 exec goals, 1 gripper goal, no
+          cancels, origin within 5 mm and yaw within 3 deg of the
+          geometry the synthetic camera encoded.
+  trip:   efforts spike mid-press (STUB_TRIP_EXEC_N=4) — the guard
+          cancels the stroke, the CLI reports pressed-via-trip, retreat
+          and home replan from the stop, exit 0. Exactly one cancel.
+  no-tag: tagless frames — scan, a detect wait that provably lasts
+          timeout_s, home, exit 2, exactly 2 exec goals.
 
 Goal counts are audited (lesson 6); the harness refuses to run beside a
 real controller_manager or planner.
 """
 
+import math
 import os
 import re
 import signal
@@ -40,7 +46,22 @@ CHAIN = (
     "source %s/install/setup.zsh; " % (DOMAIN, REPO)
 )
 
-TAG_XYZ = (0.45, 0.02, 0.133)  # what the synthetic camera encodes
+TAG_XYZ = (0.45, 0.02, 0.133)
+TAG_YAW_DEG = 30.0
+TAG_OFFSET = (0.01, 0.0, 0.0)  # container-frame tag->button, in the cfg
+BUTTON_Z = 0.16  # oxo_pop.yaml button_offset z
+DETECT_TIMEOUT_S = 10.0  # oxo_pop.yaml detect.timeout_s
+
+
+def expected_origin():
+    yaw = math.radians(TAG_YAW_DEG)
+    c, s = math.cos(yaw), math.sin(yaw)
+    ox, oy, _ = TAG_OFFSET
+    return [
+        TAG_XYZ[0] + c * ox - s * oy,
+        TAG_XYZ[1] + s * ox + c * oy,
+        TAG_XYZ[2] - BUTTON_Z,
+    ]
 
 
 def sh(cmd, **kw):
@@ -75,43 +96,47 @@ def wait_for(path, needle, timeout, proc=None, what=""):
     return False
 
 
-def spawn(cmd, log):
+def spawn(cmd, log, extra_env=""):
     return subprocess.Popen(
-        ["zsh", "-c", CHAIN + cmd],
+        ["zsh", "-c", CHAIN + extra_env + cmd],
         stdout=open(log, "w"),
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
 
 
-def run_scenario(tmp, cfg, marker):
-    name = "tag" if marker else "no-tag"
-    stub_log = tmp / ("stub_%s.log" % name)
-    cam_log = tmp / ("cam_%s.log" % name)
-    cli_log = tmp / ("cli_%s.log" % name)
+def run_scenario(tmp, cfg, mode):
+    stub_log = tmp / ("stub_%s.log" % mode)
+    cam_log = tmp / ("cam_%s.log" % mode)
+    cli_log = tmp / ("cli_%s.log" % mode)
+    cam_args = (
+        " --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG)
+    )
+    stub_env = "export STUB_TRIP_EXEC_N=4; " if mode == "trip" else ""
     stub = cam = cli = None
     try:
-        stub = spawn("exec python3 %s" % (REPO / "scripts/stub_planner.py"), stub_log)
+        stub = spawn(
+            "exec python3 %s" % (REPO / "scripts/stub_planner.py"), stub_log, stub_env
+        )
         cam = spawn(
-            "exec python3 %s%s"
-            % (REPO / "scripts/stub_d405.py", "" if marker else " --no-marker"),
-            cam_log,
+            "exec python3 %s%s" % (REPO / "scripts/stub_d405.py", cam_args), cam_log
         )
         if not wait_for(stub_log, "STUB READY", 30, stub, "stub planner"):
             sys.exit("stub planner never ready")
         if not wait_for(cam_log, "STUB D405 READY", 30, cam, "stub d405"):
             sys.exit("stub d405 never ready")
 
+        t_cli = time.monotonic()
         cli = spawn(
             "exec ros2 run rammp_box_opening press_demo --execute --container %s" % cfg,
             cli_log,
         )
         deadline = 180
-        t0 = time.monotonic()
-        while cli.poll() is None and time.monotonic() - t0 < deadline:
+        while cli.poll() is None and time.monotonic() - t_cli < deadline:
             time.sleep(0.5)
         hung = cli.poll() is None
         code = cli.returncode
+        elapsed = time.monotonic() - t_cli
     finally:
         kill(cli)
         kill(cam)
@@ -119,15 +144,18 @@ def run_scenario(tmp, cfg, marker):
 
     said = stub_log.read_text()
     cli_said = cli_log.read_text()
-    print("\n===== scenario %s =====" % name)
+    execs = said.count("EXEC GOAL ACCEPTED")
+    cancels = said.count("CANCEL RECEIVED")
+    print("\n===== scenario %s =====" % mode)
     print("--- cli tail ---\n%s" % cli_said.strip()[-1500:])
     print(
-        "--- stub counts: exec=%d gripper=%d complete=%d cancel=%d"
+        "--- stub: exec=%d gripper=%d complete=%d cancel=%d  elapsed=%.0fs"
         % (
-            said.count("EXEC GOAL ACCEPTED"),
+            execs,
             said.count("GRIPPER GOAL"),
             said.count("RAN TO COMPLETION"),
-            said.count("CANCEL RECEIVED"),
+            cancels,
+            elapsed,
         )
     )
 
@@ -136,35 +164,64 @@ def run_scenario(tmp, cfg, marker):
         fails.append("CLI hung past %d s" % deadline)
     if "Traceback" in cli_said:
         fails.append("CLI traceback")
-    execs = said.count("EXEC GOAL ACCEPTED")
-    if marker:
-        if code != 0:
-            fails.append("exit %s != 0" % code)
-        if execs != 6:
-            fails.append("exec goals %d != 6" % execs)
-        if said.count("GRIPPER GOAL") != 1:
-            fails.append("gripper goals != 1")
-        if said.count("CANCEL RECEIVED") != 0:
-            fails.append("unexpected cancel")
-        if "depth-refined" not in cli_said:
-            fails.append("depth refinement never engaged")
-        m = re.search(r"container origin \[([-\d.]+), ([-\d.]+), ([-\d.]+)\]", cli_said)
-        if not m:
-            fails.append("no container-origin line")
-        else:
-            got = [float(v) for v in m.groups()]
-            want = [TAG_XYZ[0], TAG_XYZ[1], TAG_XYZ[2] - 0.16]  # minus button_offset z
-            err = max(abs(a - b) for a, b in zip(got, want))
-            print("--- recovered origin %s vs true %s (err %.4f m)" % (got, want, err))
-            if err > 0.005:
-                fails.append("origin error %.4f m > 5 mm" % err)
-    else:
+
+    if mode == "no-tag":
         if code != 2:
             fails.append("exit %s != 2" % code)
         if execs != 2:
             fails.append("exec goals %d != 2 (scan + home)" % execs)
         if "NO TAG" not in cli_said:
             fails.append("no NO TAG line")
+        # the detect wait must actually last the configured window:
+        # scan (~4.8 s) + wait (10 s) + home (~4.8 s) — a shortened wait
+        # would finish well under timeout_s + leg time
+        if elapsed < DETECT_TIMEOUT_S + 8.0:
+            fails.append(
+                "run took %.0f s — detect wait shorter than timeout_s?" % elapsed
+            )
+        return fails
+
+    # tag and trip scenarios share the flow assertions
+    if code != 0:
+        fails.append("exit %s != 0" % code)
+    if execs != 6:
+        fails.append("exec goals %d != 6" % execs)
+    if said.count("GRIPPER GOAL") != 1:
+        fails.append("gripper goals != 1")
+    if "depth-refined" not in cli_said:
+        fails.append("depth refinement never engaged")
+    m = re.search(
+        r"container origin \[([-\d.]+), ([-\d.]+), ([-\d.]+)\] yaw ([-\d.]+) deg",
+        cli_said,
+    )
+    if not m:
+        fails.append("no container-origin line")
+    else:
+        got = [float(v) for v in m.groups()[:3]]
+        yaw = float(m.group(4))
+        want = expected_origin()
+        err = max(abs(a - b) for a, b in zip(got, want))
+        print(
+            "--- recovered origin %s yaw %.1f vs true %s yaw %.1f (err %.4f m)"
+            % (got, yaw, [round(v, 4) for v in want], TAG_YAW_DEG, err)
+        )
+        if err > 0.005:
+            fails.append("origin error %.4f m > 5 mm" % err)
+        if abs(yaw - TAG_YAW_DEG) > 3.0:
+            fails.append("yaw error %.1f deg > 3" % abs(yaw - TAG_YAW_DEG))
+
+    if mode == "tag":
+        if cancels != 0:
+            fails.append("unexpected cancel")
+        if "full travel" not in cli_said:
+            fails.append("press did not report full-travel outcome")
+    if mode == "trip":
+        if cancels != 1:
+            fails.append("cancels %d != 1 (guard trip)" % cancels)
+        if "EFFORT SPIKE" not in said:
+            fails.append("stub never injected the spike")
+        if "guard stopped the stroke" not in cli_said:
+            fails.append("CLI did not report pressed-via-trip")
     return fails
 
 
@@ -182,18 +239,25 @@ def main():
 
     cfg = tmp / "oxo_measured.yaml"
     src_cfg = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
-    cfg.write_text(src_cfg.read_text().replace("measure_me: true", "measure_me: false"))
+    cfg.write_text(
+        src_cfg.read_text()
+        .replace("measure_me: true", "measure_me: false")
+        .replace(
+            "offset_xyz: [0.0, 0.0, 0.0]",
+            "offset_xyz: [%g, %g, %g]" % TAG_OFFSET,
+        )
+    )
 
     all_fails = []
-    for marker in (True, False):
-        all_fails += [
-            "%s: %s" % ("tag" if marker else "no-tag", f)
-            for f in run_scenario(tmp, cfg, marker)
-        ]
+    for mode in ("tag", "trip", "no-tag"):
+        all_fails += ["%s: %s" % (mode, f) for f in run_scenario(tmp, cfg, mode)]
 
     print()
     if not all_fails:
-        print("PASS — full tag flow and no-tag exit both behave; goal audit clean")
+        print(
+            "PASS — tag flow (yaw+offset recovered), guard-trip press, and "
+            "no-tag exit all behave; goal audits clean"
+        )
         sys.exit(0)
     for f in all_fails:
         print("FAIL — " + f)

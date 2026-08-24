@@ -178,10 +178,23 @@ def load_press_demo(path):
         raise ValueError("press_demo.travel_m must be positive")
     if not 0.0 < cfg.press_speed <= 1.0:
         raise ValueError("press_demo.speed outside (0, 1]")
-    if cfg.staging_m < cfg.hover_m + 0.04:
+    if cfg.hover_m < 0.01:
         raise ValueError(
-            "press_demo.staging_m must exceed hover_m by >= 0.04 m: the "
-            "full-world approach has to clear the err-tall container cuboid "
-            "(+2 cm) plus collision padding (+2 cm)"
+            "press_demo.hover_m must be >= 0.01 m — it is the only thing "
+            "keeping the UNGUARDED hover leg out of contact (check_standoff "
+            "is deliberately skipped for the tag-driven press; the guard "
+            "arms on the press stroke, not the hover)"
+        )
+    if cfg.staging_m <= cfg.hover_m:
+        raise ValueError("press_demo.staging_m must exceed hover_m")
+    # staging is anchored at the BUTTON TOP; the full-world obstacle tops
+    # out at container top + err-tall (2 cm) + collision padding (2 cm):
+    # validate against the real geometry, not hover_m (2026-08-24 review)
+    clearance = float(raw["dims"][2]) - float(raw["button_offset"][2]) + 0.04
+    if cfg.staging_m < clearance:
+        raise ValueError(
+            "press_demo.staging_m %.3f cannot clear the container cuboid: "
+            "dims.z - button_offset.z + err_tall + padding = %.3f m needed"
+            % (cfg.staging_m, clearance)
         )
     return cfg

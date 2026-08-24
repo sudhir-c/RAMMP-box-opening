@@ -138,9 +138,17 @@ class TagWatcher:
         self.window = FixWindow(cfg.min_hits, cfg.tol_m, cfg.window_s, cfg.fresh_s)
         self.frames = 0
         self.hits = 0
+        self.refined_hits = 0
         self.depth_refined = None  # last sighting: True/False/None
         self._last_stamp = None
         node.create_timer(period_s, self._tick)
+
+    def reset(self):
+        """Purge the window. Called when the arm settles at the scan pose:
+        sightings gathered DURING motion carry TF/depth timing skew and a
+        parked-only fix costs under half a second of fresh frames."""
+        self.window.samples = []
+        self.window.last_seen = None
 
     def _tick(self):
         from rammp_curobo_ros.tags import tag_pose_from_frame
@@ -159,33 +167,41 @@ class TagWatcher:
         if hit is None:
             return
         _tid, r_tag_cam, tvec = hit
+        self.hits += 1
         cam = self._camera_pose(g)
         if cam is None:
             return
         rot_cam, trans_cam = cam
         refined = refine_point(tvec, g.k, g.depth)
         self.depth_refined = refined is not None
-        p_cam = refined if refined is not None else np.asarray(tvec, dtype=float)
-        pos = rot_cam @ p_cam + trans_cam
+        if refined is None:
+            # the 1-inch hover premise REQUIRES mm-scale z: an RGB-only
+            # sighting (2-3 cm z noise) never enters the window, so a
+            # depth-starved run fails honestly as NO TAG instead of
+            # pressing on a guess (2026-08-24 review)
+            return
+        self.refined_hits += 1
+        pos = rot_cam @ refined + trans_cam
         rot = rot_cam @ r_tag_cam
-        self.hits += 1
         self.window.add(pos, rot, time.monotonic())
 
     def _camera_pose(self, g):
-        """base_link <- camera at the frame's stamp (mount composition as
-        in D405Grabber.shot(), which cannot be used here: it spins)."""
+        """base_link <- camera AT THE FRAME'S STAMP (mount composition as
+        in D405Grabber.shot(), which cannot be used here: it spins).
+
+        No latest-TF fallback: upstream documents that fallback as safe
+        only while parked, and this watcher runs during motion — at
+        continuous frame rates a dropped frame costs nothing, a
+        wrong-pose frame poisons the fix (2026-08-24 review)."""
         import rclpy.time as rt
 
         from rammp_curobo.perception import quat_to_mat
 
-        tr = None
-        for when in (rt.Time.from_msg(g.color_stamp), rt.Time()):
-            try:
-                tr = g.tf_buffer.lookup_transform("base_link", g.parent, when)
-                break
-            except Exception:
-                continue
-        if tr is None:
+        try:
+            tr = g.tf_buffer.lookup_transform(
+                "base_link", g.parent, rt.Time.from_msg(g.color_stamp)
+            )
+        except Exception:
             return None
         q, t = tr.transform.rotation, tr.transform.translation
         r_p = quat_to_mat(q.x, q.y, q.z, q.w)
@@ -201,11 +217,12 @@ class TagWatcher:
         missing = self.grab.missing()
         if missing:
             return "camera streams missing: %s" % ", ".join(missing)
-        return "%d/%d frames saw tag id %d%s" % (
+        return "%d/%d frames saw tag id %d, %d depth-refined%s" % (
             self.hits,
             self.frames,
             self.cfg.tag_id,
-            ""
-            if self.depth_refined is None
-            else (" (depth-refined)" if self.depth_refined else " (RGB z only)"),
+            self.refined_hits,
+            " (RGB-only sightings never commit)"
+            if self.hits and not self.refined_hits
+            else "",
         )

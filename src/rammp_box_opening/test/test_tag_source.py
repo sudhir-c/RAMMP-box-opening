@@ -35,9 +35,15 @@ def test_container_pose_from_tag_rotates_offsets_by_yaw():
     assert cp.xyz[2] == pytest.approx(0.133 - m.button_offset[2])
 
 
-def test_refine_point_replaces_range_with_depth():
+def test_refine_point_replaces_range_with_depth_at_the_tag_pixel():
     tvec = np.array([0.05, 0.0, 0.30])  # RGB solve: 0.30 m out
-    depth = np.full((480, 640), 0.35, np.float32)  # depth image says 0.35
+    # structured depth: the true value ONLY at the tag's projected pixel
+    # window, decoy elsewhere — a wrong-pixel lookup (transposed indices,
+    # off-by-N) reads 0.60 and fails the assertions (2026-08-24 review)
+    depth = np.full((480, 640), 0.60, np.float32)
+    u = int(round(400.0 * 0.05 / 0.30 + 320.0))  # 386
+    v = 240
+    depth[v - 4 : v + 5, u - 4 : u + 5] = 0.35
     p = refine_point(tvec, K, depth)
     assert p is not None
     assert p[2] == pytest.approx(0.35)
@@ -83,6 +89,32 @@ def test_load_press_demo_cfg():
     assert cfg.hover_m == pytest.approx(0.0254)
     assert cfg.press_speed == pytest.approx(0.25)  # owner decision 2026-08-24
     assert cfg.travel_m > 0
-    # staging must clear the err-tall cuboid (+2 cm) + padding (+2 cm)
-    assert cfg.staging_m >= cfg.hover_m + 0.04
     assert cfg.min_hits >= 2 and cfg.timeout_s > 0
+
+
+def _cfg_variant(tmp_path, old, new):
+    p = tmp_path / "variant.yaml"
+    p.write_text(open(CFG).read().replace(old, new))
+    return str(p)
+
+
+def test_loader_refuses_nonpositive_hover(tmp_path):
+    # hover_m is the ONLY thing keeping the unguarded hover leg out of
+    # contact (check_standoff is skipped for the tag-driven press)
+    with pytest.raises(ValueError, match="hover_m"):
+        load_press_demo(_cfg_variant(tmp_path, "hover_m: 0.0254", "hover_m: 0.0"))
+    with pytest.raises(ValueError, match="hover_m"):
+        load_press_demo(_cfg_variant(tmp_path, "hover_m: 0.0254", "hover_m: -0.01"))
+
+
+def test_loader_validates_staging_against_real_container_geometry(tmp_path):
+    # recessed button: dims.z 0.16, button_offset.z 0.11 -> staging must
+    # clear dims.z - button_offset.z + 0.04 = 0.09; the default 0.08 fails
+    with pytest.raises(ValueError, match="staging_m"):
+        load_press_demo(
+            _cfg_variant(
+                tmp_path,
+                "button_offset: [0.0, 0.0, 0.16]",
+                "button_offset: [0.0, 0.0, 0.11]",
+            )
+        )

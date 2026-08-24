@@ -31,6 +31,9 @@ DOMAIN = os.environ.get("ABORT_E2E_DOMAIN", "77")
 
 CHAIN = (
     "export ROS_DOMAIN_ID=%s; export ROS_LOCALHOST_ONLY=1; "
+    # pin the stub stroke: the mid-stroke SIGINT premise (~24 s at 0.25)
+    # must not bend to an inherited STUB_PLAN_S from the environment
+    "export STUB_PLAN_S=6.0; unset STUB_TRIP_EXEC_N; "
     "source /opt/ros/humble/setup.zsh; "
     "source ~/RAMMP-CuRobo/install/setup.zsh; "
     "source %s/install/setup.zsh; " % (DOMAIN, REPO)

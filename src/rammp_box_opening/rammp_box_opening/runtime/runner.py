@@ -187,6 +187,12 @@ class Runner:
                 plan = self.client.plan_to_joints(rest[0], live)
             if plan is None or not plan.success:
                 return None, next_chain
+            # replanned trajectories pass the SAME sanity gate as pre-built
+            # ones — a wandering replan executed ungated defeats spec §6
+            bad = sanity_violations(plan.trajectory, self.margin_rad)
+            if bad:
+                print("REFUSED replan of %s — %s" % (leg.name, "; ".join(bad)))
+                return None, next_chain
             leg.traj = plan.trajectory
             leg.chain = next_chain
             leg.stale = False

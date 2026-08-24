@@ -27,13 +27,15 @@ CX, CY = W / 2.0, H / 2.0
 R_CAM = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
 
 
-def render(tag_xyz, size_m, tag_id):
-    """The frame a camera at R_CAM/t would capture of a flat, yaw-0 tag."""
+def render(tag_xyz, size_m, yaw_rad):
+    """World corners of a flat tag at the given yaw (about world z)."""
     s = size_m / 2.0
     corners_tag = np.array(
         [[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=float
     )
-    return corners_tag + np.asarray(tag_xyz, dtype=float)
+    c, sn = np.cos(yaw_rad), np.sin(yaw_rad)
+    rz = np.array([[c, -sn, 0.0], [sn, c, 0.0], [0.0, 0.0, 1.0]])
+    return corners_tag @ rz.T + np.asarray(tag_xyz, dtype=float)
 
 
 def main():
@@ -46,18 +48,33 @@ def main():
     ap.add_argument("--cam-z", type=float, default=0.45)
     ap.add_argument("--size", type=float, default=0.05)
     ap.add_argument("--id", type=int, default=0)
+    ap.add_argument("--tag-yaw-deg", type=float, default=0.0)
+    ap.add_argument("--table-z", type=float, default=-0.027)
     ap.add_argument("--no-marker", action="store_true")
     a = ap.parse_args()
 
     t_cam = np.array([a.cam_x, a.cam_y, a.cam_z])
     canvas = np.full((H, W, 3), 110, np.uint8)
+    # depth is spatially STRUCTURED: the tag-plane range only around the
+    # tag's projected pixels, bench range everywhere else — so a
+    # wrong-pixel depth lookup lands on the bench value and the e2e's
+    # origin check catches it (2026-08-24 review: uniform depth made
+    # refine_point's pixel math unfalsifiable)
+    bench_mm = int(round((a.cam_z - a.table_z) * 1000))
+    depth = np.full((H, W), bench_mm, np.uint16)
     if not a.no_marker:
-        corners_w = render([a.tag_x, a.tag_y, a.tag_z], a.size, a.id)
+        corners_w = render(
+            [a.tag_x, a.tag_y, a.tag_z], a.size, np.radians(a.tag_yaw_deg)
+        )
         px = []
         for cw in corners_w:
             pc = R_CAM.T @ (cw - t_cam)
             px.append([FX * pc[0] / pc[2] + CX, FY * pc[1] / pc[2] + CY])
         px = np.array(px, dtype=np.float32)
+        tag_mm = int(round((a.cam_z - a.tag_z) * 1000))
+        u0, u1 = int(px[:, 0].min()) - 12, int(px[:, 0].max()) + 12
+        v0, v1 = int(px[:, 1].min()) - 12, int(px[:, 1].max()) + 12
+        depth[max(0, v0) : v1, max(0, u0) : u1] = tag_mm
         marker = cv2.aruco.generateImageMarker(
             cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50), a.id, 200
         )
@@ -77,8 +94,6 @@ def main():
             borderMode=cv2.BORDER_TRANSPARENT,
         )
         canvas = warped
-    depth_mm = int(round((a.cam_z - a.tag_z) * 1000))
-    depth = np.full((H, W), depth_mm, np.uint16)
 
     rclpy.init()
     node = rclpy.create_node("stub_d405")
@@ -104,7 +119,16 @@ def main():
     q = mat_to_quat_xyzw(r_ee)
     tf.transform.rotation.x, tf.transform.rotation.y = float(q[0]), float(q[1])
     tf.transform.rotation.z, tf.transform.rotation.w = float(q[2]), float(q[3])
-    StaticTransformBroadcaster(node).sendTransform(tf)
+    # tool_frame too: the runner's trip-depth report looks it up
+    tf2 = TransformStamped()
+    tf2.header.stamp = tf.header.stamp
+    tf2.header.frame_id = "base_link"
+    tf2.child_frame_id = "tool_frame"
+    tf2.transform.translation.x = a.tag_x
+    tf2.transform.translation.y = a.tag_y
+    tf2.transform.translation.z = a.tag_z
+    tf2.transform.rotation.w = 1.0
+    StaticTransformBroadcaster(node).sendTransform([tf, tf2])
 
     def publish():
         stamp = node.get_clock().now().to_msg()
