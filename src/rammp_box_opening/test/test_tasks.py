@@ -77,3 +77,52 @@ def test_entry_points_registered():
         "home_arm",
     ]:
         assert ep + " = " in setup
+
+
+def _demo_cfg():
+    from rammp_box_opening.models.container import load_press_demo
+
+    return load_press_demo(CFG)
+
+
+def test_press_demo_legs_compose_staging_press_retreat_home():
+    import pytest
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    legs = press_demo.build_demo_legs(c, cfg)
+    seq = names(legs)
+    assert seq == [
+        "approach:staging",
+        "press:close",
+        "press:hover",
+        "press:down",
+        "retreat",
+        "home",
+    ]
+    button = from_container(c.cpose, c.model.button_offset)
+    staging = legs[0]
+    assert staging.world.startswith("full") and staging.speed == 0.25
+    assert staging.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
+    retreat = legs[4]
+    assert retreat.world.startswith("interaction") and retreat.speed == 0.15
+    # retreat returns to staging height from the press bottom
+    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
+    assert legs[5].world.startswith("full")
+
+
+def test_press_demo_scan_and_no_tag_home_use_bench_world():
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    scan = press_demo.build_scan_leg(c, cfg, [0.0] * 7)
+    assert scan.name == "scan" and scan.world == "bench"
+    assert scan.kind is Kind.MOTION and scan.speed == 0.25
+    assert scan.target[0] == "pose" and list(scan.target[1]) == list(cfg.scan_xyz)
+    home = press_demo.build_home_leg(c, [0.0] * 7)
+    assert home.name == "home" and home.world == "bench"
+    assert home.target[0] == "joints"

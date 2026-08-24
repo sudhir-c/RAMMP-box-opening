@@ -4,9 +4,9 @@
   "config": "gen3_real.yaml (bare bench \u2014 no container obstacle)",
   "attitude": "tool-down attitude_quat([180,0,0], bearing)",
   "start": "HOME (mission plans chain from prior legs)",
-  "z_contact": 0.09,
-  "z_hover": 0.17,
-  "table_top_z": -0.07,
+  "z_contact": 0.133,
+  "z_hover": 0.213,
+  "table_top_z": -0.027,
   "pitch": 0.05,
   "quick": false
  },
@@ -14,25 +14,25 @@
   {
    "x": 0.2,
    "y": -0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
    "time_s": 0.24,
    "msg": ""
   },
   {
+   "x": 0.25,
+   "y": -0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
    "x": 0.3,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
    "time_s": 0.23,
@@ -41,34 +41,34 @@
   {
    "x": 0.35,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
-   "time_s": 0.23,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.4,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
-   "time_s": 0.23,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.45,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
-   "time_s": 0.23,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.5,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
    "time_s": 0.22,
@@ -77,16 +77,16 @@
   {
    "x": 0.55,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": true,
-   "time_s": 0.23,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.6,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": false,
    "time_s": 0.18,
@@ -95,7 +95,7 @@
   {
    "x": 0.65,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": false,
    "time_s": 0.2,
@@ -104,7 +104,7 @@
   {
    "x": 0.7,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": false,
    "time_s": 0.22,
@@ -113,7 +113,7 @@
   {
    "x": 0.75,
    "y": -0.45,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
    "success": false,
    "time_s": 0.23,
@@ -122,2059 +122,2275 @@
   {
    "x": 0.2,
    "y": -0.4,
-   "z": 0.09,
+   "z": 0.133,
    "level": "contact",
+   "success": true,
+   "time_s": 0.26,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.26,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.26,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.0,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.05,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.1,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.15,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.2,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.25,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.3,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.19,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.35,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.26,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.4,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.26,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.45,
+   "z": 0.133,
+   "level": "contact",
+   "success": false,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.27,
    "msg": ""
   },
   {
    "x": 0.25,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.26,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.24,
    "msg": ""
   },
   {
    "x": 0.3,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.24,
    "msg": ""
   },
   {
-   "x": 0.25,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
+   "x": 0.35,
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.23,
    "msg": ""
   },
   {
-   "x": 0.3,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
    "x": 0.4,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.23,
    "msg": ""
   },
   {
    "x": 0.45,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.5,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.55,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": true,
    "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.6,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.1,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": false,
    "time_s": 0.17,
    "msg": ""
   },
   {
-   "x": 0.2,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
    "x": 0.65,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
    "success": false,
    "time_s": 0.2,
    "msg": ""
   },
   {
-   "x": 0.25,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
    "x": 0.7,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
+   "y": -0.45,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
    "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.75,
-   "y": 0.0,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.05,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.1,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.15,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.2,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.25,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.3,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.35,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.2,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.16,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.16,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.4,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": true,
-   "time_s": 0.21,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.15,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.15,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.45,
-   "z": 0.09,
-   "level": "contact",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
    "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.15,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.45,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.21,
+   "time_s": 0.23,
    "msg": ""
   },
   {
    "x": 0.2,
    "y": -0.4,
-   "z": 0.17,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.4,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.27,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.24,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.35,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.26,
@@ -2182,35 +2398,35 @@
   },
   {
    "x": 0.25,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.23,
+   "time_s": 0.24,
    "msg": ""
   },
   {
    "x": 0.3,
-   "y": -0.4,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
    "msg": ""
   },
   {
+   "x": 0.35,
+   "y": -0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
    "x": 0.4,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2218,8 +2434,8 @@
   },
   {
    "x": 0.45,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2227,8 +2443,8 @@
   },
   {
    "x": 0.5,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2236,8 +2452,8 @@
   },
   {
    "x": 0.55,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2245,26 +2461,242 @@
   },
   {
    "x": 0.6,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.21,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.65,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.26,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.25,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.17,
    "msg": ""
   },
   {
+   "x": 0.75,
+   "y": -0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
    "x": 0.7,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.2,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.18,
@@ -2272,8 +2704,8 @@
   },
   {
    "x": 0.75,
-   "y": -0.4,
-   "z": 0.17,
+   "y": -0.2,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.2,
@@ -2281,17 +2713,17 @@
   },
   {
    "x": 0.2,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.26,
+   "time_s": 0.25,
    "msg": ""
   },
   {
    "x": 0.25,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.23,
@@ -2299,26 +2731,26 @@
   },
   {
    "x": 0.3,
-   "y": -0.35,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.23,
    "msg": ""
   },
   {
+   "x": 0.35,
+   "y": -0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
    "x": 0.4,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2326,17 +2758,17 @@
   },
   {
    "x": 0.45,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.23,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.5,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2344,8 +2776,8 @@
   },
   {
    "x": 0.55,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2353,8 +2785,8 @@
   },
   {
    "x": 0.6,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -2362,17 +2794,989 @@
   },
   {
    "x": 0.65,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": -0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.1,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.17,
    "msg": ""
   },
   {
+   "x": 0.2,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
    "x": 0.7,
-   "y": -0.35,
-   "z": 0.17,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": -0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.0,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.05,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.1,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.17,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.15,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.2,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.21,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.75,
+   "y": 0.25,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.2,
+   "msg": ""
+  },
+  {
+   "x": 0.2,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.25,
+   "msg": ""
+  },
+  {
+   "x": 0.25,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.3,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.23,
+   "msg": ""
+  },
+  {
+   "x": 0.35,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.4,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.45,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.5,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.55,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.6,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": true,
+   "time_s": 0.22,
+   "msg": ""
+  },
+  {
+   "x": 0.65,
+   "y": 0.3,
+   "z": 0.213,
+   "level": "hover",
+   "success": false,
+   "time_s": 0.18,
+   "msg": ""
+  },
+  {
+   "x": 0.7,
+   "y": 0.3,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.2,
@@ -2380,8 +3784,8 @@
   },
   {
    "x": 0.75,
-   "y": -0.35,
-   "z": 0.17,
+   "y": 0.3,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.21,
@@ -2389,17 +3793,17 @@
   },
   {
    "x": 0.2,
-   "y": -0.3,
-   "z": 0.17,
+   "y": 0.35,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.27,
+   "time_s": 0.26,
    "msg": ""
   },
   {
    "x": 0.25,
-   "y": -0.3,
-   "z": 0.17,
+   "y": 0.35,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.24,
@@ -2407,1412 +3811,8 @@
   },
   {
    "x": 0.3,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": -0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.0,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.05,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.1,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.24,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.15,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.2,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.25,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.35,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.4,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.45,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.5,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.55,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.6,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.65,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.22,
-   "msg": ""
-  },
-  {
-   "x": 0.7,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.17,
-   "msg": ""
-  },
-  {
-   "x": 0.75,
-   "y": 0.3,
-   "z": 0.17,
-   "level": "hover",
-   "success": false,
-   "time_s": 0.19,
-   "msg": ""
-  },
-  {
-   "x": 0.2,
    "y": 0.35,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.25,
-   "msg": ""
-  },
-  {
-   "x": 0.25,
-   "y": 0.35,
-   "z": 0.17,
-   "level": "hover",
-   "success": true,
-   "time_s": 0.23,
-   "msg": ""
-  },
-  {
-   "x": 0.3,
-   "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.23,
@@ -3821,16 +3821,16 @@
   {
    "x": 0.35,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
-   "success": true,
+   "success": false,
    "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.4,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3839,7 +3839,7 @@
   {
    "x": 0.45,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3848,7 +3848,7 @@
   {
    "x": 0.5,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3857,7 +3857,7 @@
   {
    "x": 0.55,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3866,7 +3866,7 @@
   {
    "x": 0.6,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3875,25 +3875,25 @@
   {
    "x": 0.65,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.17,
+   "time_s": 0.18,
    "msg": ""
   },
   {
    "x": 0.7,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.19,
+   "time_s": 0.2,
    "msg": ""
   },
   {
    "x": 0.75,
    "y": 0.35,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
    "time_s": 0.21,
@@ -3902,7 +3902,7 @@
   {
    "x": 0.2,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.26,
@@ -3911,7 +3911,7 @@
   {
    "x": 0.25,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.23,
@@ -3920,16 +3920,16 @@
   {
    "x": 0.3,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.22,
+   "time_s": 0.23,
    "msg": ""
   },
   {
    "x": 0.35,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3938,7 +3938,7 @@
   {
    "x": 0.4,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3947,7 +3947,7 @@
   {
    "x": 0.45,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3956,7 +3956,7 @@
   {
    "x": 0.5,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -3965,52 +3965,52 @@
   {
    "x": 0.55,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.21,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.6,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
-   "success": true,
-   "time_s": 0.21,
+   "success": false,
+   "time_s": 0.18,
    "msg": ""
   },
   {
    "x": 0.65,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.17,
+   "time_s": 0.2,
    "msg": ""
   },
   {
    "x": 0.7,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.19,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.75,
    "y": 0.4,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.21,
+   "time_s": 0.23,
    "msg": ""
   },
   {
    "x": 0.2,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.26,
@@ -4019,7 +4019,7 @@
   {
    "x": 0.25,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.23,
@@ -4028,7 +4028,7 @@
   {
    "x": 0.3,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.23,
@@ -4037,16 +4037,16 @@
   {
    "x": 0.35,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.22,
+   "time_s": 0.23,
    "msg": ""
   },
   {
    "x": 0.4,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -4055,16 +4055,16 @@
   {
    "x": 0.45,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
-   "time_s": 0.22,
+   "time_s": 0.21,
    "msg": ""
   },
   {
    "x": 0.5,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -4073,7 +4073,7 @@
   {
    "x": 0.55,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": true,
    "time_s": 0.22,
@@ -4082,37 +4082,37 @@
   {
    "x": 0.6,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.17,
+   "time_s": 0.18,
    "msg": ""
   },
   {
    "x": 0.65,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.19,
+   "time_s": 0.2,
    "msg": ""
   },
   {
    "x": 0.7,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.21,
+   "time_s": 0.22,
    "msg": ""
   },
   {
    "x": 0.75,
    "y": 0.45,
-   "z": 0.17,
+   "z": 0.213,
    "level": "hover",
    "success": false,
-   "time_s": 0.22,
+   "time_s": 0.23,
    "msg": ""
   }
  ],
@@ -4122,7 +4122,7 @@
    "xyz": [
     0.45,
     0.0,
-    0.17
+    0.213
    ],
    "yaw": 0.0,
    "success": true,
@@ -4133,7 +4133,7 @@
    "xyz": [
     0.45,
     0.0,
-    0.09
+    0.133
    ],
    "yaw": 0.0,
    "success": true,
@@ -4144,7 +4144,7 @@
    "xyz": [
     0.45,
     -0.25,
-    0.04
+    0.083
    ],
    "yaw": 0.0,
    "success": true,

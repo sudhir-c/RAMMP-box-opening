@@ -1,14 +1,32 @@
-# Measured bench geometry — PLACEHOLDERS copied from RAMMP-CuRobo's
-# world_real_bench.yaml. MEASURE AT PHASE-1 BENCH TIME (tape measure from
-# base_link: +x forward, +z up; err TALL on the table — too tall costs
-# reachable volume, never safety). After reconciliation this file is the
-# single source of truth; generated variants extend it (worlds.py).
+# Measured bench geometry — reconciled 2026-08-24 with RAMMP-CuRobo's
+# world_real_bench.yaml (feat/perceived-world HEAD), whose table was
+# MEASURED 2026-08-24 by their scripts/measure_bench.py from the
+# registered Orbbec (surface plane of 240k points; top at -0.027 m).
+# This file is the single source of truth for OUR generated worlds
+# (worlds.py extends it with container-derived cuboids); re-reconcile
+# only if the arm or bench moves (re-run measure_bench there, copy here).
+#
+# Names matter: the planner's no_pad handling is keyed by obstacle name
+# (`table` carries the TRUE surface height; padding it would swallow the
+# arm's own base spheres). Keep pedestal/table/floor_* names verbatim.
 base_frame: base_link
 
 obstacles:
-  - name: pedestal
+  - name: pedestal                   # the arm's mounting column (no_pad).
     position: [0.0, 0.0, -0.05]
     dims: [0.14, 0.14, 0.04]
-  - name: table
-    position: [0.15, 0.0, -0.10]
-    dims: [1.3, 1.4, 0.06]
+  - name: table                      # TRUE surface height (no_pad).
+    position: [0.488, -0.063, -0.057]
+    dims: [1.68, 1.89, 0.06]
+  - name: floor_front                # padded keep-out repeating the
+    position: [0.738, -0.063, -0.057]   # surface outside a 0.30 m square
+    dims: [1.18, 1.89, 0.06]            # around the base
+  - name: floor_back
+    position: [-0.250, -0.063, -0.057]
+    dims: [0.20, 1.89, 0.06]
+  - name: floor_left
+    position: [0.000, 0.517, -0.057]
+    dims: [0.30, 0.73, 0.06]
+  - name: floor_right
+    position: [0.000, -0.580, -0.057]
+    dims: [0.30, 0.86, 0.06]

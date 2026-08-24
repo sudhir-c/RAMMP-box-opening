@@ -67,7 +67,30 @@ With the container at its bench spot:
 8. `hover_standoff`: keep ≥ 0.06 (must exceed the 0.051 m guard floor:
    2 cm pose uncertainty + 2.1 cm tip bias + 1 cm baseline travel).
 
-### 2c. Gripper width→command calibration + grip bands
+### 2c. Press-demo measurements (the current milestone needs ONLY
+### 2a items 1–3, 2b items 1–3, and this section)
+
+1. Print `docs/tag0_50mm.png` at 100% / actual size, measure the black
+   square with a ruler, record it as `tag.size_m` (PNGs carry no DPI —
+   printers rescale silently; pose error scales directly with this).
+2. Stick the tag centered ON the button top (`tag.offset_xyz` stays
+   [0,0,0]; measure and set it only if the tag must sit off-button).
+3. `press_demo.travel_m`: press the button by hand with a caliper —
+   the travel at which the lid releases, plus ~2 mm margin. The stroke
+   is position-controlled with the torque guard as a stop; too-large
+   travel means the guard (touch_nm) is your only brake.
+4. Flip `measure_me: false` — the CLIs refuse `--execute` until then.
+5. Scan pose (needs the camera AT the pose, so this comes after the
+   flip; the scan leg is a transit into free air): run §4 steps 2–3,
+   then `press_demo --execute` with the container placed. If DETECT
+   reports no tag, check `ros2 topic hz /d405/d405/color/image_raw`
+   (driver up?), then adjust `scan.xyz` until the status line reports
+   sightings — the camera sees ~±0.30 m x, ±0.19 m y around the pose at
+   tag height. The default [0.42, 0, 0.45] plans from HOME (verified
+   offline 2026-08-24). A failed detect always parks the arm home.
+
+### 2d. Gripper width→command calibration + grip bands (ladder only —
+### the press demo just closes the fingers)
 
 1. `ros2 run rammp_box_opening preflight` first (below) — planner
    `execute` must be true for gripper motion.
@@ -100,7 +123,33 @@ With the container at its bench spot:
    after any client/runner/CLI change, BEFORE burning bench time on the
    live drill.
 
-## 4. The attended ladder (Phase 1, spec §8)
+## 4. The press demo (current milestone, owner design 2026-08-24)
+
+Attended, e-stop in hand. `--execute` alone arms it — NO typed
+confirmation (owner decision: autonomous once started, Ctrl+C stops
+everything; the abort drill above is the proof it does).
+
+1. Off-bench, after any code change:
+   `python3 scripts/abort_e2e.py && python3 scripts/press_demo_e2e.py`
+   — both must PASS before bench time.
+2. Bringup: arm (ros2_kortex), then
+   `ros2 launch rammp_box_opening press_demo.launch.py execute:=true`
+   (planner + D405 driver with aligned depth; kills stray planners).
+3. Preflight + abort drill (§3). Container in the reach band AND the
+   camera's view zone (README map), tag up.
+4. Dry-run: `ros2 run rammp_box_opening press_demo` — read the leg
+   preview and the TAG line (container origin must match reality to
+   ~1 cm; if not, stop and check `tag.size_m` / the mount).
+5. `ros2 run rammp_box_opening press_demo --execute`. Expected: scan,
+   fix, staging, hover, one press stroke ("guard stopped" or "full
+   travel" both = pressed — the lid should visibly release), retreat,
+   home, exit 0. No tag → the arm parks home and it exits 2.
+6. Repeat from different container positions in the band. Exit
+   criterion: repeatable pressed-and-released runs, verified in
+   `~/.ros/rammp_box_opening/runs/run-*.jsonl`.
+
+## 5. The attended ladder (Phase-1 choreography — SUPERSEDED as the
+## milestone by §4; kept for the grasp/lift/place future)
 
 Rules: dry-run every rung FIRST (no `--execute`) and read the leg
 preview; first `--execute` of a new rung at default speeds (0.25 transit
@@ -119,7 +168,7 @@ read the report and the run log before re-trying.
 Phase-1 exit: ONE clean `open_container` run — every leg `ok` in the run
 log, press classified `pressed`, grasp band held through lift.
 
-## 5. When something trips
+## 6. When something trips
 
 - The runner stops at the first unexpected outcome with the arm holding
   and prints leg name, outcome, torque peak, progress. The same row is
@@ -136,6 +185,13 @@ log, press classified `pressed`, grasp band held through lift.
   code.
 - Guard refuses to run: `/joint_states` has no effort fields — the arm
   bringup is wrong, not the guard.
+- press_demo NO TAG with the container plainly in view: check the CLI's
+  status line — "camera streams missing" means the driver (aligned
+  depth included) isn't up; "0/N frames" with frames flowing means tag
+  id/size/lighting. "(RGB z only)" in the TAG line means depth
+  refinement failed — trust the run less, check alignment.
+- press_demo guard trip DURING hover or staging (before the stroke):
+  something unexpected in the corridor — stop, look, re-place.
 - Post-contact plan failure triggers the plan-free reverse-retrace of the
   executed descent. If THAT is refused by the server, the arm holds:
   clear the area, home manually at low speed.

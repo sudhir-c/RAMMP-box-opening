@@ -116,3 +116,38 @@ def test_lift_reverifies_band():
     assert not ok  # slipped to fully closed
     ok, detail = legs[0].verify(VerifyCtx(outcome="arrived", gripper_pos=None))
     assert ok and "unchecked" in detail  # honest fallback, logged
+
+
+def test_press_fixed_legs_speeds_and_targets():
+    import pytest
+
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.primitives.core import PressFixed
+
+    c = ctx()
+    cfg = load_press_demo(CFG)
+    legs, st = PressFixed(cfg).plan(c, state())
+    close, hover, press = legs
+    assert close.kind is Kind.GRIPPER and close.gripper_cmd == 0.8
+    button = from_container(c.cpose, c.model.button_offset)
+    assert hover.kind is Kind.MOTION and hover.speed == 0.15
+    assert hover.world.startswith("interaction")
+    assert hover.target[1][2] == pytest.approx(button[2] + cfg.hover_m)
+    assert press.guard is not None and press.guard.trip == "press"
+    assert press.speed == pytest.approx(cfg.press_speed)
+    assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
+    assert press.invalidates_downstream and st.chain > 0
+
+
+def test_press_fixed_verify_trip_or_full_travel_both_pass():
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.primitives.core import PressFixed
+
+    legs, _ = PressFixed(load_press_demo(CFG)).plan(ctx(), state())
+    press = legs[2]
+    ok, detail = press.verify(VerifyCtx(outcome="touch", torque_peak=4.2))
+    assert ok and "guard" in detail
+    ok, detail = press.verify(VerifyCtx(outcome="arrived"))
+    assert ok and "no trip" in detail
+    ok, _ = press.verify(VerifyCtx(outcome="failed"))
+    assert not ok

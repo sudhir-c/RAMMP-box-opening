@@ -268,3 +268,10 @@ def test_jsonl_log_written(tmp_path):
     assert len(logs) == 1
     row = json.loads(logs[0].read_text().splitlines()[0])
     assert row["leg"] == "a" and row["outcome"] == "arrived"
+
+
+def test_transit_gate_accepts_bench_world_pre_detection(tmp_path):
+    c = FakeClient()
+    r = runner(c, tmp_path)
+    assert r._refusal(leg("scan", world="bench")) is None
+    assert "full or bench" in r._refusal(leg("weird", world="interaction_button"))

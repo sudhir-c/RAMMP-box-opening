@@ -30,9 +30,12 @@ humble → RAMMP-Kinova ws → RAMMP-CuRobo → this ws, with
 ## Safety stance
 
 Dry-run is the default everywhere: every CLI plans and previews without
-motion unless given `--execute` AND a typed `yes`, and motion CLIs are
-run by a human with a hand on the physical e-stop. No autonomous motion
-from agent sessions, ever. The planner's `execute` parameter is a third,
+motion unless given `--execute`, and motion CLIs are run by a human
+with a hand on the physical e-stop. The Phase-1 primitive CLIs
+additionally require a typed `yes`; `press_demo` deliberately does not
+(owner decision 2026-08-24: `--execute` alone arms it, autonomous once
+started, Ctrl+C stops everything). No autonomous motion from agent
+sessions, ever. The planner's `execute` parameter is a third,
 server-side gate for arm motion; the runner additionally refuses gripper
 commands while the planner is dry-run (the direct gripper action is not
 server-gated).
@@ -52,43 +55,79 @@ drill in `docs/HARDWARE_BRINGUP.md`.
 `scripts/reach_probe.py` (offline, in-process planner, nothing can move)
 swept tool-down poses — the press-attitude family every contact
 primitive uses — across the bench at the two mission heights for a
-container on the table: contact (button top, z=0.09) and hover (+0.08).
-Result (2026-08-24, placeholder bench geometry, 5 cm pitch, 459 plans;
-raw data `docs/reach_map.json`):
+container on the MEASURED table (top −0.027 m, reconciled 2026-08-24
+from RAMMP-CuRobo's Orbbec measurement): contact (button top, z=0.133)
+and staging (+0.08, z=0.213). Result (2026-08-24, 5 cm pitch, 459
+plans; raw data `docs/reach_map.json`):
 
 ```
      x 0.20 0.25 0.30 0.35 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75
 y -0.45  #   #   #   #   #   #   #   #   .   .   .   .
-y -0.35  #   #   #   #   #   #   #   #   #   o   .   .
+y -0.35  #   #   #   #   #   #   #   #   #   .   .   .
 y -0.25  #   #   #   #   #   #   #   #   #   #   .   .
-y -0.15  #   #   #   #   #   #   #   #   #   #   #   .
+y -0.15  #   #   #   #   #   #   #   #   #   #   o   .
 y -0.05  #   #   #   #   #   #   #   #   #   #   #   .
-y +0.00  o   #   #   #   #   #   #   #   #   #   #   .
-y +0.05  #   #   #   #   #   #   #   #   #   #   #   .
-y +0.15  #   #   #   #   #   #   #   #   #   #   #   .
+y +0.00  #   #   #   #   #   #   #   #   #   #   #   .
+y +0.05  #   o   #   #   #   #   #   #   #   #   #   .
+y +0.15  #   #   #   #   #   #   #   #   #   #   o   .
 y +0.25  #   #   #   #   #   #   #   #   #   #   .   .
-y +0.35  #   #   #   #   #   #   #   #   #   o   .   .
+y +0.35  #   #   #   o   #   #   #   #   #   .   .   .
 y +0.45  #   #   #   #   #   #   #   #   .   .   .   .
-(# = hover AND contact plan, o = one height only, . = neither;
+(# = staging AND contact plan, o = one height only, . = neither;
  every-other row shown — full 19-row map in docs/reach_map.json)
 ```
 
-Read it as: **place the container with its button between x 0.25 and a
-radial edge of ~0.70 m, anywhere in y ±0.45** — 188/228 grid points are
-usable at both heights. The inner edge is real but tight: (0.20, 0.00)
-fails at contact height (near-base fold-in), so keep 0.25 m as the
-practical minimum. This is the complement of the wrist-flat lore: the
-wrist-flat TRANSIT family fails inside ~0.5 m radius, while TOOL-DOWN
-work covers 0.25–0.70 m — the two families overlap only in an annulus,
-which is why contact primitives never use wrist-flat attitudes. The
-configured `bench_pose` (0.45, 0, yaw 0) and `lid_place` (0.45, −0.25)
-hover/contact poses all plan from HOME.
+Read it as: **place the container with its button between x 0.20 and a
+radial edge of ~0.70 m, anywhere in y ±0.45** — 180/228 grid points are
+usable at both heights, with a few isolated single-point holes (planner
+stochasticity; nudge an inch if one bites). This is the complement of
+the wrist-flat lore: the wrist-flat TRANSIT family fails inside ~0.5 m
+radius, while TOOL-DOWN work covers the whole band — which is why every
+mission pose uses the tool-down family. The configured `bench_pose`
+(0.45, 0) and `lid_place` (0.45, −0.25) poses all plan from HOME.
+
+For the press demo, the practical zone is tighter than the reach band:
+the wrist camera at the scan pose sees roughly ±0.30 m in x and
+±0.19 m in y around (0.45, 0) at tag height — the tag must be VISIBLE
+before it can be reached (a container outside the view exits honestly
+via the no-tag path).
 
 Caveats (also in the JSON meta): bare-bench world — the container's own
 collision model shrinks this only locally; every plan starts at HOME;
 probe yaw is the point bearing (joint_7 absorbs tool-down yaw). Re-run
-after the Phase-1 worksheet reconciles the real bench geometry:
+whenever bench geometry changes:
 
 ```zsh
 python3 scripts/reach_probe.py            # ~2 min on the Orin; --quick to smoke
 ```
+
+## The press demo (current milestone, owner design 2026-08-24)
+
+One launch, one command, autonomous once started:
+
+```zsh
+ros2 launch rammp_box_opening press_demo.launch.py execute:=true   # planner + D405
+ros2 run rammp_box_opening press_demo --execute                    # in its own shell
+```
+
+Flow: SCAN (tool-down look pose over the bench) → DETECT (continuous
+wrist-camera ArUco watcher; the camera runs from CLI start to exit) →
+no fresh stable fix within the timeout → home, exit 2 — otherwise
+APPROACH staging above the tag (full world with the tag-derived
+container cuboid) → hover 1 inch over the tag (interaction world) →
+ONE fixed-travel guarded press stroke (`press_demo.travel_m` below the
+tag plane at `press_demo.speed`; a torque trip or full travel both
+count as pressed, the report says which) → retreat → HOME.
+
+The tag (DICT_4X4_50 id 0, `docs/tag0_50mm.png`) sits ON the button
+top; its depth-refined pose IS the press target — `tag.offset_xyz`
+supports off-button placement. All knobs live in
+`config/containers/oxo_pop.yaml`; measure `tag.size_m` (printed edge),
+`press_demo.travel_m` (caliper), and the scan pose per
+`docs/HARDWARE_BRINGUP.md`, then flip `measure_me: false`.
+
+Proven off-bench by `scripts/press_demo_e2e.py` (stub planner +
+synthetic D405 publishing real rendered ArUco frames on an isolated
+domain): the actual detection→PnP→TF→depth→pose pipeline recovers the
+container origin to ~1 mm, the full leg chain runs, and the no-tag
+path homes and exits 2.

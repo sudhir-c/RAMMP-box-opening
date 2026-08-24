@@ -78,24 +78,34 @@ def lid_place_of(args):
     return ContainerPose(xyz=tuple(args.lid_place), yaw=0.0)
 
 
-def build_ctx(args):
-    cfg = args.container or default_container_yaml()
-    bench = args.bench_world or default_bench_yaml()
-    model = ContainerModel.load(cfg)
-    if args.execute and model.measure_me:
+def refuse_unmeasured(model, execute):
+    if execute and model.measure_me:
         sys.exit(
             "container config still carries measure_me: true — run the "
-            "Phase-1 measurement worksheet (docs/HARDWARE_BRINGUP.md) and "
-            "flip it before any hardware execution (dry-run is fine)."
+            "measurement worksheet (docs/HARDWARE_BRINGUP.md) and flip it "
+            "before any hardware execution (dry-run is fine)."
         )
-    # own SIGINT: an in-flight stroke must get its cancel delivered on a
-    # live context before we exit (runtime/abort.py; proven by
-    # scripts/abort_e2e.py — rclpy's default handler makes it a race)
+
+
+def init_runtime():
+    """rclpy + SIGINT ownership + node + client, shared by every CLI.
+
+    Owning SIGINT means an in-flight stroke gets its cancel delivered on
+    a live context before we exit (runtime/abort.py; proven by
+    scripts/abort_e2e.py — rclpy's default handler makes it a race)."""
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     abort = AbortFlag()
     install_sigint(abort)
     node = rclpy.create_node("rammp_box_opening")
-    client = PlannerClient(node, abort=abort)
+    return node, PlannerClient(node, abort=abort)
+
+
+def build_ctx(args):
+    cfg = args.container or default_container_yaml()
+    bench = args.bench_world or default_bench_yaml()
+    model = ContainerModel.load(cfg)
+    refuse_unmeasured(model, args.execute)
+    node, client = init_runtime()
     ctx = Ctx(
         model=model,
         cpose=ConfigPoseSource(cfg).container_pose(),

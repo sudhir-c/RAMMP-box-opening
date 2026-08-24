@@ -40,6 +40,17 @@ def _lid_cuboid(model, lid_at):
     }
 
 
+def bench_world(bench):
+    """Bench obstacles only — the pre-detection world: no container has
+    been seen yet, so none may be modeled (press_demo scan/no-tag legs)."""
+    return {
+        "base_frame": bench.get("base_frame", "base_link"),
+        "obstacles": _bench_obstacles(bench),
+        "objects": [],
+        "targets": [],
+    }
+
+
 def full_world(bench, model, cpose, lid_at=None):
     obstacles = _bench_obstacles(bench)
     obstacles.append(_container_cuboid(model, cpose))
@@ -111,7 +122,10 @@ class WorldStore:
         lid_at=None,
         tag="",
     ):
-        if kind == "full":
+        if kind == "bench":
+            world = bench_world(self._bench)
+            name = "bench" + (("_" + tag) if tag else "")
+        elif kind == "full":
             world = full_world(self._bench, model, cpose, lid_at=lid_at)
             name = "full" + (("_" + tag) if tag else "")
         elif kind == "interaction":

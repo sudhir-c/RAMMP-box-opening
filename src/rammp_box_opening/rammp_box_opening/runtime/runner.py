@@ -74,18 +74,21 @@ class Runner:
     # -- gates (checked BEFORE anything executes) ---------------------------
     def _refusal(self, leg):
         if leg.kind is Kind.MOTION:
-            # Transit-speed legs require the full world. Slow (contact-speed)
-            # unguarded legs are the one exception: a post-contact retreat
-            # must plan against the interaction world its descent used — in
-            # the full world its start would read as inside the container.
+            # Transit-speed legs require the fullest world KNOWN: "full"
+            # (bench + container), or "bench" in the pre-detection epoch —
+            # a container cannot be modeled before one is seen (press_demo
+            # scan / no-tag home). Slow (contact-speed) unguarded legs are
+            # the one exception: a post-contact retreat must plan against
+            # the interaction world its descent used — in the full world
+            # its start would read as inside the container.
             if (
                 leg.guard is None
                 and leg.speed > CONTACT_SPEED
-                and not leg.world.startswith("full")
+                and not leg.world.startswith(("full", "bench"))
             ):
                 return (
-                    "transit-speed MOTION leg planned against %r — full world "
-                    "required (spec §6)" % leg.world
+                    "transit-speed MOTION leg planned against %r — full or "
+                    "bench world required (spec §6)" % leg.world
                 )
             if leg.traj is not None:
                 bad = sanity_violations(leg.traj, self.margin_rad)
@@ -119,6 +122,7 @@ class Runner:
         for leg in legs:
             why = self._refusal(leg)
             if why:
+                print("REFUSED: %s — %s" % (leg.name, why))
                 res = LegResult(leg.name, "refused", False, why)
                 self._log(res, leg)
                 return [res]

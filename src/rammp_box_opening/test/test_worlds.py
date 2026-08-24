@@ -88,3 +88,15 @@ def test_store_idempotent_names(tmp_path):
     n2, p2 = store.push_name("full", model=m, cpose=cp)
     assert n1 == n2 == "full" and p1 == p2
     assert p1.exists()
+
+
+def test_bench_world_is_bench_only(tmp_path):
+    from rammp_box_opening.worlds import bench_world
+
+    w = bench_world(_bench())
+    names = set(_cuboids(w))
+    assert {"pedestal", "table"} <= names
+    assert not any(n.startswith(("container", "ring", "placed_lid")) for n in names)
+    store = WorldStore(BENCH, out_dir=tmp_path)
+    n, p = store.push_name("bench")
+    assert n == "bench" and p.exists()

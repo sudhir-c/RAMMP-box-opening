@@ -339,6 +339,75 @@ class Retreat:
         return [leg], state
 
 
+class PressFixed:
+    """Owner-simplified press (2026-08-24): close, hover at cfg.hover_m,
+    then ONE fixed-travel guarded stroke at cfg.press_speed.
+
+    The guard is a STOP, not a classifier: a torque trip OR reaching the
+    commanded depth both count as pressed — the report says which ended
+    the stroke. check_standoff is deliberately not applied: its 0.051 m
+    floor priced in +/-2 cm hand-measured z, while the tag pose's z is
+    depth-refined to mm; the guard still arms in free air above the
+    button. The hover waypoint is only plannable in the interaction
+    world (in the full world it sits inside the err-tall container
+    cuboid's padding), which is why staging (full world, cfg.staging_m)
+    must precede this primitive."""
+
+    def __init__(self, cfg, name="press"):
+        self.cfg = cfg
+        self.name = name
+
+    def plan(self, ctx, state):
+        m = ctx.model
+        cfg = self.cfg
+        button = from_container(ctx.cpose, m.button_offset)
+        quat = attitude_quat(m.press_attitude_rpy_deg, ctx.cpose.yaw)
+        world = _interaction_world(ctx, button, button[2], cfg.travel_m, "button")
+        ctx.last_world = world
+        close = _gripper_leg(
+            ctx, state, self.name + ":close", GRIPPER_CMD_CLOSED, world
+        )
+        hover = [button[0], button[1], button[2] + cfg.hover_m]
+        hover_leg, state = _plan_motion(
+            ctx,
+            state,
+            self.name + ":hover",
+            ("pose", hover, quat),
+            world,
+            CONTACT_SPEED,
+        )
+        guard = GuardSpec(
+            touch_nm=m.touch_nm,
+            trip="press",
+            depth_window=(0.0, cfg.travel_m),
+            target_z=button[2],
+        )
+
+        def verify(v):
+            if v.outcome == "touch":
+                peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
+                return True, "guard stopped the stroke%s — pressed" % peak
+            if v.outcome == "arrived":
+                return True, "full travel %.1f mm, no trip — pressed" % (
+                    cfg.travel_m * 1000
+                )
+            return False, "press %s" % v.outcome
+
+        target = [button[0], button[1], button[2] - cfg.travel_m]
+        press, state = _plan_motion(
+            ctx,
+            state,
+            self.name + ":down",
+            ("pose", target, quat),
+            world,
+            cfg.press_speed,
+            guard=guard,
+            invalidates=True,
+            verify=verify,
+        )
+        return [close, hover_leg, press], state
+
+
 class Home:
     """Return to HOME joints via plan_to_joints (spec §5)."""
 

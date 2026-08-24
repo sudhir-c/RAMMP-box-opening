@@ -23,9 +23,31 @@ gripper_map:
   aperture_at_0: 0.085            # bench-calibrated two-point width->command map
   aperture_at_08: 0.0
 bench_pose:                       # Phase-1 PoseSource (hand-measured)
-  xyz: [0.45, 0.0, -0.07]
+  xyz: [0.45, 0.0, -0.027]        # z = measured table top (world_bench.yaml)
   yaw_deg: 0.0
 open_container:
   lid_place:                      # the one non-container-derived pose (spec §5)
-    xyz: [0.45, -0.25, -0.07]
+    xyz: [0.45, -0.25, -0.027]
     yaw_deg: 0.0
+
+# --- press_demo (tag-driven press flow, owner design 2026-08-24) ---------
+tag:                              # printed marker on the button top
+  id: 0                           # DICT_4X4_50 (docs/tag0_50mm.png)
+  size_m: 0.05                    # MEASURE the printed black square edge
+  offset_xyz: [0.0, 0.0, 0.0]     # tag center -> button top center, container
+                                  # frame (0 = tag stuck ON the button)
+press_demo:
+  hover_m: 0.0254                 # pre-press waypoint above the tag plane
+  travel_m: 0.008                 # MEASURE: press depth below the tag plane
+  speed: 0.25                     # press stroke speed (owner 2026-08-24)
+  staging_m: 0.08                 # full-world approach height above the tag
+                                  # (must clear the err-tall container cuboid)
+scan:
+  xyz: [0.42, 0.0, 0.45]          # tool-down look pose; camera sees ~0.6 x
+                                  # 0.4 m of bench around it at tag height
+detect:
+  timeout_s: 10.0                 # scan-pose wait for a stable fix
+  min_hits: 3                     # agreeing frames before the fix commits
+  tol_m: 0.03                     # pairwise agreement (stable_fix)
+  window_s: 2.0                   # sightings older than this leave the window
+  fresh_s: 1.0                    # a fix older than this cannot commit

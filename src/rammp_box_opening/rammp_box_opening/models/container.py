@@ -134,3 +134,54 @@ def load_lid_place(path):
     with open(path) as f:
         raw = yaml.safe_load(f)["open_container"]["lid_place"]
     return ContainerPose(xyz=tuple(raw["xyz"]), yaw=math.radians(float(raw["yaw_deg"])))
+
+
+@dataclass(frozen=True)
+class PressDemoCfg:
+    """Knobs of the tag-driven press flow (owner design 2026-08-24)."""
+
+    tag_id: int
+    tag_size_m: float
+    tag_offset: tuple  # tag center -> button top center, container frame
+    hover_m: float  # pre-press waypoint above the tag plane
+    travel_m: float  # press depth below the tag plane
+    press_speed: float
+    staging_m: float  # full-world approach height above the tag
+    scan_xyz: tuple
+    timeout_s: float
+    min_hits: int
+    tol_m: float
+    window_s: float
+    fresh_s: float
+
+
+def load_press_demo(path):
+    with open(path) as f:
+        raw = yaml.safe_load(f)
+    tag, pd = raw["tag"], raw["press_demo"]
+    cfg = PressDemoCfg(
+        tag_id=int(tag["id"]),
+        tag_size_m=float(tag["size_m"]),
+        tag_offset=tuple(tag.get("offset_xyz", (0.0, 0.0, 0.0))),
+        hover_m=float(pd["hover_m"]),
+        travel_m=float(pd["travel_m"]),
+        press_speed=float(pd["speed"]),
+        staging_m=float(pd["staging_m"]),
+        scan_xyz=tuple(raw["scan"]["xyz"]),
+        timeout_s=float(raw["detect"]["timeout_s"]),
+        min_hits=int(raw["detect"]["min_hits"]),
+        tol_m=float(raw["detect"]["tol_m"]),
+        window_s=float(raw["detect"]["window_s"]),
+        fresh_s=float(raw["detect"]["fresh_s"]),
+    )
+    if cfg.travel_m <= 0:
+        raise ValueError("press_demo.travel_m must be positive")
+    if not 0.0 < cfg.press_speed <= 1.0:
+        raise ValueError("press_demo.speed outside (0, 1]")
+    if cfg.staging_m < cfg.hover_m + 0.04:
+        raise ValueError(
+            "press_demo.staging_m must exceed hover_m by >= 0.04 m: the "
+            "full-world approach has to clear the err-tall container cuboid "
+            "(+2 cm) plus collision padding (+2 cm)"
+        )
+    return cfg
