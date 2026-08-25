@@ -188,6 +188,7 @@ def test_center_on_tag_converges_after_one_move():
     from rammp_box_opening.tasks.press_demo import center_on_tag
 
     c = ctx()
+    c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
     cfg = load_press_demo(CFG)
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.001, 0.0, 0.4]])
     runner = _FakeRunner()
@@ -201,6 +202,7 @@ def test_center_on_tag_unconverged_presses_on_freshest_fix():
     from rammp_box_opening.tasks.press_demo import center_on_tag
 
     c = ctx()
+    c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
     cfg = load_press_demo(CFG)
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4]] * (cfg.servo_max_iters + 1))
     runner = _FakeRunner()
@@ -214,6 +216,7 @@ def test_center_on_tag_failure_semantics():
     from rammp_box_opening.tasks.press_demo import center_on_tag
 
     c = ctx()
+    c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
     cfg = load_press_demo(CFG)
     # servo exec failure: holds, never homes
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.10, 0.0, 0.4]])

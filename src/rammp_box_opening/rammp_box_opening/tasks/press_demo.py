@@ -121,10 +121,15 @@ def build_demo_legs(ctx, cfg):
 
 
 def build_servo_leg(ctx, cfg, disp, i):
-    """One lateral centering translation at the current height."""
-    tool = ctx.client.tool_xyz()
-    if tool is None:
+    """One lateral centering translation at the current height.
+
+    Anchored on the last COMMANDED pose (arrival-enforced by the runner),
+    not live TF: this bringup's TF tree has no `tool_frame`, and the
+    commanded pose is the more deterministic anchor anyway — each step
+    re-observes, so small arrival error self-corrects (field 2026-08-25)."""
+    if ctx.last_pose is None:
         return None
+    tool = ctx.last_pose[0]
     target = [tool[0] + disp[0], tool[1] + disp[1], tool[2]]
     quat = attitude_quat([180.0, 0.0, 0.0], math.atan2(target[1], target[0]))
     world = ctx.worlds.push_name("bench", model=ctx.model)
@@ -211,7 +216,7 @@ def center_on_tag(node, watcher, ctx, cfg, runner, execute, wait=None):
             print("[press_demo] servo plan refused: %s" % e)
             return None, "servo_failed"
         if leg is None:
-            print("[press_demo] no tool TF for the servo move")
+            print("[press_demo] no commanded pose to anchor the servo move")
             return None, "servo_failed"
         res = runner.run([leg], execute=execute, assume_yes=True)
         if any(not r.ok for r in res):
