@@ -1,5 +1,9 @@
-# OXO POP container model — PLACEHOLDERS, MEASURE AT PHASE-1 BENCH TIME.
-measure_me: true
+# OXO POP container model. Owner accepted nominal values for the press
+# demo 2026-08-25 (tag.size_m measured; dims/button_offset/travel_m are
+# NOMINAL — safe because the press target comes from the live tag, not
+# config, and the torque guard stops the stroke). Refine at the bench:
+# a caliper on the button travel is still worth 2 minutes.
+measure_me: false
 
 dims: [0.075, 0.075, 0.16]        # outer x, y, z (m), origin = bottom center
 lid_dims: [0.075, 0.075, 0.03]
