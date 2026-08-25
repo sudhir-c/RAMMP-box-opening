@@ -33,7 +33,8 @@ open_container:
 # --- press_demo (tag-driven press flow, owner design 2026-08-24) ---------
 tag:                              # printed marker on the button top
   id: 0                           # DICT_4X4_50 (docs/tag0_50mm.png)
-  size_m: 0.05                    # MEASURE the printed black square edge
+  size_m: 0.06                    # MEASURED 2026-08-25: printer scaled the
+                                  # 50 mm file to a 60 mm black square
   offset_xyz: [0.0, 0.0, 0.0]     # tag center -> button top center, container
                                   # frame (0 = tag stuck ON the button)
 press_demo:

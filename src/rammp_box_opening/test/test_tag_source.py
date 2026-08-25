@@ -85,7 +85,7 @@ def test_fix_window_rejects_disagreeing_frames():
 def test_load_press_demo_cfg():
     cfg = load_press_demo(CFG)
     assert cfg.tag_id == 0
-    assert cfg.tag_size_m == pytest.approx(0.05)
+    assert cfg.tag_size_m == pytest.approx(0.06)  # measured print 2026-08-25
     assert cfg.hover_m == pytest.approx(0.0254)
     assert cfg.press_speed == pytest.approx(0.25)  # owner decision 2026-08-24
     assert cfg.travel_m > 0

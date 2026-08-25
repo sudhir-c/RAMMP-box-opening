@@ -49,6 +49,8 @@ CHAIN = (
 TAG_XYZ = (0.45, 0.02, 0.133)
 TAG_YAW_DEG = 30.0
 TAG_OFFSET = (0.01, 0.0, 0.0)  # container-frame tag->button, in the cfg
+TAG_SIZE_M = 0.05  # harness-internal: cfg and synthetic camera BOTH get
+#                    this, whatever edge the real printed tag measures
 BUTTON_Z = 0.16  # oxo_pop.yaml button_offset z
 DETECT_TIMEOUT_S = 10.0  # oxo_pop.yaml detect.timeout_s
 
@@ -109,7 +111,7 @@ def run_scenario(tmp, cfg, mode):
     stub_log = tmp / ("stub_%s.log" % mode)
     cam_log = tmp / ("cam_%s.log" % mode)
     cli_log = tmp / ("cli_%s.log" % mode)
-    cam_args = (
+    cam_args = " --size %g" % TAG_SIZE_M + (
         " --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG)
     )
     stub_env = "export STUB_TRIP_EXEC_N=4; " if mode == "trip" else ""
@@ -240,11 +242,16 @@ def main():
     cfg = tmp / "oxo_measured.yaml"
     src_cfg = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
     cfg.write_text(
-        src_cfg.read_text()
-        .replace("measure_me: true", "measure_me: false")
-        .replace(
-            "offset_xyz: [0.0, 0.0, 0.0]",
-            "offset_xyz: [%g, %g, %g]" % TAG_OFFSET,
+        re.sub(
+            r"size_m: [\d.]+",
+            "size_m: %g" % TAG_SIZE_M,  # stay in sync with the synthetic
+            src_cfg.read_text()
+            .replace("measure_me: true", "measure_me: false")
+            .replace(
+                "offset_xyz: [0.0, 0.0, 0.0]",
+                "offset_xyz: [%g, %g, %g]" % TAG_OFFSET,
+            ),
+            count=1,
         )
     )
 
