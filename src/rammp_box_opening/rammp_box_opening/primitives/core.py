@@ -11,6 +11,7 @@ the world it was planned against, so pose-relative primitives (Lift,
 Retreat) need no pose argument of their own.
 """
 
+import math
 from dataclasses import dataclass
 
 from rammp_box_opening.constants import (
@@ -372,7 +373,12 @@ class PressFixed:
         m = ctx.model
         cfg = self.cfg
         button = from_container(ctx.cpose, m.button_offset)
-        quat = attitude_quat(m.press_attitude_rpy_deg, ctx.cpose.yaw)
+        # attitude yaw = BEARING of the button, not the container's yaw: a
+        # fingertip press is yaw-invariant, bearing is the family the reach
+        # map certifies, and an arbitrary tag yaw can have no IK solution
+        # (79.5 deg -> IK_FAIL, first bench run 2026-08-25). The tag's yaw
+        # still rotates tag_offset and is logged.
+        quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
         world = _interaction_world(ctx, button, button[2], cfg.travel_m, "button")
         ctx.last_world = world
         close = _gripper_leg(

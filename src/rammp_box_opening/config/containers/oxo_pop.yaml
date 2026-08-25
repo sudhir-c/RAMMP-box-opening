@@ -5,9 +5,11 @@
 # a caliper on the button travel is still worth 2 minutes.
 measure_me: false
 
-dims: [0.075, 0.075, 0.16]        # outer x, y, z (m), origin = bottom center
+dims: [0.075, 0.075, 0.107]       # z DERIVED from the live tag height
+                                  # 2026-08-25 (tag z 0.080 - table -0.027);
+                                  # xy still nominal — tape when convenient
 lid_dims: [0.075, 0.075, 0.03]
-button_offset: [0.0, 0.0, 0.16]   # origin -> button top center
+button_offset: [0.0, 0.0, 0.107]  # tag sits on the button = container top
 press:
   depth_window: [0.004, 0.012]    # m below nominal button top (min=real press,
   touch_nm: 3.0                   #  max includes cancel-latency budget, spec §6)

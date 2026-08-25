@@ -87,7 +87,9 @@ def build_demo_legs(ctx, cfg):
     to staging height -> HOME. All poses tool-down at the tag's yaw."""
     m = ctx.model
     button = from_container(ctx.cpose, m.button_offset)
-    quat = attitude_quat(m.press_attitude_rpy_deg, ctx.cpose.yaw)
+    # bearing-steered attitude, same as PressFixed: press is yaw-invariant
+    # and the bearing family is the reach-map-certified one (2026-08-25)
+    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
     st = _state(ctx.client.joints())
     staging = [button[0], button[1], button[2] + cfg.staging_m]
     approach, st = _plan_motion(

@@ -17,7 +17,7 @@ CFG = "src/rammp_box_opening/config/containers/oxo_pop.yaml"
 
 def test_load_and_validate():
     m = ContainerModel.load(CFG)
-    assert m.measure_me is True  # placeholders flagged
+    assert m.measure_me is False  # owner accepted values 2026-08-25
     assert m.press_depth_window[0] < m.press_depth_window[1]
     assert m.lid_grasp.width_m <= m.aperture_at_0  # graspable
     assert m.body_grasp.width_m <= m.aperture_at_0

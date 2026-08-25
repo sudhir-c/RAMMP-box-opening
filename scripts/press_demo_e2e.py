@@ -51,18 +51,23 @@ TAG_YAW_DEG = 30.0
 TAG_OFFSET = (0.01, 0.0, 0.0)  # container-frame tag->button, in the cfg
 TAG_SIZE_M = 0.05  # harness-internal: cfg and synthetic camera BOTH get
 #                    this, whatever edge the real printed tag measures
-BUTTON_Z = 0.16  # oxo_pop.yaml button_offset z
 DETECT_TIMEOUT_S = 10.0  # oxo_pop.yaml detect.timeout_s
 
 
-def expected_origin():
+def button_z(cfg_text):
+    """button_offset z from the yaml itself — never a stale constant."""
+    m = re.search(r"button_offset: \[[^,]+, [^,]+, ([\d.]+)\]", cfg_text)
+    return float(m.group(1))
+
+
+def expected_origin(btn_z):
     yaw = math.radians(TAG_YAW_DEG)
     c, s = math.cos(yaw), math.sin(yaw)
     ox, oy, _ = TAG_OFFSET
     return [
         TAG_XYZ[0] + c * ox - s * oy,
         TAG_XYZ[1] + s * ox + c * oy,
-        TAG_XYZ[2] - BUTTON_Z,
+        TAG_XYZ[2] - btn_z,
     ]
 
 
@@ -201,7 +206,7 @@ def run_scenario(tmp, cfg, mode):
     else:
         got = [float(v) for v in m.groups()[:3]]
         yaw = float(m.group(4))
-        want = expected_origin()
+        want = expected_origin(button_z(Path(cfg).read_text()))
         err = max(abs(a - b) for a, b in zip(got, want))
         print(
             "--- recovered origin %s yaw %.1f vs true %s yaw %.1f (err %.4f m)"

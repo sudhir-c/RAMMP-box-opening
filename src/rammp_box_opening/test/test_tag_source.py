@@ -108,13 +108,13 @@ def test_loader_refuses_nonpositive_hover(tmp_path):
 
 
 def test_loader_validates_staging_against_real_container_geometry(tmp_path):
-    # recessed button: dims.z 0.16, button_offset.z 0.11 -> staging must
-    # clear dims.z - button_offset.z + 0.04 = 0.09; the default 0.08 fails
+    # recessed button: dims.z 0.107, button_offset.z 0.05 -> staging
+    # must clear 0.107 - 0.05 + 0.04 = 0.097; the default 0.08 fails
     with pytest.raises(ValueError, match="staging_m"):
         load_press_demo(
             _cfg_variant(
                 tmp_path,
-                "button_offset: [0.0, 0.0, 0.16]",
-                "button_offset: [0.0, 0.0, 0.11]",
+                "button_offset: [0.0, 0.0, 0.107]",
+                "button_offset: [0.0, 0.0, 0.05]",
             )
         )
