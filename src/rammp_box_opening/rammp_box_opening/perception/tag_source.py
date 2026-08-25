@@ -140,6 +140,7 @@ class TagWatcher:
         self.hits = 0
         self.refined_hits = 0
         self.depth_refined = None  # last sighting: True/False/None
+        self.last_debug = None  # (p_cam, rot_cam, trans_cam) of last sighting
         self._last_stamp = None
         node.create_timer(period_s, self._tick)
 
@@ -183,6 +184,8 @@ class TagWatcher:
         self.refined_hits += 1
         pos = rot_cam @ refined + trans_cam
         rot = rot_cam @ r_tag_cam
+        # raw ingredients of the last sighting, for mount diagnostics
+        self.last_debug = (refined, rot_cam, trans_cam)
         self.window.add(pos, rot, time.monotonic())
 
     def _camera_pose(self, g):

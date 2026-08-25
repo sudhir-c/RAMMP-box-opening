@@ -123,8 +123,62 @@ def wait_for_fix(node, watcher, cfg):
     return None
 
 
+def detect_only_report(node, watcher, ctx, cfg, runner, execute):
+    """Mount-calibration observation: hold at the scan pose reporting every
+    fresh fix with its raw camera-frame ingredients, then park home.
+
+    Place the container at a TAPE-MEASURED spot first; the printed base
+    pose vs truth solves the wrist-mount error."""
+    watcher.reset()
+    print("[press_demo] DETECT-ONLY: reporting fixes for 15 s")
+    t0 = time.monotonic()
+    last = None
+    while time.monotonic() - t0 < 15.0:
+        rclpy.spin_once(node, timeout_sec=0.1)
+        got = watcher.fix()
+        if got is None:
+            continue
+        pos, rot = got
+        key = tuple(round(float(v), 4) for v in pos)
+        if key == last:
+            continue
+        last = key
+        yaw = math.degrees(math.atan2(rot[1][0], rot[0][0]))
+        p_cam, rot_cam, t_cam = watcher.last_debug
+        print(
+            "fix: base [%.3f, %.3f, %.3f] yaw %.1f | p_cam [%.3f, %.3f, %.3f]"
+            " | cam_t [%.3f, %.3f, %.3f]"
+            % (
+                pos[0],
+                pos[1],
+                pos[2],
+                yaw,
+                p_cam[0],
+                p_cam[1],
+                p_cam[2],
+                t_cam[0],
+                t_cam[1],
+                t_cam[2],
+            )
+        )
+        print(
+            "     cam_R rows [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]"
+            % tuple(float(v) for row in rot_cam for v in row)
+        )
+    print("[press_demo] detect-only done (%s) — homing" % watcher.status())
+    runner.run(
+        [build_home_leg(ctx, ctx.client.joints())], execute=execute, assume_yes=True
+    )
+
+
 def main():
     ap = cli_common.make_parser(__doc__)
+    ap.add_argument(
+        "--detect-only",
+        action="store_true",
+        help="scan, report fixes + camera-frame diagnostics for 15 s, home, "
+        "exit — the wrist-mount calibration observation (no press)",
+    )
     args = ap.parse_args()
     cfg_path = args.container or cli_common.default_container_yaml()
     bench = args.bench_world or cli_common.default_bench_yaml()
@@ -152,6 +206,10 @@ def main():
         )
         if any(not r.ok for r in res):
             sys.exit(1)
+
+        if args.detect_only:
+            detect_only_report(node, watcher, ctx, cfg, runner, args.execute)
+            sys.exit(0)
 
         print(
             "[press_demo] DETECT: waiting %.0f s for a stable fix (tag id %d)"
