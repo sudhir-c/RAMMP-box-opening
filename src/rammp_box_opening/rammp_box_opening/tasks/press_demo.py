@@ -107,6 +107,15 @@ def build_demo_legs(ctx, cfg):
     return [approach, *press_legs, *retreat_legs, *home_legs]
 
 
+def _spin_detect(node):
+    try:
+        rclpy.spin_once(node, timeout_sec=0.1)
+    except RuntimeError as e:
+        # rclpy teardown artifact: our SIGINT handler raising inside a
+        # subscription take surfaces as RuntimeError, not KeyboardInterrupt
+        raise KeyboardInterrupt from e
+
+
 def wait_for_fix(node, watcher, cfg):
     """Spin (the watcher ticks on its timer) until a fresh stable fix.
 
@@ -116,7 +125,7 @@ def wait_for_fix(node, watcher, cfg):
     watcher.reset()
     t0 = time.monotonic()
     while time.monotonic() - t0 < cfg.timeout_s:
-        rclpy.spin_once(node, timeout_sec=0.1)
+        _spin_detect(node)
         got = watcher.fix()
         if got is not None:
             return got
@@ -134,7 +143,7 @@ def detect_only_report(node, watcher, ctx, cfg, runner, execute):
     t0 = time.monotonic()
     last = None
     while time.monotonic() - t0 < 15.0:
-        rclpy.spin_once(node, timeout_sec=0.1)
+        _spin_detect(node)
         got = watcher.fix()
         if got is None:
             continue
