@@ -30,6 +30,7 @@ from rammp_box_opening.models.container import (
 from rammp_box_opening.perception.tag_source import (
     TagWatcher,
     container_pose_from_tag,
+    servo_step,
 )
 from rammp_box_opening.primitives.core import (
     Ctx,
@@ -82,29 +83,100 @@ def build_home_leg(ctx, start_joints):
     return leg
 
 
-def build_demo_legs(ctx, cfg):
-    """Post-detection sequence: staging approach -> PressFixed -> retreat
-    to staging height -> HOME. All poses tool-down at the tag's yaw."""
+def build_approach_leg(ctx, cfg):
+    """Staging directly above the tag-derived button, full world."""
     m = ctx.model
     button = from_container(ctx.cpose, m.button_offset)
     # bearing-steered attitude, same as PressFixed: press is yaw-invariant
     # and the bearing family is the reach-map-certified one (2026-08-25)
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
-    st = _state(ctx.client.joints())
     staging = [button[0], button[1], button[2] + cfg.staging_m]
-    approach, st = _plan_motion(
+    leg, _ = _plan_motion(
         ctx,
-        st,
+        _state(ctx.client.joints()),
         "approach:staging",
         ("pose", staging, quat),
         _full_world(ctx),
         TRANSIT_SPEED,
     )
+    return leg
+
+
+def build_press_legs(ctx, cfg):
+    """Hover + fixed stroke + retreat + home, planned from live joints
+    (run AFTER the approach so the close-range re-fix can update cpose)."""
+    st = _state(ctx.client.joints())
     press_legs, st = PressFixed(cfg).plan(ctx, st)
     # from the press bottom back up to staging height
     retreat_legs, st = Retreat(cfg.staging_m + cfg.travel_m).plan(ctx, st)
     home_legs, st = Home().plan(ctx, st)
-    return [approach, *press_legs, *retreat_legs, *home_legs]
+    return [*press_legs, *retreat_legs, *home_legs]
+
+
+def build_demo_legs(ctx, cfg):
+    """The one-shot composition (offline tests); main runs it in phases."""
+    return [build_approach_leg(ctx, cfg), *build_press_legs(ctx, cfg)]
+
+
+def build_servo_leg(ctx, cfg, disp, i):
+    """One lateral centering translation at the current height."""
+    tool = ctx.client.tool_xyz()
+    if tool is None:
+        return None
+    target = [tool[0] + disp[0], tool[1] + disp[1], tool[2]]
+    quat = attitude_quat([180.0, 0.0, 0.0], math.atan2(target[1], target[0]))
+    world = ctx.worlds.push_name("bench", model=ctx.model)
+    leg, _ = _plan_motion(
+        ctx,
+        _state(ctx.client.joints()),
+        "servo:%d" % i,
+        ("pose", target, quat),
+        world,
+        TRANSIT_SPEED,
+    )
+    return leg
+
+
+def center_on_tag(node, watcher, ctx, cfg, runner, execute):
+    """Owner design 2026-08-25: translate at scan height until the tag is
+    at the image center, then press from what the CENTERED camera sees.
+    Robust to camera-mount error — the loop converges even with an
+    imperfect direction, and a centered tag is under the optical axis no
+    matter what the mount calibration believes."""
+    for i in range(cfg.servo_max_iters + 1):
+        got = wait_for_fix(node, watcher, cfg)
+        if got is None:
+            return None
+        p_cam, rot_cam, _t = watcher.last_debug
+        disp, px = servo_step(
+            p_cam,
+            rot_cam,
+            watcher.grab.k,
+            cfg.servo_tol_px,
+            cfg.servo_min_step_m,
+            cfg.servo_max_step_m,
+        )
+        if disp is None:
+            print("[press_demo] CENTERED — tag %.0f px off the optical axis" % px)
+            return got
+        if i == cfg.servo_max_iters:
+            print(
+                "[press_demo] centering unconverged (%.0f px after %d moves) "
+                "— pressing on the freshest fix" % (px, i)
+            )
+            return got
+        print(
+            "[press_demo] SERVO %d: tag %.0f px off — shifting [%.3f, %.3f]"
+            % (i + 1, px, disp[0], disp[1])
+        )
+        leg = build_servo_leg(ctx, cfg, disp, i + 1)
+        if leg is None:
+            print("[press_demo] no tool TF for the servo move — stopping")
+            return None
+        res = runner.run([leg], execute=execute, assume_yes=True)
+        if any(not r.ok for r in res):
+            return None
+    return None
 
 
 def _spin_detect(node):
@@ -116,15 +188,16 @@ def _spin_detect(node):
         raise KeyboardInterrupt from e
 
 
-def wait_for_fix(node, watcher, cfg):
+def wait_for_fix(node, watcher, cfg, timeout_s=None):
     """Spin (the watcher ticks on its timer) until a fresh stable fix.
 
     The window is purged first: sightings gathered while the arm was
     still moving carry TF/depth timing skew — only parked-camera frames
     may commit the fix the press will trust."""
     watcher.reset()
+    limit = cfg.timeout_s if timeout_s is None else timeout_s
     t0 = time.monotonic()
-    while time.monotonic() - t0 < cfg.timeout_s:
+    while time.monotonic() - t0 < limit:
         _spin_detect(node)
         got = watcher.fix()
         if got is not None:
@@ -224,7 +297,7 @@ def main():
             "[press_demo] DETECT: waiting %.0f s for a stable fix (tag id %d)"
             % (cfg.timeout_s, cfg.tag_id)
         )
-        got = wait_for_fix(node, watcher, cfg)
+        got = center_on_tag(node, watcher, ctx, cfg, runner, args.execute)
         if got is None:
             print("[press_demo] NO TAG — %s — returning home" % watcher.status())
             runner.run(
@@ -251,8 +324,45 @@ def main():
             )
         )
 
-        legs = build_demo_legs(ctx, cfg)
-        res = runner.run(legs, execute=args.execute, assume_yes=True)
+        res = runner.run(
+            [build_approach_leg(ctx, cfg)], execute=args.execute, assume_yes=True
+        )
+        if any(not r.ok for r in res):
+            sys.exit(1)
+
+        # close-range re-fix: from staging (~20 cm range) any residual
+        # mount error shrinks proportionally. Opportunistic — the closed
+        # gripper may occlude the tag; the centered fix then stands.
+        got2 = wait_for_fix(node, watcher, cfg, timeout_s=2.5)
+        if got2 is not None:
+            cp2 = container_pose_from_tag(got2[0], got2[1], model, cfg.tag_offset)
+            d = math.dist(cp2.xyz, ctx.cpose.xyz)
+            if d > 0.05:
+                print(
+                    "[press_demo] close-range re-fix is %.3f m from the "
+                    "centered fix — inconsistent, aborting to home" % d
+                )
+                runner.run(
+                    [build_home_leg(ctx, client.joints())],
+                    execute=args.execute,
+                    assume_yes=True,
+                )
+                sys.exit(3)
+            if d > 0.005:
+                print(
+                    "[press_demo] close-range re-fix shifts the target "
+                    "%.1f mm — using it" % (d * 1000)
+                )
+            ctx.cpose = cp2
+        else:
+            print(
+                "[press_demo] no close-range re-fix (gripper may occlude) — "
+                "keeping the centered fix"
+            )
+
+        res = runner.run(
+            build_press_legs(ctx, cfg), execute=args.execute, assume_yes=True
+        )
         bad = [r for r in res if not r.ok]
         if bad:
             sys.exit(1)

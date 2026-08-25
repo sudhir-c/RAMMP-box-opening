@@ -72,6 +72,29 @@ def refine_point(tvec, k, depth, half_px=3, min_m=0.07, max_m=0.9):
     return np.array([(u - kk[0, 2]) / kk[0, 0] * d, (v - kk[1, 2]) / kk[1, 1] * d, d])
 
 
+def servo_step(p_cam, rot_cam, k, tol_px, min_step_m, max_step_m):
+    """One center-the-tag step: (base displacement | None-if-centered, px).
+
+    px is the tag center's pixel distance from the image center. The
+    displacement translates the CAMERA (and rigidly the tool) so the
+    optical axis lands on the tag: rot_cam @ (x, y, 0) — camera-frame
+    lateral offset lifted to base. Centering is robust to camera-mount
+    calibration error: the direction may be a few degrees off, the
+    iteration converges anyway, and 'tag on the optical axis' is true
+    regardless of where the mount THINKS the camera is (owner design
+    2026-08-25)."""
+    p = np.asarray(p_cam, dtype=float)
+    kk = np.asarray(k, dtype=float)
+    px = math.hypot(kk[0, 0] * p[0] / p[2], kk[1, 1] * p[1] / p[2])
+    disp = np.asarray(rot_cam, dtype=float) @ np.array([p[0], p[1], 0.0])
+    n = float(np.linalg.norm(disp))
+    if px <= tol_px or n < min_step_m:
+        return None, px
+    if n > max_step_m:
+        disp = disp * (max_step_m / n)
+    return [float(v) for v in disp], px
+
+
 class FixWindow:
     """Rolling sightings -> a fresh, stable (position, rotation) fix.
 

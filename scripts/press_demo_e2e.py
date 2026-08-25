@@ -46,7 +46,7 @@ CHAIN = (
     "source %s/install/setup.zsh; " % (DOMAIN, REPO)
 )
 
-TAG_XYZ = (0.45, 0.02, 0.133)
+TAG_XYZ = (0.42, 0.0, 0.133)  # on the scan camera's axis: servo is a no-op
 TAG_YAW_DEG = 30.0
 TAG_OFFSET = (0.01, 0.0, 0.0)  # container-frame tag->button, in the cfg
 TAG_SIZE_M = 0.05  # harness-internal: cfg and synthetic camera BOTH get
@@ -116,9 +116,9 @@ def run_scenario(tmp, cfg, mode):
     stub_log = tmp / ("stub_%s.log" % mode)
     cam_log = tmp / ("cam_%s.log" % mode)
     cli_log = tmp / ("cli_%s.log" % mode)
-    cam_args = " --size %g" % TAG_SIZE_M + (
-        " --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG)
-    )
+    cam_args = " --size %g --tag-x %g --tag-y %g --tag-z %g" % (
+        (TAG_SIZE_M,) + TAG_XYZ
+    ) + (" --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG))
     stub_env = "export STUB_TRIP_EXEC_N=4; " if mode == "trip" else ""
     stub = cam = cli = None
     try:
@@ -197,6 +197,8 @@ def run_scenario(tmp, cfg, mode):
         fails.append("gripper goals != 1")
     if "depth-refined" not in cli_said:
         fails.append("depth refinement never engaged")
+    if "CENTERED" not in cli_said:
+        fails.append("servo never reported CENTERED")
     m = re.search(
         r"container origin \[([-\d.]+), ([-\d.]+), ([-\d.]+)\] yaw ([-\d.]+) deg",
         cli_said,

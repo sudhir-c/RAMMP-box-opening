@@ -60,3 +60,8 @@ detect:
   tol_m: 0.03                     # pairwise agreement (stable_fix)
   window_s: 2.0                   # sightings older than this leave the window
   fresh_s: 1.0                    # a fix older than this cannot commit
+servo:                            # center-the-tag loop (owner 2026-08-25):
+  tol_px: 20.0                    # tag within this of image center = centered
+  max_iters: 4                    # lateral looks before pressing on anyway
+  min_step_m: 0.01                # skip micro-moves (kortex small-goal lore)
+  max_step_m: 0.25                # clamp one servo translation

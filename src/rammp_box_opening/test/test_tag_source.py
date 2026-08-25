@@ -118,3 +118,30 @@ def test_loader_validates_staging_against_real_container_geometry(tmp_path):
                 "button_offset: [0.0, 0.0, 0.05]",
             )
         )
+
+
+def test_servo_step_centered_and_directions():
+    from rammp_box_opening.perception.tag_source import servo_step
+
+    r_down = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
+    # centered: 10 px off < tol
+    disp, px = servo_step([0.005, 0.0, 0.4], r_down, K, 20.0, 0.01, 0.25)
+    assert disp is None and px < 20
+    # tag at camera +x -> move base +x by the lateral offset
+    disp, px = servo_step([0.10, 0.0, 0.4], r_down, K, 20.0, 0.01, 0.25)
+    assert px > 20
+    assert disp == pytest.approx([0.10, 0.0, 0.0])
+    # camera +y maps to base -y under the tool-down rotation
+    disp, _ = servo_step([0.0, 0.08, 0.4], r_down, K, 20.0, 0.01, 0.25)
+    assert disp == pytest.approx([0.0, -0.08, 0.0])
+
+
+def test_servo_step_clamps_and_min_step():
+    from rammp_box_opening.perception.tag_source import servo_step
+
+    r_down = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
+    disp, _ = servo_step([0.60, 0.0, 0.4], r_down, K, 20.0, 0.01, 0.25)
+    assert disp == pytest.approx([0.25, 0.0, 0.0])  # clamped to max_step
+    # px off-center but the physical move is sub-min: treat as centered
+    disp, _ = servo_step([0.005, 0.0, 0.05], r_down, K, 20.0, 0.01, 0.25)
+    assert disp is None

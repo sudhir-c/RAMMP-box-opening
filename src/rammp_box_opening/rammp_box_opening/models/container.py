@@ -153,6 +153,10 @@ class PressDemoCfg:
     tol_m: float
     window_s: float
     fresh_s: float
+    servo_tol_px: float
+    servo_max_iters: int
+    servo_min_step_m: float
+    servo_max_step_m: float
 
 
 def load_press_demo(path):
@@ -173,7 +177,15 @@ def load_press_demo(path):
         tol_m=float(raw["detect"]["tol_m"]),
         window_s=float(raw["detect"]["window_s"]),
         fresh_s=float(raw["detect"]["fresh_s"]),
+        servo_tol_px=float(raw["servo"]["tol_px"]),
+        servo_max_iters=int(raw["servo"]["max_iters"]),
+        servo_min_step_m=float(raw["servo"]["min_step_m"]),
+        servo_max_step_m=float(raw["servo"]["max_step_m"]),
     )
+    if cfg.servo_tol_px <= 0 or cfg.servo_max_iters < 0:
+        raise ValueError("servo.tol_px must be positive, max_iters >= 0")
+    if not 0 < cfg.servo_min_step_m < cfg.servo_max_step_m:
+        raise ValueError("servo step bounds must satisfy 0 < min < max")
     if cfg.travel_m <= 0:
         raise ValueError("press_demo.travel_m must be positive")
     if not 0.0 < cfg.press_speed <= 1.0:
