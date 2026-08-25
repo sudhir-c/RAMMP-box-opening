@@ -179,6 +179,7 @@ def center_on_tag(node, watcher, ctx, cfg, runner, execute, wait=None):
     "servo_failed" (plan/exec/TF failure -> caller does NOT command more
     motion; the arm holds, like every other leg failure)."""
     wait = wait_for_fix if wait is None else wait
+    prev_px = None
     for i in range(cfg.servo_max_iters + 1):
         got = wait(node, watcher, cfg)
         if got is None:
@@ -200,6 +201,16 @@ def center_on_tag(node, watcher, ctx, cfg, runner, execute, wait=None):
         if disp is None:
             print("[press_demo] CENTERED — tag %.0f px off the optical axis" % px)
             return got, "ok"
+        if prev_px is not None and px > prev_px + 20.0:
+            # a correct servo shrinks the error every step; growth means
+            # the camera frame is wrong (e.g. a flipped mount mirrors the
+            # correction) — stop instead of walking away (field 2026-08-25)
+            print(
+                "[press_demo] servo DIVERGING (%.0f -> %.0f px) — camera "
+                "frame is wrong, stopping" % (prev_px, px)
+            )
+            return None, "servo_failed"
+        prev_px = px
         if i == cfg.servo_max_iters:
             print(
                 "[press_demo] centering unconverged (%.0f px after %d moves) "

@@ -227,3 +227,18 @@ def test_center_on_tag_failure_semantics():
     watcher, wait = _servo_fixture([None])
     got, why = center_on_tag(None, watcher, c, cfg, _FakeRunner(), True, wait=wait)
     assert got is None and why == "no_tag"
+
+
+def test_center_on_tag_divergence_stops():
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.tasks.press_demo import center_on_tag
+
+    c = ctx()
+    c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
+    cfg = load_press_demo(CFG)
+    # a mirrored camera frame: the error GROWS after the first move
+    watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.22, 0.0, 0.4]])
+    runner = _FakeRunner()
+    got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
+    assert got is None and why == "servo_failed"
+    assert len(runner.ran) == 1  # stopped after one move, no walking away
