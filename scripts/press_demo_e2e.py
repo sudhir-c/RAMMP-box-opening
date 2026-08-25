@@ -200,11 +200,11 @@ def run_scenario(tmp, cfg, mode):
     if "CENTERED" not in cli_said:
         fails.append("servo never reported CENTERED")
     m = re.search(
-        r"container origin \[([-\d.]+), ([-\d.]+), ([-\d.]+)\] yaw ([-\d.]+) deg",
+        r"PRESS target origin \[([-\d.]+), ([-\d.]+), ([-\d.]+)\] yaw ([-\d.]+) deg",
         cli_said,
     )
     if not m:
-        fails.append("no container-origin line")
+        fails.append("no PRESS-target line")
     else:
         got = [float(v) for v in m.groups()[:3]]
         yaw = float(m.group(4))

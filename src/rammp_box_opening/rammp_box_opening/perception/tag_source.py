@@ -72,6 +72,13 @@ def refine_point(tvec, k, depth, half_px=3, min_m=0.07, max_m=0.9):
     return np.array([(u - kk[0, 2]) / kk[0, 0] * d, (v - kk[1, 2]) / kk[1, 1] * d, d])
 
 
+def to_camera(pos_base, rot_cam, trans_cam):
+    """Base-frame point -> camera frame (for judging the MEDIAN fix)."""
+    return np.asarray(rot_cam, dtype=float).T @ (
+        np.asarray(pos_base, dtype=float) - np.asarray(trans_cam, dtype=float)
+    )
+
+
 def servo_step(p_cam, rot_cam, k, tol_px, min_step_m, max_step_m):
     """One center-the-tag step: (base displacement | None-if-centered, px).
 
