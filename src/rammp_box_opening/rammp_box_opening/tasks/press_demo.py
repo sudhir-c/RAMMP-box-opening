@@ -4,10 +4,11 @@
     ros2 run rammp_box_opening press_demo --execute
 
 Flow, states logged one line each: SCAN (tool-down look pose, bench-only
-world) -> DETECT (continuous wrist-camera watcher; no fresh stable fix
-within the timeout -> home, exit 2) -> APPROACH staging (full world with
-the tag-derived container cuboid) -> PRESS (hover at 1 inch, one
-fixed-travel guarded stroke) -> RETREAT -> HOME.
+world) -> DETECT + center-the-tag servo -> CLOSE gripper + APPROACH
+staging (one phase; full world with the tag-derived container cuboid) ->
+close-range re-fix -> PRESS (ONE guarded stroke from staging to travel_m
+below the tag plane; a trip near expected contact depth or full travel =
+pressed, an early trip = honest strike failure) -> RETREAT -> HOME.
 
 --execute alone arms it: NO typed confirmation (owner decision
 2026-08-24 — autonomous once started, Ctrl+C stops everything via the
@@ -23,7 +24,7 @@ import time
 import rclpy
 
 
-from rammp_box_opening.constants import HOME, TRANSIT_SPEED
+from rammp_box_opening.constants import GRIPPER_CMD_CLOSED, HOME, TRANSIT_SPEED
 from rammp_box_opening.models.container import (
     ContainerModel,
     load_press_demo,
@@ -41,6 +42,7 @@ from rammp_box_opening.primitives.core import (
     PressFixed,
     Retreat,
     _full_world,
+    _gripper_leg,
     _plan_motion,
 )
 from rammp_box_opening.models.container import attitude_quat, from_container
@@ -85,6 +87,20 @@ def build_home_leg(ctx, start_joints):
     return leg
 
 
+def build_close_and_approach(ctx, cfg):
+    """Gripper close bundled with the staging approach (owner 2026-08-25:
+    fewer pauses — the fingers close before/while the arm transits, not
+    as a separate stop at the press site)."""
+    close = _gripper_leg(
+        ctx,
+        _state(ctx.client.joints()),
+        "press:close",
+        GRIPPER_CMD_CLOSED,
+        _full_world(ctx),
+    )
+    return [close, build_approach_leg(ctx, cfg)]
+
+
 def build_approach_leg(ctx, cfg):
     """Staging directly above the tag-derived button, full world."""
     m = ctx.model
@@ -117,7 +133,7 @@ def build_press_legs(ctx, cfg):
 
 def build_demo_legs(ctx, cfg):
     """The one-shot composition (offline tests); main runs it in phases."""
-    return [build_approach_leg(ctx, cfg), *build_press_legs(ctx, cfg)]
+    return [*build_close_and_approach(ctx, cfg), *build_press_legs(ctx, cfg)]
 
 
 def build_servo_leg(ctx, cfg, disp, i):
@@ -370,7 +386,7 @@ def main():
         )
 
         res = runner.run(
-            [build_approach_leg(ctx, cfg)], execute=args.execute, assume_yes=True
+            build_close_and_approach(ctx, cfg), execute=args.execute, assume_yes=True
         )
         if any(not r.ok for r in res):
             sys.exit(1)
@@ -395,10 +411,11 @@ def main():
                 cp2.xyz[0] - ctx.cpose.xyz[0], cp2.xyz[1] - ctx.cpose.xyz[1]
             )
             ctx.cpose = cp2
-            if shift_xy > 0.01:
-                # the ring-free press world is certified ONLY for a descent
-                # from directly overhead: a lateral re-fix shift means
-                # re-approaching above the NEW xy first (2026-08-25 review)
+            if shift_xy > 0.02:
+                # a sub-2cm shift presses as a slightly diagonal stroke
+                # (bounded, trivial over a 13 cm descent); beyond that,
+                # re-approach above the NEW xy so the descent stays
+                # overhead (2026-08-25 review + owner: fewer pauses)
                 print(
                     "[press_demo] re-fix shifts the target %.1f mm laterally "
                     "— re-approaching overhead" % (shift_xy * 1000)

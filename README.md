@@ -113,11 +113,12 @@ ros2 run rammp_box_opening press_demo --execute                    # in its own 
 Flow: SCAN (tool-down look pose over the bench) → DETECT (continuous
 wrist-camera ArUco watcher; the camera runs from CLI start to exit) →
 no fresh stable fix within the timeout → home, exit 2 — otherwise
-APPROACH staging above the tag (full world with the tag-derived
-container cuboid) → hover 1 inch over the tag (interaction world) →
-ONE fixed-travel guarded press stroke (`press_demo.travel_m` below the
-tag plane at `press_demo.speed`; a torque trip or full travel both
-count as pressed, the report says which) → retreat → HOME.
+CLOSE gripper + APPROACH staging above the tag (full world with the
+tag-derived container cuboid) → close-range re-fix → ONE guarded press
+stroke straight from staging (`press_demo.travel_m` below the tag plane
+at `press_demo.speed`; a torque trip near the expected contact depth or
+full travel both count as pressed — an EARLY trip reports as a strike
+failure) → retreat → HOME.
 
 The tag (DICT_4X4_50 id 0, `docs/tag0_50mm.png`) sits ON the button
 top; its depth-refined pose IS the press target — `tag.offset_xyz`

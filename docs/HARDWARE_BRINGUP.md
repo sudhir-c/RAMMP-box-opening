@@ -141,7 +141,7 @@ everything; the abort drill above is the proof it does).
    preview and the TAG line (container origin must match reality to
    ~1 cm; if not, stop and check `tag.size_m` / the mount).
 5. `ros2 run rammp_box_opening press_demo --execute`. Expected: scan,
-   fix, staging, hover, one press stroke ("guard stopped" or "full
+   fix (+servo), close+staging, one press stroke ("guard stopped" or "full
    travel" both = pressed — the lid should visibly release), retreat,
    home, exit 0. No tag → the arm parks home and it exits 2.
    Pre-detection legs (scan, no-tag home) plan above an

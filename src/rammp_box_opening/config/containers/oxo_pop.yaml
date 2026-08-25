@@ -12,7 +12,9 @@ lid_dims: [0.075, 0.075, 0.03]
 button_offset: [0.0, 0.0, 0.107]  # tag sits on the button = container top
 press:
   depth_window: [0.004, 0.012]    # m below nominal button top (min=real press,
-  touch_nm: 3.0                   #  max includes cancel-latency budget, spec §6)
+  touch_nm: 6.0                   #  max includes cancel-latency budget, spec §6)
+                                  # 6.0: the 3.0 trip stopped the stroke before
+                                  # the OXO seal released (owner 2026-08-25)
 press_attitude_rpy_deg: [180.0, 0.0, 0.0]   # top-down; yaw steered per pose
 lid_grasp:
   offset: [0.0, 0.0, 0.15]        # rim grasp point
@@ -44,7 +46,6 @@ tag:                              # printed marker on the button top
   offset_xyz: [0.0, 0.0, 0.0]     # tag center -> button top center, container
                                   # frame (0 = tag stuck ON the button)
 press_demo:
-  hover_m: 0.0254                 # pre-press waypoint above the tag plane
   travel_m: 0.010                 # +2 mm per owner 2026-08-25 (first runs
                                   # pressed but lightly)
   speed: 0.35                     # press stroke speed (owner 2026-08-25)
@@ -62,7 +63,9 @@ detect:
   window_s: 2.0                   # sightings older than this leave the window
   fresh_s: 1.0                    # a fix older than this cannot commit
 servo:                            # center-the-tag loop (owner 2026-08-25):
-  tol_px: 20.0                    # tag within this of image center = centered
+  tol_px: 40.0                    # ~1.8 cm at scan range: one servo move
+                                  # usually suffices; the close-range re-fix
+                                  # absorbs the residual (owner: fewer pauses)
   max_iters: 4                    # lateral looks before pressing on anyway
   min_step_m: 0.01                # skip micro-moves (kortex small-goal lore)
   max_step_m: 0.25                # clamp one servo translation

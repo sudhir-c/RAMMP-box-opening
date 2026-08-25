@@ -120,7 +120,7 @@ def test_lift_reverifies_band():
     assert ok and "unchecked" in detail  # honest fallback, logged
 
 
-def test_press_fixed_legs_speeds_and_targets():
+def test_press_fixed_single_stroke_from_staging():
     import pytest
 
     from rammp_box_opening.models.container import load_press_demo
@@ -129,26 +129,31 @@ def test_press_fixed_legs_speeds_and_targets():
     c = ctx()
     cfg = load_press_demo(CFG)
     legs, st = PressFixed(cfg).plan(c, state())
-    close, hover, press = legs
-    assert close.kind is Kind.GRIPPER and close.gripper_cmd == 0.8
+    assert len(legs) == 1  # v2: no hover, no close (close rides the approach)
+    press = legs[0]
     button = from_container(c.cpose, c.model.button_offset)
-    assert hover.kind is Kind.MOTION and hover.speed == 0.15
-    assert hover.world.startswith("interaction")
-    assert hover.target[1][2] == pytest.approx(button[2] + cfg.hover_m)
+    assert press.kind is Kind.MOTION and press.world.startswith("interaction")
     assert press.guard is not None and press.guard.trip == "press"
     assert press.speed == pytest.approx(cfg.press_speed)
     assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
     assert press.invalidates_downstream and st.chain > 0
 
 
-def test_press_fixed_verify_trip_or_full_travel_both_pass():
+def test_press_fixed_verify_expected_depth_semantics():
     from rammp_box_opening.models.container import load_press_demo
     from rammp_box_opening.primitives.core import PressFixed
 
-    legs, _ = PressFixed(load_press_demo(CFG)).plan(ctx(), state())
-    press = legs[2]
-    ok, detail = press.verify(VerifyCtx(outcome="touch", torque_peak=4.2))
-    assert ok and "guard" in detail
+    cfg = load_press_demo(CFG)
+    legs, _ = PressFixed(cfg).plan(ctx(), state())
+    press = legs[0]
+    expected = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
+    # trip near the expected contact depth = pressed
+    ok, detail = press.verify(VerifyCtx(outcome="touch", progress=expected))
+    assert ok and "pressed" in detail
+    # trip far ABOVE the button = struck something else, honest failure
+    ok, detail = press.verify(VerifyCtx(outcome="touch", progress=0.3))
+    assert not ok and "EARLY" in detail
+    # full travel with no trip = pressed
     ok, detail = press.verify(VerifyCtx(outcome="arrived"))
     assert ok and "no trip" in detail
     ok, _ = press.verify(VerifyCtx(outcome="failed"))

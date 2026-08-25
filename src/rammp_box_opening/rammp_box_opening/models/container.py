@@ -143,7 +143,6 @@ class PressDemoCfg:
     tag_id: int
     tag_size_m: float
     tag_offset: tuple  # tag center -> button top center, container frame
-    hover_m: float  # pre-press waypoint above the tag plane
     travel_m: float  # press depth below the tag plane
     press_speed: float
     staging_m: float  # full-world approach height above the tag
@@ -167,7 +166,6 @@ def load_press_demo(path):
         tag_id=int(tag["id"]),
         tag_size_m=float(tag["size_m"]),
         tag_offset=tuple(tag.get("offset_xyz", (0.0, 0.0, 0.0))),
-        hover_m=float(pd["hover_m"]),
         travel_m=float(pd["travel_m"]),
         press_speed=float(pd["speed"]),
         staging_m=float(pd["staging_m"]),
@@ -190,15 +188,6 @@ def load_press_demo(path):
         raise ValueError("press_demo.travel_m must be positive")
     if not 0.0 < cfg.press_speed <= 1.0:
         raise ValueError("press_demo.speed outside (0, 1]")
-    if cfg.hover_m < 0.01:
-        raise ValueError(
-            "press_demo.hover_m must be >= 0.01 m — it is the only thing "
-            "keeping the UNGUARDED hover leg out of contact (check_standoff "
-            "is deliberately skipped for the tag-driven press; the guard "
-            "arms on the press stroke, not the hover)"
-        )
-    if cfg.staging_m <= cfg.hover_m:
-        raise ValueError("press_demo.staging_m must exceed hover_m")
     # staging is anchored at the BUTTON TOP; the full-world obstacle tops
     # out at container top + err-tall (2 cm) + collision padding (2 cm),
     # and the finger collision spheres reach ~6 cm below tool_frame.

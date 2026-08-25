@@ -353,18 +353,17 @@ class Retreat:
 
 
 class PressFixed:
-    """Owner-simplified press (2026-08-24): close, hover at cfg.hover_m,
-    then ONE fixed-travel guarded stroke at cfg.press_speed.
+    """Owner-simplified press v2 (2026-08-25): ONE guarded stroke from the
+    staging pose straight to travel_m below the tag plane — the hover
+    waypoint is gone (owner: fewer pauses; the gripper closes during the
+    approach instead).
 
-    The guard is a STOP, not a classifier: a torque trip OR reaching the
-    commanded depth both count as pressed — the report says which ended
-    the stroke. check_standoff is deliberately not applied: its 0.051 m
-    floor priced in +/-2 cm hand-measured z, while the tag pose's z is
-    depth-refined to mm; the guard still arms in free air above the
-    button. The hover waypoint is only plannable in the interaction
-    world (in the full world it sits inside the err-tall container
-    cuboid's padding), which is why staging (full world, cfg.staging_m)
-    must precede this primitive."""
+    The guard arms in free air during the long descent. A trip counts as
+    "pressed" only near the depth where contact is EXPECTED — a trip well
+    above the button means the stroke struck something else, and reports
+    as the failure it is. Full travel with no trip also counts as
+    pressed. check_standoff is deliberately not applied: the tag pose's z
+    is depth-refined to mm and the guard has the whole descent to arm."""
 
     def __init__(self, cfg, name="press"):
         self.cfg = cfg
@@ -374,40 +373,31 @@ class PressFixed:
         m = ctx.model
         cfg = self.cfg
         button = from_container(ctx.cpose, m.button_offset)
-        # attitude yaw = BEARING of the button, not the container's yaw: a
-        # fingertip press is yaw-invariant, bearing is the family the reach
-        # map certifies, and an arbitrary tag yaw can have no IK solution
-        # (79.5 deg -> IK_FAIL, first bench run 2026-08-25). The tag's yaw
-        # still rotates tag_offset and is logged.
         quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
         # ring=False: the aperture walls collide with the gripper body at
-        # these heights (live IK_FAIL, margin probe 2026-08-25); a 3 cm
-        # descent from directly overhead needs no lateral-entry guarding
+        # these heights (live IK_FAIL, margin probe 2026-08-25); the
+        # descent comes from directly overhead
         world = _interaction_world(
             ctx, button, button[2], cfg.travel_m, "button", ring=False
         )
         ctx.last_world = world
-        close = _gripper_leg(
-            ctx, state, self.name + ":close", GRIPPER_CMD_CLOSED, world
-        )
-        hover = [button[0], button[1], button[2] + cfg.hover_m]
-        hover_leg, state = _plan_motion(
-            ctx,
-            state,
-            self.name + ":hover",
-            ("pose", hover, quat),
-            world,
-            CONTACT_SPEED,
-        )
         guard = GuardSpec(
             touch_nm=m.touch_nm,
             trip="press",
             depth_window=(0.0, cfg.travel_m),
             target_z=button[2],
         )
+        # contact is expected at ~staging/(staging+travel) of the stroke
+        expected = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
 
         def verify(v):
             if v.outcome == "touch":
+                if v.progress is not None and v.progress < expected - 0.15:
+                    return False, (
+                        "guard tripped EARLY at %.0f%% of the stroke (contact "
+                        "expected ~%.0f%%) — struck something above the button"
+                        % (v.progress * 100, expected * 100)
+                    )
                 peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
                 return True, "guard stopped the stroke%s — pressed" % peak
             if v.outcome == "arrived":
@@ -428,7 +418,7 @@ class PressFixed:
             invalidates=True,
             verify=verify,
         )
-        return [close, hover_leg, press], state
+        return [press], state
 
 
 class Home:

@@ -86,7 +86,6 @@ def test_load_press_demo_cfg():
     cfg = load_press_demo(CFG)
     assert cfg.tag_id == 0
     assert cfg.tag_size_m == pytest.approx(0.06)  # measured print 2026-08-25
-    assert cfg.hover_m == pytest.approx(0.0254)
     assert cfg.press_speed == pytest.approx(0.35)  # owner decision 2026-08-25
     assert cfg.travel_m > 0
     assert cfg.min_hits >= 2 and cfg.timeout_s > 0
@@ -96,15 +95,6 @@ def _cfg_variant(tmp_path, old, new):
     p = tmp_path / "variant.yaml"
     p.write_text(open(CFG).read().replace(old, new))
     return str(p)
-
-
-def test_loader_refuses_nonpositive_hover(tmp_path):
-    # hover_m is the ONLY thing keeping the unguarded hover leg out of
-    # contact (check_standoff is skipped for the tag-driven press)
-    with pytest.raises(ValueError, match="hover_m"):
-        load_press_demo(_cfg_variant(tmp_path, "hover_m: 0.0254", "hover_m: 0.0"))
-    with pytest.raises(ValueError, match="hover_m"):
-        load_press_demo(_cfg_variant(tmp_path, "hover_m: 0.0254", "hover_m: -0.01"))
 
 
 def test_loader_validates_staging_against_real_container_geometry(tmp_path):

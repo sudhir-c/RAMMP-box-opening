@@ -12,10 +12,10 @@ pixels) and the tag carries a 30 deg yaw plus a nonzero tag->button
 offset, so wrong-pixel depth sampling and wrong rotation composition
 both move the recovered origin and FAIL the 5 mm / 3 deg checks.
 
-  tag:    full flow, no trip — exit 0, 6 exec goals, 1 gripper goal, no
+  tag:    full flow, no trip — exit 0, 5 exec goals, 1 gripper goal, no
           cancels, origin within 5 mm and yaw within 3 deg of the
           geometry the synthetic camera encoded.
-  trip:   efforts spike mid-press (STUB_TRIP_EXEC_N=4) — the guard
+  trip:   efforts spike late in the press (STUB_TRIP_EXEC_N=3) — the guard
           cancels the stroke, the CLI reports pressed-via-trip, retreat
           and home replan from the stop, exit 0. Exactly one cancel.
   no-tag: tagless frames — scan, a detect wait that provably lasts
@@ -119,7 +119,7 @@ def run_scenario(tmp, cfg, mode):
     cam_args = " --size %g --tag-x %g --tag-y %g --tag-z %g" % (
         (TAG_SIZE_M,) + TAG_XYZ
     ) + (" --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG))
-    stub_env = "export STUB_TRIP_EXEC_N=4; " if mode == "trip" else ""
+    stub_env = "export STUB_TRIP_EXEC_N=3; " if mode == "trip" else ""
     stub = cam = cli = None
     try:
         stub = spawn(
@@ -191,8 +191,8 @@ def run_scenario(tmp, cfg, mode):
     # tag and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
-    if execs != 6:
-        fails.append("exec goals %d != 6" % execs)
+    if execs != 5:
+        fails.append("exec goals %d != 5" % execs)
     if said.count("GRIPPER GOAL") != 1:
         fails.append("gripper goals != 1")
     if "depth-refined" not in cli_said:

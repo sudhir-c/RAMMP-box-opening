@@ -85,9 +85,10 @@ def _demo_cfg():
     return load_press_demo(CFG)
 
 
-def test_press_demo_legs_compose_staging_press_retreat_home():
+def test_press_demo_legs_compose_close_staging_press_retreat_home():
     import pytest
 
+    from rammp_box_opening.constants import TRANSIT_SPEED
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
@@ -96,24 +97,21 @@ def test_press_demo_legs_compose_staging_press_retreat_home():
     legs = press_demo.build_demo_legs(c, cfg)
     seq = names(legs)
     assert seq == [
-        "approach:staging",
         "press:close",
-        "press:hover",
+        "approach:staging",
         "press:down",
         "retreat",
         "home",
     ]
     button = from_container(c.cpose, c.model.button_offset)
-    staging = legs[0]
-    from rammp_box_opening.constants import TRANSIT_SPEED
-
+    staging = legs[1]
     assert staging.world.startswith("full") and staging.speed == TRANSIT_SPEED
     assert staging.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
-    retreat = legs[4]
+    retreat = legs[3]
     assert retreat.world.startswith("interaction") and retreat.speed == 0.15
     # retreat returns to staging height from the press bottom
     assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
-    assert legs[5].world.startswith("full")
+    assert legs[4].world.startswith("full")
 
 
 def test_press_demo_scan_and_no_tag_home_use_bench_world():

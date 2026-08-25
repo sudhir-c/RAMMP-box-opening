@@ -188,7 +188,7 @@ class StubPlanner(Node):
             while k < len(times) - 1 and times[k] < el:
                 k += 1
             self.q = list(pts[k].positions)
-            if goal_n == TRIP_EXEC_N and el / dur > 0.4 and not self.spike:
+            if goal_n == TRIP_EXEC_N and el / dur > 0.88 and not self.spike:
                 print("EFFORT SPIKE injected (goal #%d)" % goal_n, flush=True)
                 self.spike = True
             fb = ExecuteTrajectory.Feedback()
