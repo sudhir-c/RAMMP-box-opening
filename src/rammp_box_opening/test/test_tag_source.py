@@ -87,7 +87,7 @@ def test_load_press_demo_cfg():
     assert cfg.tag_id == 0
     assert cfg.tag_size_m == pytest.approx(0.06)  # measured print 2026-08-25
     assert cfg.hover_m == pytest.approx(0.0254)
-    assert cfg.press_speed == pytest.approx(0.25)  # owner decision 2026-08-24
+    assert cfg.press_speed == pytest.approx(0.35)  # owner decision 2026-08-25
     assert cfg.travel_m > 0
     assert cfg.min_hits >= 2 and cfg.timeout_s > 0
 

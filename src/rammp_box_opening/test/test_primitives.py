@@ -77,7 +77,9 @@ def test_approach_targets_hover_not_contact():
         hov, attitude_quat(c.model.press_attitude_rpy_deg, 0.0), "approach:button"
     ).plan(c, state())
     assert len(legs) == 1 and legs[0].world.startswith("full")
-    assert legs[0].speed == 0.25
+    from rammp_box_opening.constants import TRANSIT_SPEED
+
+    assert legs[0].speed == TRANSIT_SPEED
     assert legs[0].target[1][2] > button[2]  # hover, never contact depth
 
 

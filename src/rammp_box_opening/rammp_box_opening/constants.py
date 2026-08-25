@@ -11,7 +11,7 @@ WRIST_FLAT_XYZW = [0.5, 0.5, 0.5, 0.5]
 NODE_NAMESPACE = "/rammp_curobo"
 GRIPPER_ACTION = "/robotiq_gripper_controller/gripper_cmd"
 
-TRANSIT_SPEED = 0.25
+TRANSIT_SPEED = 0.35  # owner 2026-08-25, after the first clean live runs
 CONTACT_SPEED = 0.15
 DRIFT_REPLAN_RAD = 0.04  # < server start gate (0.05); catches arrival-tol drift
 SANITY_MARGIN_RAD = 0.35  # per-joint excursion allowance beyond |start->end|
