@@ -13,7 +13,11 @@ ERR_TALL_M = 0.02  # container cuboid extra height (err tall, spec §3)
 APERTURE_HALF_M = 0.06  # half-extent of the free descent corridor
 RING_THICK_M = 0.05  # aperture ring wall thickness
 RING_HEIGHT_M = 0.25  # ring wall height above the reduction plane
-PLANE_MARGIN_M = 0.03  # reduction plane below deepest command (≥ calib margin)
+# Reduction plane below the deepest command. EMPIRICAL 2026-08-25 (margin
+# probe vs the real planner): the finger collision spheres reach ~4 cm
+# below tool_frame and padding adds 2 cm — at 0.03 the hover AND press
+# goals were in collision (IK_FAIL); 0.08 plans.
+PLANE_MARGIN_M = 0.08
 
 
 def _bench_obstacles(bench):
@@ -99,7 +103,7 @@ def reduction_plane_z(contact_z, depth_max):
 
 
 def interaction_world(
-    bench, model, cpose, target_xyz, contact_z, depth_max, lid_at=None
+    bench, model, cpose, target_xyz, contact_z, depth_max, lid_at=None, ring=True
 ):
     obstacles = _bench_obstacles(bench)
     plane = reduction_plane_z(contact_z, depth_max)
@@ -107,17 +111,37 @@ def interaction_world(
         obstacles.append(
             _container_cuboid(model, cpose, name="container_body", top_z=plane)
         )
-    # Aperture ring: lateral entry forbidden, vertical corridor free.
-    tx, ty = target_xyz[0], target_xyz[1]
-    a, w, h = APERTURE_HALF_M, RING_THICK_M, RING_HEIGHT_M
-    zc = plane + h / 2
-    span = 2 * (a + w)
-    obstacles += [
-        {"name": "ring_xp", "position": [tx + a + w / 2, ty, zc], "dims": [w, span, h]},
-        {"name": "ring_xn", "position": [tx - a - w / 2, ty, zc], "dims": [w, span, h]},
-        {"name": "ring_yp", "position": [tx, ty + a + w / 2, zc], "dims": [span, w, h]},
-        {"name": "ring_yn", "position": [tx, ty - a - w / 2, zc], "dims": [span, w, h]},
-    ]
+    if ring:
+        # Aperture ring: lateral entry forbidden, vertical corridor free.
+        # Sized for Phase-1's deep grasp descents; at press-demo hover
+        # heights its walls collide with the gripper body (empirical
+        # 2026-08-25) — PressFixed passes ring=False.
+        tx, ty = target_xyz[0], target_xyz[1]
+        a, w, h = APERTURE_HALF_M, RING_THICK_M, RING_HEIGHT_M
+        zc = plane + h / 2
+        span = 2 * (a + w)
+        obstacles += [
+            {
+                "name": "ring_xp",
+                "position": [tx + a + w / 2, ty, zc],
+                "dims": [w, span, h],
+            },
+            {
+                "name": "ring_xn",
+                "position": [tx - a - w / 2, ty, zc],
+                "dims": [w, span, h],
+            },
+            {
+                "name": "ring_yp",
+                "position": [tx, ty + a + w / 2, zc],
+                "dims": [span, w, h],
+            },
+            {
+                "name": "ring_yn",
+                "position": [tx, ty - a - w / 2, zc],
+                "dims": [span, w, h],
+            },
+        ]
     if lid_at is not None:
         obstacles.append(_lid_cuboid(model, lid_at))
     return {
@@ -149,6 +173,7 @@ class WorldStore:
         depth_max=None,
         lid_at=None,
         tag="",
+        ring=True,
     ):
         if kind == "bench":
             world = bench_world(self._bench, unseen_model=model)
@@ -165,6 +190,7 @@ class WorldStore:
                 contact_z,
                 depth_max,
                 lid_at=lid_at,
+                ring=ring,
             )
             name = "interaction" + (("_" + tag) if tag else "")
         else:

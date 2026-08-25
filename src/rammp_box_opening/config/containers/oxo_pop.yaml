@@ -47,8 +47,10 @@ press_demo:
   hover_m: 0.0254                 # pre-press waypoint above the tag plane
   travel_m: 0.008                 # MEASURE: press depth below the tag plane
   speed: 0.25                     # press stroke speed (owner 2026-08-24)
-  staging_m: 0.08                 # full-world approach height above the tag
-                                  # (must clear the err-tall container cuboid)
+  staging_m: 0.12                 # full-world approach height above the tag.
+                                  # EMPIRICAL 2026-08-25: 0.08 was IK_FAIL
+                                  # live (finger spheres + err-tall + padding
+                                  # eat ~0.10); 0.10 is the measured boundary
 scan:
   xyz: [0.42, 0.0, 0.45]          # tool-down look pose; camera sees ~0.6 x
                                   # 0.4 m of bench around it at tag height

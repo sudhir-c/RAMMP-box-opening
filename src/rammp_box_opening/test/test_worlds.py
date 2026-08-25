@@ -113,3 +113,17 @@ def test_bench_world_keepout_band_when_container_unseen():
     table_top = table["position"][2] + table["dims"][2] / 2
     assert top == pytest.approx(table_top + m.dims[2] + ERR_TALL_M)
     assert band["dims"][0] >= 0.5 and band["dims"][1] >= 0.9  # covers the band
+
+
+def test_interaction_world_ring_optional():
+    m, cp = _model_pose()
+    w = interaction_world(
+        _bench(),
+        m,
+        cp,
+        target_xyz=[0.45, 0.0, 0.09],
+        contact_z=0.09,
+        depth_max=0.012,
+        ring=False,
+    )
+    assert not any(n.startswith("ring_") for n in _cuboids(w))

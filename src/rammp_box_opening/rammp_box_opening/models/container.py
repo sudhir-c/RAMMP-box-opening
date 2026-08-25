@@ -188,13 +188,15 @@ def load_press_demo(path):
     if cfg.staging_m <= cfg.hover_m:
         raise ValueError("press_demo.staging_m must exceed hover_m")
     # staging is anchored at the BUTTON TOP; the full-world obstacle tops
-    # out at container top + err-tall (2 cm) + collision padding (2 cm):
-    # validate against the real geometry, not hover_m (2026-08-24 review)
-    clearance = float(raw["dims"][2]) - float(raw["button_offset"][2]) + 0.04
+    # out at container top + err-tall (2 cm) + collision padding (2 cm),
+    # and the finger collision spheres reach ~6 cm below tool_frame.
+    # 0.10 above the cuboid gap is the MEASURED plans/fails boundary
+    # (margin probe vs the real planner, 2026-08-25).
+    clearance = float(raw["dims"][2]) - float(raw["button_offset"][2]) + 0.10
     if cfg.staging_m < clearance:
         raise ValueError(
             "press_demo.staging_m %.3f cannot clear the container cuboid: "
-            "dims.z - button_offset.z + err_tall + padding = %.3f m needed"
-            % (cfg.staging_m, clearance)
+            "dims.z - button_offset.z + 0.10 (err-tall + padding + gripper "
+            "spheres, measured 2026-08-25) = %.3f m needed" % (cfg.staging_m, clearance)
         )
     return cfg

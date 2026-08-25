@@ -75,7 +75,7 @@ def _full_world(ctx, tag=""):
     )
 
 
-def _interaction_world(ctx, target_xyz, contact_z, depth_max, tag):
+def _interaction_world(ctx, target_xyz, contact_z, depth_max, tag, ring=True):
     return ctx.worlds.push_name(
         "interaction",
         model=ctx.model,
@@ -85,6 +85,7 @@ def _interaction_world(ctx, target_xyz, contact_z, depth_max, tag):
         depth_max=depth_max,
         lid_at=ctx.lid_at,
         tag=tag,
+        ring=ring,
     )
 
 
@@ -379,7 +380,12 @@ class PressFixed:
         # (79.5 deg -> IK_FAIL, first bench run 2026-08-25). The tag's yaw
         # still rotates tag_offset and is logged.
         quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
-        world = _interaction_world(ctx, button, button[2], cfg.travel_m, "button")
+        # ring=False: the aperture walls collide with the gripper body at
+        # these heights (live IK_FAIL, margin probe 2026-08-25); a 3 cm
+        # descent from directly overhead needs no lateral-entry guarding
+        world = _interaction_world(
+            ctx, button, button[2], cfg.travel_m, "button", ring=False
+        )
         ctx.last_world = world
         close = _gripper_leg(
             ctx, state, self.name + ":close", GRIPPER_CMD_CLOSED, world
