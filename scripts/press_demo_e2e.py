@@ -279,4 +279,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        # the probe above rebinds the ros2 CLI daemon to the isolated
+        # domain; leaving it there makes `ros2 node list` in normal shells
+        # come up empty (field lesson 8) — put it back down on the way out
+        sh("ros2 daemon stop", timeout=30)
