@@ -126,3 +126,101 @@ def test_press_demo_scan_and_no_tag_home_use_bench_world():
     home = press_demo.build_home_leg(c, [0.0] * 7)
     assert home.name == "home" and home.world == "bench"
     assert home.target[0] == "joints"
+
+
+class _FakeWatcher:
+    def __init__(self):
+        import numpy as np
+
+        self.k = None
+        self.grab = type("G", (), {})()
+        self.grab.k = np.array(
+            [[430.0, 0.0, 424.0], [0.0, 430.0, 240.0], [0.0, 0.0, 1.0]]
+        )
+        self.last_debug = None
+
+
+class _FakeRunner:
+    def __init__(self, ok=True):
+        self.ok = ok
+        self.ran = []
+
+    def run(self, legs, execute, assume_yes=False):
+        self.ran.append([leg.name for leg in legs])
+
+        class R:
+            pass
+
+        out = []
+        for leg in legs:
+            r = R()
+            r.ok = self.ok
+            r.leg_name = leg.name
+            out.append(r)
+        return out
+
+
+def _servo_fixture(p_cams):
+    """Scripted wait: each call yields a fix whose camera-frame position is
+    the next entry (rot/trans fixed, tool-down at yaw 0)."""
+    import numpy as np
+
+    rot = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
+    t = np.array([0.42, -0.075, 0.575])
+    watcher = _FakeWatcher()
+    seq = list(p_cams)
+
+    def wait(_node, w, _cfg, timeout_s=None):
+        if not seq:
+            return None
+        p = seq.pop(0)
+        if p is None:
+            return None
+        p = np.asarray(p, float)
+        watcher.last_debug = (p, rot, t)
+        return rot @ p + t, np.eye(3)
+
+    return watcher, wait
+
+
+def test_center_on_tag_converges_after_one_move():
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.tasks.press_demo import center_on_tag
+
+    c = ctx()
+    cfg = load_press_demo(CFG)
+    watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.001, 0.0, 0.4]])
+    runner = _FakeRunner()
+    got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
+    assert why == "ok" and got is not None
+    assert runner.ran == [["servo:1"]]
+
+
+def test_center_on_tag_unconverged_presses_on_freshest_fix():
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.tasks.press_demo import center_on_tag
+
+    c = ctx()
+    cfg = load_press_demo(CFG)
+    watcher, wait = _servo_fixture([[0.10, 0.0, 0.4]] * (cfg.servo_max_iters + 1))
+    runner = _FakeRunner()
+    got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
+    assert why == "ok" and got is not None
+    assert len(runner.ran) == cfg.servo_max_iters
+
+
+def test_center_on_tag_failure_semantics():
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.tasks.press_demo import center_on_tag
+
+    c = ctx()
+    cfg = load_press_demo(CFG)
+    # servo exec failure: holds, never homes
+    watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.10, 0.0, 0.4]])
+    runner = _FakeRunner(ok=False)
+    got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
+    assert got is None and why == "servo_failed"
+    # benign timeout: no_tag
+    watcher, wait = _servo_fixture([None])
+    got, why = center_on_tag(None, watcher, c, cfg, _FakeRunner(), True, wait=wait)
+    assert got is None and why == "no_tag"
