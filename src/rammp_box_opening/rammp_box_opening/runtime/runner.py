@@ -85,6 +85,13 @@ class Runner:
                 leg.guard is None
                 and leg.speed > CONTACT_SPEED
                 and not leg.world.startswith(("full", "bench"))
+                # retreat ascends OUT of the corridor it descended, planned
+                # collision-free in that same interaction world — transit
+                # speed is fine for it (owner: fast up, 2026-08-26)
+                and not (
+                    leg.name.startswith("retreat")
+                    and leg.world.startswith("interaction")
+                )
             ):
                 return (
                     "transit-speed MOTION leg planned against %r — full or "
@@ -128,7 +135,6 @@ class Runner:
                 return [res]
 
         results = []
-        stale = False
         next_chain = max((leg.chain for leg in legs), default=0) + 1
         for group in merge_groups(legs):
             lead = group[0]
@@ -146,7 +152,13 @@ class Runner:
             if lead.kind is Kind.GRIPPER:
                 res = self._run_gripper(lead)
             else:
-                if stale or self._drifted(group):
+                # replan only on MEASURED drift (live vs planned start,
+                # 0.04 rad): a guard trip near full travel leaves the arm
+                # within tolerance and the pre-planned leg runs at once —
+                # forcing replans after every contact cost ~2 s pressed
+                # into the button (owner: fewer pauses, 2026-08-26). The
+                # server's own start gate (0.05 rad) still backstops.
+                if self._drifted(group):
                     group, next_chain = self._replan_group(group, next_chain)
                     if group is None:
                         res = LegResult(
@@ -157,8 +169,6 @@ class Runner:
                         return results
                     lead = group[0]
                 res = self._run_motion(group)
-                if any(g.invalidates_downstream for g in group):
-                    stale = True
             for g in group:
                 self._log(res, g)
             results.append(res)

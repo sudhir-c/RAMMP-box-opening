@@ -331,9 +331,10 @@ class Retreat:
     the container cuboid after contact); slow and short. The Runner's
     reverse-retrace covers the plan-fails case (spec §6)."""
 
-    def __init__(self, dz, name="retreat"):
+    def __init__(self, dz, name="retreat", speed=CONTACT_SPEED):
         self.dz = float(dz)
         self.name = name
+        self.speed = float(speed)
 
     def plan(self, ctx, state):
         if ctx.last_pose is None:
@@ -347,7 +348,7 @@ class Retreat:
             self.name,
             ("pose", target, list(quat)),
             world,
-            CONTACT_SPEED,
+            self.speed,
         )
         return [leg], state
 

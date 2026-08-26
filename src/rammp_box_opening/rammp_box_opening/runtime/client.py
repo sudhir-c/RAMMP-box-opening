@@ -104,8 +104,15 @@ class PlannerClient:
         self.joints()  # ensure at least one message arrived
         return self._eff is not None
 
-    def tool_xyz(self, timeout_s=1.5):
-        """Live base_link -> tool_frame translation via TF, or None."""
+    def tool_xyz(self, timeout_s=0.5):
+        """Live base_link -> tool_frame translation via TF, or None.
+
+        This bringup's TF tree has NO tool_frame (field 2026-08-25): the
+        first full timeout is remembered so later calls return instantly
+        instead of stalling telemetry — a 1.5 s lookup at the bottom of
+        every press stroke was most of the 'pause while pressed'."""
+        if getattr(self, "_tool_frame_missing", False):
+            return None
         t0 = time.monotonic()
         while time.monotonic() - t0 < timeout_s:
             try:
@@ -114,6 +121,7 @@ class PlannerClient:
                 return [tr.x, tr.y, tr.z]
             except Exception:
                 rclpy.spin_once(self.node, timeout_sec=0.1)
+        self._tool_frame_missing = True
         return None
 
     def planner_reachable(self, timeout_s=5.0):

@@ -46,8 +46,8 @@ tag:                              # printed marker on the button top
   offset_xyz: [0.0, 0.0, 0.0]     # tag center -> button top center, container
                                   # frame (0 = tag stuck ON the button)
 press_demo:
-  travel_m: 0.013                 # owner 2026-08-26 (10 mm + raised guard
-                                  # still not enough to pop the seal)
+  travel_m: 0.015                 # owner 2026-08-26 (third bump; the guard
+                                  # at 6 Nm remains the force ceiling)
   speed: 0.35                     # press stroke speed (owner 2026-08-25)
   staging_m: 0.12                 # full-world approach height above the tag.
                                   # EMPIRICAL 2026-08-25: 0.08 was IK_FAIL

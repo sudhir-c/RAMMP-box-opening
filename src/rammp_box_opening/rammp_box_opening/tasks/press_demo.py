@@ -126,7 +126,9 @@ def build_press_legs(ctx, cfg):
     st = _state(ctx.client.joints())
     press_legs, st = PressFixed(cfg).plan(ctx, st)
     # from the press bottom back up to staging height
-    retreat_legs, st = Retreat(cfg.staging_m + cfg.travel_m).plan(ctx, st)
+    retreat_legs, st = Retreat(
+        cfg.staging_m + cfg.travel_m, speed=cfg.press_speed
+    ).plan(ctx, st)
     home_legs, st = Home().plan(ctx, st)
     return [*press_legs, *retreat_legs, *home_legs]
 
@@ -394,7 +396,7 @@ def main():
         # close-range re-fix: from staging (~20 cm range) any residual
         # mount error shrinks proportionally. Opportunistic — the closed
         # gripper may occlude the tag; the centered fix then stands.
-        got2 = wait_for_fix(node, watcher, cfg, timeout_s=2.5)
+        got2 = wait_for_fix(node, watcher, cfg, timeout_s=1.5)
         if got2 is not None:
             cp2 = container_pose_from_tag(got2[0], got2[1], model, cfg.tag_offset)
             d = math.dist(cp2.xyz, ctx.cpose.xyz)

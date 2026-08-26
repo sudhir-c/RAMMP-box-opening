@@ -295,3 +295,30 @@ def test_replanned_trajectories_pass_the_sanity_gate(tmp_path):
     c.plans = [R]
     group, chain = r._replan_group([leg("a", invalidates=True)], next_chain=5)
     assert group is None  # wandering replan refused, same gate as pre-built
+
+
+def test_fast_retreat_allowed_in_interaction_world(tmp_path):
+    c = FakeClient()
+    r = runner(c, tmp_path)
+    ok_leg = leg("retreat", speed=0.35, world="interaction_button")
+    assert r._refusal(ok_leg) is None  # ascends its own corridor
+    other = leg("wander", speed=0.35, world="interaction_button")
+    assert r._refusal(other) is not None  # only retreats get the pass
+
+
+def test_no_replan_when_contact_left_arm_on_plan(tmp_path):
+    c = FakeClient()
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0)
+    c.exec_script = [
+        ("touch", {"message": "contact", "progress": 0.97, "torque_peak": 4.0})
+    ]
+    legs = [
+        leg("descend", guard=g, world="interaction_x", invalidates=True, chain=0),
+        leg("retreat", Q1, Q2, chain=0, speed=0.15, world="interaction_x"),
+    ]
+    r = runner(c, tmp_path)
+    res = r.run(legs, execute=True, assume_yes=True)
+    assert all(x.ok for x in res)
+    # live == planned start (FakeClient tracks to traj end): NO replan —
+    # the pre-planned retreat executed as built (no pause at the bottom)
+    assert c.exec_starts[1] == Q1

@@ -108,7 +108,8 @@ def test_press_demo_legs_compose_close_staging_press_retreat_home():
     assert staging.world.startswith("full") and staging.speed == TRANSIT_SPEED
     assert staging.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
     retreat = legs[3]
-    assert retreat.world.startswith("interaction") and retreat.speed == 0.15
+    assert retreat.world.startswith("interaction")
+    assert retreat.speed == pytest.approx(cfg.press_speed)  # fast up
     # retreat returns to staging height from the press bottom
     assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
     assert legs[4].world.startswith("full")
