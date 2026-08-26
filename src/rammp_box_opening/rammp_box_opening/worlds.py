@@ -24,6 +24,22 @@ def _bench_obstacles(bench):
     return [dict(o) for o in bench["obstacles"]]
 
 
+def _cap_top(obs, top_z):
+    """Copy of a cuboid with its top lowered to top_z; None if nothing of
+    it remains. No-op when the top is already at or below top_z."""
+    x, y, z = obs["position"]
+    dx, dy, dz = obs["dims"]
+    top, bottom = z + dz / 2, z - dz / 2
+    if top <= top_z:
+        return dict(obs)
+    if bottom >= top_z:
+        return None
+    capped = dict(obs)
+    capped["position"] = [x, y, bottom + (top_z - bottom) / 2]
+    capped["dims"] = [dx, dy, top_z - bottom]
+    return capped
+
+
 def _container_cuboid(model, cpose, name="container", top_z=None):
     dx, dy, dz = model.dims
     top = (cpose.xyz[2] + dz + ERR_TALL_M) if top_z is None else top_z
@@ -105,8 +121,16 @@ def reduction_plane_z(contact_z, depth_max):
 def interaction_world(
     bench, model, cpose, target_xyz, contact_z, depth_max, lid_at=None, ring=True
 ):
-    obstacles = _bench_obstacles(bench)
     plane = reduction_plane_z(contact_z, depth_max)
+    # bench obstacles cap at the reduction plane too: a set-down ONTO the
+    # bench must be plannable to its commanded overdrive depth, same
+    # spec §6 rule as the container body (field 2026-08-26: IK_FAIL at a
+    # set-down goal 25 mm over the solid table). For button-height
+    # contacts the plane sits below every bench top — a no-op. Only
+    # guarded/slow legs live in this world; the transit gate stands.
+    obstacles = [
+        c for c in (_cap_top(o, plane) for o in _bench_obstacles(bench)) if c
+    ]
     if plane > cpose.xyz[2]:  # body below the plane stays solid
         obstacles.append(
             _container_cuboid(model, cpose, name="container_body", top_z=plane)

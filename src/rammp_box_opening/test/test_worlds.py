@@ -127,3 +127,25 @@ def test_interaction_world_ring_optional():
         ring=False,
     )
     assert not any(n.startswith("ring_") for n in _cuboids(w))
+
+
+def test_interaction_world_caps_bench_at_the_reduction_plane():
+    """A set-down onto the bench must be PLANNABLE to its overdrive depth
+    (field 2026-08-26: IK_FAIL 25 mm over the solid table); a
+    button-height contact leaves the bench untouched."""
+    m, cp = _model_pose()
+    bench = _bench()
+    table = next(o for o in bench["obstacles"] if o["name"] == "table")
+    table_top = table["position"][2] + table["dims"][2] / 2
+    contact = table_top + 0.03  # lid-height above the table
+    w = interaction_world(bench, m, cp, [0.54, -0.27, contact], contact, 0.005)
+    plane = reduction_plane_z(contact, 0.005)
+    assert plane < table_top
+    for o in w["obstacles"]:
+        if o["name"].startswith(("container", "ring", "placed_lid")):
+            continue
+        assert o["position"][2] + o["dims"][2] / 2 <= plane + 1e-9
+    # press-like: contact at button height leaves the bench untouched
+    w = interaction_world(bench, m, cp, [0.45, 0.0, 0.09], 0.09, 0.015)
+    tops = {o["name"]: o["position"][2] + o["dims"][2] / 2 for o in w["obstacles"]}
+    assert tops["table"] == pytest.approx(table_top)
