@@ -36,6 +36,10 @@ from rammp_box_opening.runtime.legs import Kind, Leg
 # modeling can otherwise leave an exact-height target arriving untouched)
 SETDOWN_OVERDRIVE_M = 0.005
 
+# clearance between the CARRIED lid's underside and the container top
+# during the place transit — the planner cannot model a held object
+CARRY_CLEAR_M = 0.04
+
 
 @dataclass
 class Ctx:
@@ -297,6 +301,11 @@ class Place:
     def plan(self, ctx, state):
         m = ctx.model
         hover = hover_above(self.target_xyz, m.hover_standoff + m.lid_dims[2])
+        # the carried lid hangs a lid-height below the fingertips and the
+        # planner cannot see it: keep the carry high enough that the lid
+        # clears the container body even when passing directly over it
+        carry_floor = ctx.cpose.xyz[2] + m.dims[2] + m.lid_dims[2] + CARRY_CLEAR_M
+        hover[2] = max(hover[2], carry_floor)
         full = _full_world(ctx)
         transit, state = _plan_motion(
             ctx,

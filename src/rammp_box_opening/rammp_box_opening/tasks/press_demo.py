@@ -200,6 +200,16 @@ def build_grip_legs(ctx, cfg):
     return [open_leg, down, close, *lift_legs]
 
 
+def lid_place_min_clear(m):
+    """Smallest planar container-origin-to-lid_place distance that leaves
+    the place hover IK-solvable: both footprint half-diagonals plus
+    gripper-body room. Field 2026-08-26: IK_FAIL at 0.073 m separation,
+    clean plan at 0.162 m."""
+    return (
+        math.hypot(m.dims[0], m.dims[1]) + math.hypot(m.lid_dims[0], m.lid_dims[1])
+    ) / 2 + 0.05
+
+
 def build_place_legs(ctx, cfg):
     """Carry the lid to the configured side spot, guarded set-down,
     release, retreat, home — the placed lid joins the collision world."""
@@ -480,6 +490,28 @@ def main():
                 math.degrees(ctx.cpose.yaw),
             )
         )
+
+        if not args.press_only:
+            # the lid drop spot is fixed config and the box lands wherever
+            # it lands: refuse BEFORE any container-directed motion when
+            # they overlap, instead of failing to plan the place transit
+            # with the lid already in hand (field 2026-08-26)
+            lid = load_lid_place(ctx.config_path)
+            clear = math.hypot(
+                ctx.cpose.xyz[0] - lid.xyz[0], ctx.cpose.xyz[1] - lid.xyz[1]
+            )
+            need = lid_place_min_clear(model)
+            if clear < need:
+                try_home(
+                    ctx,
+                    runner,
+                    args.execute,
+                    "container is %.0f mm from the lid drop spot [%.2f, %.2f]"
+                    " — the set-down needs %.0f mm; move the box (or "
+                    "open_container.lid_place)"
+                    % (clear * 1000, lid.xyz[0], lid.xyz[1], need * 1000),
+                )
+                sys.exit(4)
 
         res = runner.run(
             build_close_and_approach(ctx, cfg), execute=args.execute, assume_yes=True

@@ -282,6 +282,11 @@ def test_open_box_grip_and_place_legs():
         "retreat",
         "home",
     ]
+    from rammp_box_opening.primitives.core import CARRY_CLEAR_M
+
+    # carry clears the container even directly overhead (held lid unmodeled)
+    carry_floor = c.cpose.xyz[2] + c.model.dims[2] + c.model.lid_dims[2] + CARRY_CLEAR_M
+    assert place_legs[0].target[1][2] >= carry_floor - 1e-9
     assert place_legs[1].guard.trip == "setdown"
     assert place_legs[2].gripper_cmd == 0.0
     assert c.lid_at is not None  # the placed lid joins later worlds
@@ -304,3 +309,20 @@ def test_press_demo_full_composition():
         "retreat",
         "home",
     ]
+
+
+def test_lid_place_clearance_gate_threshold():
+    import pytest
+
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    need = press_demo.lid_place_min_clear(c.model)
+    # both footprint half-diagonals + gripper-body room; the field runs
+    # bracket it: IK_FAIL at 0.073 m separation, clean plan at 0.162 m
+    assert 0.073 < need < 0.162
+    import math
+
+    assert need == pytest.approx(
+        (math.hypot(*c.model.dims[:2]) + math.hypot(*c.model.lid_dims[:2])) / 2 + 0.05
+    )
