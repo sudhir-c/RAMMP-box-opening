@@ -12,7 +12,7 @@ pixels) and the tag carries a 30 deg yaw plus a nonzero tag->button
 offset, so wrong-pixel depth sampling and wrong rotation composition
 both move the recovered origin and FAIL the 5 mm / 3 deg checks.
 
-  tag:    full flow, no trip — exit 0, 5 exec goals, 1 gripper goal, no
+  tag:    full flow, no trip — exit 0, 4 exec goals, 1 gripper goal, no
           cancels, origin within 5 mm and yaw within 3 deg of the
           geometry the synthetic camera encoded.
   trip:   efforts spike late in the press (STUB_TRIP_EXEC_N=3) — the guard
@@ -191,8 +191,10 @@ def run_scenario(tmp, cfg, mode):
     # tag and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
-    if execs != 5:
-        fails.append("exec goals %d != 5" % execs)
+    if execs != 4:
+        # retreat+home MERGE (same speed/chain, no guard): one continuous
+        # ascent-and-home motion — scan, approach, press, retreat+home
+        fails.append("exec goals %d != 4" % execs)
     if said.count("GRIPPER GOAL") != 1:
         fails.append("gripper goals != 1")
     if "depth-refined" not in cli_said:
