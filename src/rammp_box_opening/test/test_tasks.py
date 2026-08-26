@@ -96,13 +96,7 @@ def test_press_demo_legs_compose_close_staging_press_retreat_home():
     cfg = _demo_cfg()
     legs = press_demo.build_demo_legs(c, cfg)
     seq = names(legs)
-    assert seq == [
-        "press:close",
-        "approach:staging",
-        "press:down",
-        "retreat",
-        "home",
-    ]
+    assert seq[:4] == ["press:close", "approach:staging", "press:down", "retreat"]
     button = from_container(c.cpose, c.model.button_offset)
     staging = legs[1]
     assert staging.world.startswith("full") and staging.speed == TRANSIT_SPEED
@@ -112,7 +106,6 @@ def test_press_demo_legs_compose_close_staging_press_retreat_home():
     assert retreat.speed == pytest.approx(TRANSIT_SPEED)  # fast up
     # retreat returns to staging height from the press bottom
     assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
-    assert legs[4].world.startswith("full")
 
 
 def test_press_demo_scan_and_no_tag_home_use_bench_world():
@@ -245,3 +238,62 @@ def test_center_on_tag_divergence_stops():
     got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
     assert got is None and why == "servo_failed"
     assert len(runner.ran) == 1  # stopped after one move, no walking away
+
+
+def test_open_box_grip_and_place_legs():
+    import pytest
+
+    from rammp_box_opening.constants import TRANSIT_SPEED
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.runtime.legs import VerifyCtx
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    legs = press_demo.build_grip_legs(c, cfg)
+    assert names(legs) == ["grip:open", "grip:down", "grip:close", "lift"]
+    open_leg, down, close, lift = legs
+    assert open_leg.gripper_cmd == 0.0 and close.gripper_cmd == 0.8
+    button = from_container(c.cpose, c.model.button_offset)
+    # same depth the press reached, obstruction semantics on the way down
+    assert down.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
+    assert down.guard is not None and down.guard.trip == "obstruction"
+    assert down.invalidates_downstream
+    # closed-on-air (0.8) fails the band; holding the knob passes
+    ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.8))
+    assert not ok
+    ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.6))
+    assert ok
+    assert lift.speed == pytest.approx(cfg.lift_speed)  # "slowly lift"
+    assert lift.target[1][2] == pytest.approx(button[2] - cfg.travel_m + cfg.lift_m)
+
+    place_legs = press_demo.build_place_legs(c, cfg)
+    assert names(place_legs) == [
+        "place:lid:transit",
+        "place:lid:down",
+        "place:lid:open",
+        "retreat",
+        "home",
+    ]
+    assert place_legs[1].guard.trip == "setdown"
+    assert place_legs[2].gripper_cmd == 0.0
+    assert c.lid_at is not None  # the placed lid joins later worlds
+    assert "lid" in place_legs[4].world  # home plans around the placed lid
+    assert place_legs[3].speed == TRANSIT_SPEED
+
+
+def test_press_demo_full_composition():
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    legs = press_demo.build_demo_legs(c, _demo_cfg())
+    seq = names(legs)
+    assert seq[:4] == ["press:close", "approach:staging", "press:down", "retreat"]
+    assert seq[4:8] == ["grip:open", "grip:down", "grip:close", "lift"]
+    assert seq[8:] == [
+        "place:lid:transit",
+        "place:lid:down",
+        "place:lid:open",
+        "retreat",
+        "home",
+    ]

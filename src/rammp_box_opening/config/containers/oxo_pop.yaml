@@ -38,11 +38,20 @@ open_container:
     xyz: [0.45, -0.25, -0.027]
     yaw_deg: 0.0
 
+# --- open_box (step 2, owner 2026-08-26): pull the lid off ---------------
+open_box:
+  grip_band: [0.40, 0.75]         # close feedback = HOLDING the popped
+                                  # button (0.8 = closed on air; TUNE at
+                                  # bench on the first grip)
+  lift_m: 0.15                    # slow pull height before the carry
+  lift_speed: 0.15                # "slowly lift upwards" (owner)
+
 # --- press_demo (tag-driven press flow, owner design 2026-08-24) ---------
 tag:                              # printed marker on the button top
   id: 0                           # DICT_4X4_50 (docs/tag0_50mm.png)
-  size_m: 0.06                    # MEASURED 2026-08-25: printer scaled the
-                                  # 50 mm file to a 60 mm black square
+  size_m: 0.03                    # 30 mm file (docs/tag0_30mm.png) — the
+                                  # printer rescales: MEASURE the print and
+                                  # correct this (last print came out 1.2x)
   offset_xyz: [0.0, 0.0, 0.0]     # tag center -> button top center, container
                                   # frame (0 = tag stuck ON the button)
 press_demo:

@@ -40,7 +40,7 @@ DOMAIN = os.environ.get("ABORT_E2E_DOMAIN", "77")
 
 CHAIN = (
     "export ROS_DOMAIN_ID=%s; export ROS_LOCALHOST_ONLY=1; "
-    "export STUB_PLAN_S=1.2; "
+    "export STUB_PLAN_S=1.2; export STUB_GRIP_POS=0.6; "
     "source /opt/ros/humble/setup.zsh; "
     "source ~/RAMMP-CuRobo/install/setup.zsh; "
     "source %s/install/setup.zsh; " % (DOMAIN, REPO)
@@ -119,7 +119,13 @@ def run_scenario(tmp, cfg, mode):
     cam_args = " --size %g --tag-x %g --tag-y %g --tag-z %g" % (
         (TAG_SIZE_M,) + TAG_XYZ
     ) + (" --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG))
-    stub_env = "export STUB_TRIP_EXEC_N=3; " if mode == "trip" else ""
+    # the guarded set-down (place:lid:down) must always trip; the trip
+    # scenario also trips the press stroke
+    stub_env = (
+        "export STUB_TRIP_EXEC_N=3,8; "
+        if mode == "trip"
+        else "export STUB_TRIP_EXEC_N=8; "
+    )
     stub = cam = cli = None
     try:
         stub = spawn(
@@ -191,12 +197,16 @@ def run_scenario(tmp, cfg, mode):
     # tag and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
-    if execs != 4:
-        # retreat+home MERGE (same speed/chain, no guard): one continuous
-        # ascent-and-home motion — scan, approach, press, retreat+home
-        fails.append("exec goals %d != 4" % execs)
-    if said.count("GRIPPER GOAL") != 1:
-        fails.append("gripper goals != 1")
+    if execs != 9:
+        # scan, approach, press, retreat, grip:down, lift, place transit,
+        # place:down, place-retreat+home (merged)
+        fails.append("exec goals %d != 9" % execs)
+    if said.count("GRIPPER GOAL") != 4:
+        fails.append("gripper goals %d != 4" % said.count("GRIPPER GOAL"))
+    if "LID PULLED" not in cli_said:
+        fails.append("no LID PULLED line")
+    if "DONE — box open" not in cli_said:
+        fails.append("no final DONE line")
     if "depth-refined" not in cli_said:
         fails.append("depth refinement never engaged")
     if "CENTERED" not in cli_said:
@@ -222,13 +232,13 @@ def run_scenario(tmp, cfg, mode):
             fails.append("yaw error %.1f deg > 3" % abs(yaw - TAG_YAW_DEG))
 
     if mode == "tag":
-        if cancels != 0:
-            fails.append("unexpected cancel")
+        if cancels != 1:  # the guarded set-down trips (by design)
+            fails.append("cancels %d != 1 (set-down trip)" % cancels)
         if "full travel" not in cli_said:
             fails.append("press did not report full-travel outcome")
     if mode == "trip":
-        if cancels != 1:
-            fails.append("cancels %d != 1 (guard trip)" % cancels)
+        if cancels != 2:  # press trip + set-down trip
+            fails.append("cancels %d != 2 (press + set-down)" % cancels)
         if "EFFORT SPIKE" not in said:
             fails.append("stub never injected the spike")
         if "guard stopped the stroke" not in cli_said:

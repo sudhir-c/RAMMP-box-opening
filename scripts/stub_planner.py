@@ -34,7 +34,10 @@ from rammp_curobo_interfaces.srv import SetWorld
 START = [0.4, 0.262, 3.142, -2.269, 0.0, 0.960, 1.571]  # off-home: real move
 NAMES = ["joint_%d" % i for i in range(1, 8)]
 PLAN_S = float(os.environ.get("STUB_PLAN_S", "6.0"))
-TRIP_EXEC_N = int(os.environ.get("STUB_TRIP_EXEC_N", "0"))
+TRIP_EXEC_NS = {
+    int(v) for v in os.environ.get("STUB_TRIP_EXEC_N", "").split(",") if v.strip()
+}
+GRIP_POS = os.environ.get("STUB_GRIP_POS")  # gripper feedback override
 
 
 def interp_traj(q0, q1, n=40, dur=PLAN_S):
@@ -64,6 +67,7 @@ class StubPlanner(Node):
         self.plan_goals = 0
         self.exec_goals = 0
         self.spike = False  # STUB_TRIP_EXEC_N: efforts spike mid-goal
+        self.grip_state = 0.0
         # RELIABLE depth 10, like the real joint_state_broadcaster (the
         # client subscribes RELIABLE; sensor-data QoS would never connect)
         self.pub = self.create_publisher(JointState, "/joint_states", 10)
@@ -110,7 +114,7 @@ class StubPlanner(Node):
         m = JointState()
         m.header.stamp = self.get_clock().now().to_msg()
         m.name = NAMES + ["robotiq_85_left_knuckle_joint"]
-        m.position = list(self.q) + [0.0]
+        m.position = list(self.q) + [self.grip_state]
         m.velocity = [0.0] * 8
         m.effort = [9.0 if self.spike else 0.0] * 8
         self.pub.publish(m)
@@ -152,8 +156,10 @@ class StubPlanner(Node):
     def _gripper(self, gh):
         pos = float(gh.request.command.position)
         print("GRIPPER GOAL pos=%.2f" % pos, flush=True)
+        fb = float(GRIP_POS) if GRIP_POS else pos
+        self.grip_state = fb
         res = GripperCommand.Result()
-        res.position = pos
+        res.position = fb
         res.effort = 0.0
         res.stalled = False
         res.reached_goal = True
@@ -188,7 +194,7 @@ class StubPlanner(Node):
             while k < len(times) - 1 and times[k] < el:
                 k += 1
             self.q = list(pts[k].positions)
-            if goal_n == TRIP_EXEC_N and el / dur > 0.88 and not self.spike:
+            if goal_n in TRIP_EXEC_NS and el / dur > 0.88 and not self.spike:
                 print("EFFORT SPIKE injected (goal #%d)" % goal_n, flush=True)
                 self.spike = True
             fb = ExecuteTrajectory.Feedback()

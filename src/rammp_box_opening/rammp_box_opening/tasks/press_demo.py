@@ -24,9 +24,16 @@ import time
 import rclpy
 
 
-from rammp_box_opening.constants import GRIPPER_CMD_CLOSED, HOME, TRANSIT_SPEED
+from rammp_box_opening.constants import (
+    CONTACT_SPEED,
+    GRIPPER_CMD_CLOSED,
+    GRIPPER_CMD_OPEN,
+    HOME,
+    TRANSIT_SPEED,
+)
 from rammp_box_opening.models.container import (
     ContainerModel,
+    load_lid_place,
     load_press_demo,
 )
 from rammp_box_opening.perception.tag_source import (
@@ -38,13 +45,18 @@ from rammp_box_opening.perception.tag_source import (
 from rammp_box_opening.primitives.core import (
     Ctx,
     Home,
+    Lift,
+    Place,
     PlanState,
     PressFixed,
     Retreat,
     _full_world,
     _gripper_leg,
+    _interaction_world,
     _plan_motion,
+    band_verify,
 )
+from rammp_box_opening.runtime.guards import GuardSpec
 from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.runtime.runner import Runner
 from rammp_box_opening.tasks import cli_common
@@ -120,24 +132,90 @@ def build_approach_leg(ctx, cfg):
     return leg
 
 
-def build_press_legs(ctx, cfg):
-    """Hover + fixed stroke + retreat + home, planned from live joints
-    (run AFTER the approach so the close-range re-fix can update cpose)."""
+def build_press_legs(ctx, cfg, include_home=True):
+    """Fixed stroke + retreat to staging, planned from live joints (run
+    AFTER the approach so the close-range re-fix can update cpose).
+    include_home=False when the open-box tail continues from staging."""
     st = _state(ctx.client.joints())
     press_legs, st = PressFixed(cfg).plan(ctx, st)
-    # from the press bottom back up to staging height
     # retreat at TRANSIT speed (owner: everything fast EXCEPT the press
-    # stroke) — it still merges with home into one continuous motion
+    # stroke) — with home appended they merge into one continuous motion
+    retreat_legs, st = Retreat(cfg.staging_m + cfg.travel_m, speed=TRANSIT_SPEED).plan(
+        ctx, st
+    )
+    legs = [*press_legs, *retreat_legs]
+    if include_home:
+        home_legs, st = Home().plan(ctx, st)
+        legs += home_legs
+    return legs
+
+
+def build_grip_legs(ctx, cfg):
+    """Step 2 (owner 2026-08-26): open the fingers, descend to the SAME
+    depth the press reached — around the now-popped button — close on it
+    (band-verified: 0.8 means closed on air), and slowly pull the lid."""
+    m = ctx.model
+    button = from_container(ctx.cpose, m.button_offset)
+    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
+    world = _interaction_world(
+        ctx, button, button[2], cfg.travel_m, "button", ring=False
+    )
+    ctx.last_world = world
+    st = _state(ctx.client.joints())
+    open_leg = _gripper_leg(ctx, st, "grip:open", GRIPPER_CMD_OPEN, world)
+    target = [button[0], button[1], button[2] - cfg.travel_m]
+    # obstruction semantics: a trip on the way down = the open fingers
+    # STRUCK the button/lid instead of straddling it — honest failure
+    guard = GuardSpec(touch_nm=m.touch_nm, trip="obstruction", target_z=button[2])
+    down, st = _plan_motion(
+        ctx,
+        st,
+        "grip:down",
+        ("pose", target, quat),
+        world,
+        CONTACT_SPEED,
+        guard=guard,
+        invalidates=True,
+    )
+    close = _gripper_leg(
+        ctx,
+        st,
+        "grip:close",
+        GRIPPER_CMD_CLOSED,
+        world,
+        verify=band_verify(cfg.grip_band),
+    )
+    lift_legs, st = Lift(cfg.lift_m, band=cfg.grip_band, speed=cfg.lift_speed).plan(
+        ctx, st
+    )
+    return [open_leg, down, close, *lift_legs]
+
+
+def build_place_legs(ctx, cfg):
+    """Carry the lid to the configured side spot, guarded set-down,
+    release, retreat, home — the placed lid joins the collision world."""
+    m = ctx.model
+    lid = load_lid_place(ctx.config_path)
+    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(lid.xyz[1], lid.xyz[0]))
+    target = [lid.xyz[0], lid.xyz[1], lid.xyz[2] + m.lid_dims[2]]
+    st = _state(ctx.client.joints())
+    legs, st = Place(target, quat, open_after=True, name="place:lid").plan(ctx, st)
+    ctx.lid_at = lid  # worlds carry the placed lid from here on
     retreat_legs, st = Retreat(
-        cfg.staging_m + cfg.travel_m, speed=TRANSIT_SPEED
+        m.hover_standoff + m.lid_dims[2], speed=TRANSIT_SPEED
     ).plan(ctx, st)
     home_legs, st = Home().plan(ctx, st)
-    return [*press_legs, *retreat_legs, *home_legs]
+    return [*legs, *retreat_legs, *home_legs]
 
 
 def build_demo_legs(ctx, cfg):
     """The one-shot composition (offline tests); main runs it in phases."""
-    return [*build_close_and_approach(ctx, cfg), *build_press_legs(ctx, cfg)]
+    return [
+        *build_close_and_approach(ctx, cfg),
+        *build_press_legs(ctx, cfg, include_home=False),
+        *build_grip_legs(ctx, cfg),
+        *build_place_legs(ctx, cfg),
+    ]
 
 
 def build_servo_leg(ctx, cfg, disp, i):
@@ -318,6 +396,11 @@ def detect_only_report(node, watcher, ctx, cfg, runner, execute):
 def main():
     ap = cli_common.make_parser(__doc__)
     ap.add_argument(
+        "--press-only",
+        action="store_true",
+        help="stop after the press (the step-1 demo): press, retreat, home",
+    )
+    ap.add_argument(
         "--detect-only",
         action="store_true",
         help="scan, report fixes + camera-frame diagnostics for 15 s, home, "
@@ -452,16 +535,37 @@ def main():
             )
         )
         res = runner.run(
-            build_press_legs(ctx, cfg), execute=args.execute, assume_yes=True
+            build_press_legs(ctx, cfg, include_home=args.press_only),
+            execute=args.execute,
+            assume_yes=True,
         )
         bad = [r for r in res if not r.ok]
         if bad:
             sys.exit(1)
         press = [r for r in res if r.leg_name.startswith("press")]
         print(
-            "[press_demo] DONE — %s"
+            "[press_demo] PRESSED — %s"
             % (press[-1].detail if press else "no press leg ran (dry-run)")
         )
+        if args.press_only:
+            sys.exit(0)
+
+        print("[press_demo] GRIP: open, descend to press depth, close, pull")
+        res = runner.run(
+            build_grip_legs(ctx, cfg), execute=args.execute, assume_yes=True
+        )
+        if any(not r.ok for r in res):
+            sys.exit(1)  # grip failed (band miss / strike) — arm holds
+        grip = [r for r in res if r.leg_name == "grip:close"]
+        print("[press_demo] LID PULLED — %s" % (grip[-1].detail if grip else "dry-run"))
+
+        print("[press_demo] PLACE: carrying the lid to the side spot")
+        res = runner.run(
+            build_place_legs(ctx, cfg), execute=args.execute, assume_yes=True
+        )
+        if any(not r.ok for r in res):
+            sys.exit(1)
+        print("[press_demo] DONE — box open, lid placed, arm home")
     except KeyboardInterrupt:
         sys.exit(130)  # the abort path already reported what was confirmed
 

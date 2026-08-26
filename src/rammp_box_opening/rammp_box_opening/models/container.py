@@ -156,6 +156,9 @@ class PressDemoCfg:
     servo_max_iters: int
     servo_min_step_m: float
     servo_max_step_m: float
+    grip_band: tuple  # gripper feedback band = holding the popped button
+    lift_m: float
+    lift_speed: float
 
 
 def load_press_demo(path):
@@ -179,7 +182,15 @@ def load_press_demo(path):
         servo_max_iters=int(raw["servo"]["max_iters"]),
         servo_min_step_m=float(raw["servo"]["min_step_m"]),
         servo_max_step_m=float(raw["servo"]["max_step_m"]),
+        grip_band=tuple(raw["open_box"]["grip_band"]),
+        lift_m=float(raw["open_box"]["lift_m"]),
+        lift_speed=float(raw["open_box"]["lift_speed"]),
     )
+    if not raw["open_box"]["grip_band"][0] < raw["open_box"]["grip_band"][1] < 0.8:
+        raise ValueError(
+            "open_box.grip_band must be (lo, hi) with hi < 0.8 — 0.8 is the "
+            "closed-on-air feedback and can never mean 'holding the button'"
+        )
     if cfg.servo_tol_px <= 0 or cfg.servo_max_iters < 0:
         raise ValueError("servo.tol_px must be positive, max_iters >= 0")
     if not 0 < cfg.servo_min_step_m < cfg.servo_max_step_m:

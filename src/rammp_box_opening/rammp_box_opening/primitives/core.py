@@ -251,10 +251,11 @@ class Grasp:
 class Lift:
     """Planned ascent by dz; re-checks the grip band afterward (slip)."""
 
-    def __init__(self, dz, band=None, name="lift"):
+    def __init__(self, dz, band=None, name="lift", speed=CONTACT_SPEED):
         self.dz = float(dz)
         self.band = band
         self.name = name
+        self.speed = float(speed)
 
     def plan(self, ctx, state):
         if ctx.last_pose is not None:
@@ -271,7 +272,7 @@ class Lift:
             self.name,
             ("pose", target, list(quat)),
             world,
-            CONTACT_SPEED,
+            self.speed,
             verify=verify,
         )
         return [leg], state
