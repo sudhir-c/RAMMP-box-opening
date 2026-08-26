@@ -33,6 +33,7 @@ from rammp_box_opening.constants import (
 )
 from rammp_box_opening.models.container import (
     ContainerModel,
+    ContainerPose,
     load_lid_place,
     load_press_demo,
 )
@@ -200,6 +201,10 @@ def build_grip_legs(ctx, cfg):
     return [open_leg, down, close, *lift_legs]
 
 
+DROP_X_M = (0.28, 0.65)  # set-down zone: inside the tool-down reach band
+DROP_Y_M = (-0.42, 0.42)
+
+
 def lid_place_min_clear(m):
     """Smallest planar container-origin-to-lid_place distance that leaves
     the place hover IK-solvable: both footprint half-diagonals plus
@@ -210,11 +215,33 @@ def lid_place_min_clear(m):
     ) / 2 + 0.05
 
 
+def resolve_lid_drop(m, cpose, lid_xyz):
+    """Pick the actual drop spot: the configured lid_place when the
+    DETECTED box clears it, else slid directly away from the box to the
+    required clearance (the box lands wherever it lands — a fixed spot
+    cannot assume the table around it is free; field 2026-08-26).
+    Returns (xyz, shifted), or (None, False) when nothing in-zone clears."""
+    need = lid_place_min_clear(m)
+    bx, by = cpose.xyz[0], cpose.xyz[1]
+    dx, dy = lid_xyz[0] - bx, lid_xyz[1] - by
+    d = math.hypot(dx, dy)
+    if d >= need:
+        return list(lid_xyz), False
+    dirs = [(dx / d, dy / d)] if d > 1e-6 else []
+    dirs += [(0.0, -1.0), (0.0, 1.0), (1.0, 0.0), (-1.0, 0.0)]
+    for ux, uy in dirs:
+        x = min(max(bx + ux * need, DROP_X_M[0]), DROP_X_M[1])
+        y = min(max(by + uy * need, DROP_Y_M[0]), DROP_Y_M[1])
+        if math.hypot(x - bx, y - by) >= need - 1e-9:
+            return [x, y, lid_xyz[2]], True
+    return None, False
+
+
 def build_place_legs(ctx, cfg):
     """Carry the lid to the configured side spot, guarded set-down,
     release, retreat, home — the placed lid joins the collision world."""
     m = ctx.model
-    lid = load_lid_place(ctx.config_path)
+    lid = ctx.lid_drop or load_lid_place(ctx.config_path)
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(lid.xyz[1], lid.xyz[0]))
     target = [lid.xyz[0], lid.xyz[1], lid.xyz[2] + m.lid_dims[2]]
     st = _state(ctx.client.joints())
@@ -492,26 +519,45 @@ def main():
         )
 
         if not args.press_only:
-            # the lid drop spot is fixed config and the box lands wherever
-            # it lands: refuse BEFORE any container-directed motion when
-            # they overlap, instead of failing to plan the place transit
-            # with the lid already in hand (field 2026-08-26)
+            # the box lands wherever it lands: resolve the drop spot NOW,
+            # before any container-directed motion — configured lid_place
+            # when clear, slid away from the box when crowded, refusal
+            # only when nothing in the set-down zone clears
             lid = load_lid_place(ctx.config_path)
-            clear = math.hypot(
-                ctx.cpose.xyz[0] - lid.xyz[0], ctx.cpose.xyz[1] - lid.xyz[1]
-            )
-            need = lid_place_min_clear(model)
-            if clear < need:
+            drop, shifted = resolve_lid_drop(model, ctx.cpose, lid.xyz)
+            if drop is None:
                 try_home(
                     ctx,
                     runner,
                     args.execute,
-                    "container is %.0f mm from the lid drop spot [%.2f, %.2f]"
-                    " — the set-down needs %.0f mm; move the box (or "
-                    "open_container.lid_place)"
-                    % (clear * 1000, lid.xyz[0], lid.xyz[1], need * 1000),
+                    "no lid drop spot clears the box at [%.2f, %.2f] "
+                    "(need %.0f mm, inside x %s y %s) — move the box"
+                    % (
+                        ctx.cpose.xyz[0],
+                        ctx.cpose.xyz[1],
+                        lid_place_min_clear(model) * 1000,
+                        list(DROP_X_M),
+                        list(DROP_Y_M),
+                    ),
                 )
                 sys.exit(4)
+            if shifted:
+                print(
+                    "[press_demo] drop spot [%.2f, %.2f] is only %.0f mm "
+                    "from the box — sliding it to [%.2f, %.2f]"
+                    % (
+                        lid.xyz[0],
+                        lid.xyz[1],
+                        math.hypot(
+                            lid.xyz[0] - ctx.cpose.xyz[0],
+                            lid.xyz[1] - ctx.cpose.xyz[1],
+                        )
+                        * 1000,
+                        drop[0],
+                        drop[1],
+                    )
+                )
+            ctx.lid_drop = ContainerPose(xyz=tuple(drop), yaw=lid.yaw)
 
         res = runner.run(
             build_close_and_approach(ctx, cfg), execute=args.execute, assume_yes=True

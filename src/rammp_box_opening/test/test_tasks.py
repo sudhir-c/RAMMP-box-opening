@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 from test_runner import FakeClient, FakeStore
@@ -326,3 +327,43 @@ def test_lid_place_clearance_gate_threshold():
     assert need == pytest.approx(
         (math.hypot(*c.model.dims[:2]) + math.hypot(*c.model.lid_dims[:2])) / 2 + 0.05
     )
+
+
+def test_resolve_lid_drop_adapts_to_the_box():
+    from rammp_box_opening.models.container import ContainerPose
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    m = c.model
+    need = press_demo.lid_place_min_clear(m)
+    lid = [0.45, -0.25, -0.027]
+    far = ContainerPose(xyz=(0.45, 0.1, -0.02), yaw=0.0)
+    xyz, shifted = press_demo.resolve_lid_drop(m, far, lid)
+    assert xyz == lid and not shifted
+    # field 2026-08-26: box 55 mm from the spot — slide, don't refuse
+    close = ContainerPose(xyz=(0.396, -0.24, -0.02), yaw=0.0)
+    xyz, shifted = press_demo.resolve_lid_drop(m, close, lid)
+    assert shifted
+    assert math.hypot(xyz[0] - 0.396, xyz[1] + 0.24) >= need - 1e-9
+    assert press_demo.DROP_X_M[0] <= xyz[0] <= press_demo.DROP_X_M[1]
+    assert press_demo.DROP_Y_M[0] <= xyz[1] <= press_demo.DROP_Y_M[1]
+    assert xyz[2] == lid[2]  # table height never changes
+    # box ON the spot: the direction degenerates, a fallback still clears
+    on_top = ContainerPose(xyz=(0.45, -0.25, -0.02), yaw=0.0)
+    xyz, shifted = press_demo.resolve_lid_drop(m, on_top, lid)
+    assert shifted and math.hypot(xyz[0] - 0.45, xyz[1] + 0.25) >= need - 1e-9
+
+
+def test_place_legs_use_the_resolved_drop_spot():
+    import pytest
+
+    from rammp_box_opening.models.container import ContainerPose
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    c.lid_drop = ContainerPose(xyz=(0.30, 0.30, -0.027), yaw=0.0)
+    legs = press_demo.build_place_legs(c, _demo_cfg())
+    transit = legs[0]
+    assert transit.target[1][0] == pytest.approx(0.30)
+    assert transit.target[1][1] == pytest.approx(0.30)
+    assert c.lid_at is c.lid_drop  # the placed-lid world follows the shift

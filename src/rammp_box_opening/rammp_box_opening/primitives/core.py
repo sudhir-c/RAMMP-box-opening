@@ -48,6 +48,7 @@ class Ctx:
     client: object
     worlds: object
     lid_at: object = None  # set after Place(lid): later worlds carry the lid
+    lid_drop: object = None  # runtime-resolved drop spot (adapts to the box)
     config_path: str = None
     last_pose: tuple = None  # (xyz, quat_xyzw) of the last commanded pose
     last_world: tuple = None  # (name, path) of the last interaction world
