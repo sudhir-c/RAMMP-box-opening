@@ -31,6 +31,11 @@ from rammp_box_opening.runtime.guards import (
 )
 from rammp_box_opening.runtime.legs import Kind, Leg
 
+# a set-down's success IS the guard trip — overdrive the commanded depth
+# past nominal surface contact so the table is always felt (err-TALL world
+# modeling can otherwise leave an exact-height target arriving untouched)
+SETDOWN_OVERDRIVE_M = 0.005
+
 
 @dataclass
 class Ctx:
@@ -302,17 +307,33 @@ class Place:
             TRANSIT_SPEED,
         )
         world = _interaction_world(
-            ctx, self.target_xyz, self.target_xyz[2], 0.0, self.name
+            ctx,
+            self.target_xyz,
+            self.target_xyz[2],
+            SETDOWN_OVERDRIVE_M,
+            self.name,
+            # ring walls collide with the gripper body at hover heights
+            # (empirical 2026-08-25; bit the lid set-down's start state
+            # live 2026-08-26 — INVALID_START_STATE at the hover)
+            ring=False,
         )
         ctx.last_world = world
         guard = GuardSpec(
             touch_nm=m.touch_nm, trip="setdown", target_z=self.target_xyz[2]
         )
+        # a set-down SUCCEEDS only on the touch: target exactly at surface
+        # height can 'arrive' without ever feeling the table — command a
+        # hair below so the guard verdict is deterministic
+        down_xyz = [
+            self.target_xyz[0],
+            self.target_xyz[1],
+            self.target_xyz[2] - SETDOWN_OVERDRIVE_M,
+        ]
         descend, state = _plan_motion(
             ctx,
             state,
             self.name + ":down",
-            ("pose", self.target_xyz, self.quat),
+            ("pose", down_xyz, self.quat),
             world,
             CONTACT_SPEED,
             guard=guard,

@@ -96,16 +96,27 @@ def test_chaining_start_joints_flow():
 
 
 def test_place_sequence_and_release():
+    import pytest
+
+    from rammp_box_opening.primitives.core import SETDOWN_OVERDRIVE_M
+
     c = ctx()
-    legs, _ = Place(
-        [0.45, -0.25, -0.07 + c.model.lid_dims[2]], [0.5, 0.5, 0.5, 0.5]
-    ).plan(c, state())
+    target_z = -0.07 + c.model.lid_dims[2]
+    legs, _ = Place([0.45, -0.25, target_z], [0.5, 0.5, 0.5, 0.5]).plan(c, state())
     kinds = [leg.kind for leg in legs]
     assert kinds == [Kind.MOTION, Kind.MOTION, Kind.GRIPPER]
     transit, descend, open_ = legs
     assert descend.guard.trip == "setdown"
     assert descend.invalidates_downstream
     assert open_.gripper_cmd == 0.0
+    # field 2026-08-26: the hover start state sat inside the aperture-ring
+    # walls (INVALID_START_STATE) — the set-down world must be ring-free
+    interaction = [kw for k, kw in c.worlds.pushes if k == "interaction"]
+    assert interaction and interaction[-1]["ring"] is False
+    # success is the TOUCH: the stroke overdrives past nominal surface
+    # contact so an exact-height 'arrived' can't slip through untripped
+    assert descend.target[1][2] == pytest.approx(target_z - SETDOWN_OVERDRIVE_M)
+    assert descend.guard.target_z == pytest.approx(target_z)
 
 
 def test_lift_reverifies_band():

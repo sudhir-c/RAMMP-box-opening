@@ -95,7 +95,11 @@ class FakeClient:
 
 
 class FakeStore:
+    def __init__(self):
+        self.pushes = []  # (kind, kwargs) — world-shape assertions
+
     def push_name(self, kind, **kw):
+        self.pushes.append((kind, kw))
         tag = kw.get("tag", "")
         name = kind + (("_" + tag) if tag else "")
         return name, name + ".yaml"
