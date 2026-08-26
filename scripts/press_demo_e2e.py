@@ -180,9 +180,9 @@ def run_scenario(tmp, cfg, mode):
         if "NO TAG" not in cli_said:
             fails.append("no NO TAG line")
         # the detect wait must actually last the configured window:
-        # scan + wait (10 s) + home; legs are ~3.4 s each at 0.35 — a
+        # scan + wait (10 s) + home; legs are ~1.6 s each at 0.75 — a
         # shortened wait would finish well under timeout_s + leg time
-        if elapsed < DETECT_TIMEOUT_S + 4.0:
+        if elapsed < DETECT_TIMEOUT_S + 2.0:
             fails.append(
                 "run took %.0f s — detect wait shorter than timeout_s?" % elapsed
             )

@@ -126,8 +126,10 @@ def build_press_legs(ctx, cfg):
     st = _state(ctx.client.joints())
     press_legs, st = PressFixed(cfg).plan(ctx, st)
     # from the press bottom back up to staging height
+    # retreat at TRANSIT speed (owner: everything fast EXCEPT the press
+    # stroke) — it still merges with home into one continuous motion
     retreat_legs, st = Retreat(
-        cfg.staging_m + cfg.travel_m, speed=cfg.press_speed
+        cfg.staging_m + cfg.travel_m, speed=TRANSIT_SPEED
     ).plan(ctx, st)
     home_legs, st = Home().plan(ctx, st)
     return [*press_legs, *retreat_legs, *home_legs]
