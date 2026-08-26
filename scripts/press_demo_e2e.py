@@ -40,7 +40,7 @@ DOMAIN = os.environ.get("ABORT_E2E_DOMAIN", "77")
 
 CHAIN = (
     "export ROS_DOMAIN_ID=%s; export ROS_LOCALHOST_ONLY=1; "
-    "export STUB_PLAN_S=1.2; export STUB_GRIP_POS=0.6; "
+    "export STUB_PLAN_S=1.2; export STUB_GRIP_POS=0.45; "
     "source /opt/ros/humble/setup.zsh; "
     "source ~/RAMMP-CuRobo/install/setup.zsh; "
     "source %s/install/setup.zsh; " % (DOMAIN, REPO)

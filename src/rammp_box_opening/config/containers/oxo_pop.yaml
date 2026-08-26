@@ -40,9 +40,11 @@ open_container:
 
 # --- open_box (step 2, owner 2026-08-26): pull the lid off ---------------
 open_box:
-  grip_band: [0.40, 0.75]         # close feedback = HOLDING the popped
-                                  # button (0.8 = closed on air; TUNE at
-                                  # bench on the first grip)
+  grip_band: [0.30, 0.55]         # close feedback = HOLDING the popped
+                                  # button. Bench-measured 2026-08-26:
+                                  # 0.387 gripping the knob. Below lo =
+                                  # closed on something too wide (the box
+                                  # itself reads ~0.09); 0.8 = air
   lift_m: 0.15                    # slow pull height before the carry
   lift_speed: 0.15                # "slowly lift upwards" (owner)
   grip_clear_m: 0.002             # fingertip stop height ABOVE the tag

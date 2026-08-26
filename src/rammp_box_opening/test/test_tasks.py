@@ -265,7 +265,11 @@ def test_open_box_grip_and_place_legs():
     # closed-on-air (0.8) fails the band; holding the knob passes
     ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.8))
     assert not ok
-    ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.6))
+    held = (cfg.grip_band[0] + cfg.grip_band[1]) / 2
+    ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=held))
+    assert ok
+    # bench 2026-08-26: the real knob reads 0.387 — the band must hold it
+    ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.387))
     assert ok
     assert lift.speed == pytest.approx(cfg.lift_speed)  # "slowly lift"
     assert lift.target[1][2] == pytest.approx(button[2] + cfg.grip_clear_m + cfg.lift_m)
