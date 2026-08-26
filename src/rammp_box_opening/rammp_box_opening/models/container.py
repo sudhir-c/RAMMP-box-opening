@@ -159,6 +159,8 @@ class PressDemoCfg:
     grip_band: tuple  # gripper feedback band = holding the popped button
     lift_m: float
     lift_speed: float
+    grip_clear_m: float  # fingertip stop height above the tag/lid plane
+    grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
 
 
 def load_press_demo(path):
@@ -185,11 +187,23 @@ def load_press_demo(path):
         grip_band=tuple(raw["open_box"]["grip_band"]),
         lift_m=float(raw["open_box"]["lift_m"]),
         lift_speed=float(raw["open_box"]["lift_speed"]),
+        grip_clear_m=float(raw["open_box"]["grip_clear_m"]),
+        grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
     )
     if not raw["open_box"]["grip_band"][0] < raw["open_box"]["grip_band"][1] < 0.8:
         raise ValueError(
             "open_box.grip_band must be (lo, hi) with hi < 0.8 — 0.8 is the "
             "closed-on-air feedback and can never mean 'holding the button'"
+        )
+    if not 0.0 <= cfg.grip_clear_m <= 0.02:
+        raise ValueError(
+            "open_box.grip_clear_m must be in [0, 0.02] m — 0 puts the "
+            "fingertips ON the lid plane, more than 2 cm closes above the knob"
+        )
+    if any(abs(v) > 0.02 for v in cfg.grip_offset_xy):
+        raise ValueError(
+            "open_box.grip_offset_xy is a mm-scale bias trim, not an offset "
+            "— |each| must be <= 0.02 m (re-measure the tag/mount instead)"
         )
     if cfg.servo_tol_px <= 0 or cfg.servo_max_iters < 0:
         raise ValueError("servo.tol_px must be positive, max_iters >= 0")

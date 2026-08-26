@@ -151,9 +151,14 @@ def build_press_legs(ctx, cfg, include_home=True):
 
 
 def build_grip_legs(ctx, cfg):
-    """Step 2 (owner 2026-08-26): open the fingers, descend to the SAME
-    depth the press reached — around the now-popped button — close on it
-    (band-verified: 0.8 means closed on air), and slowly pull the lid."""
+    """Step 2: open the fingers, descend to just ABOVE the tag plane —
+    around the now-popped button, grabbing it at its BASE — close on it
+    (band-verified: 0.8 means closed on air), and slowly pull the lid.
+
+    The tag plane IS the lid top surface (the tag sits on the flush
+    button at scan time). Press depth is below it: the press compresses
+    the sprung button, but open fingertips sent there hit solid lid and
+    trip the guard (field 2026-08-26) — grip_clear_m keeps them above."""
     m = ctx.model
     button = from_container(ctx.cpose, m.button_offset)
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
@@ -163,9 +168,13 @@ def build_grip_legs(ctx, cfg):
     ctx.last_world = world
     st = _state(ctx.client.joints())
     open_leg = _gripper_leg(ctx, st, "grip:open", GRIPPER_CMD_OPEN, world)
-    target = [button[0], button[1], button[2] - cfg.travel_m]
+    target = [
+        button[0] + cfg.grip_offset_xy[0],
+        button[1] + cfg.grip_offset_xy[1],
+        button[2] + cfg.grip_clear_m,
+    ]
     # obstruction semantics: a trip on the way down = the open fingers
-    # STRUCK the button/lid instead of straddling it — honest failure
+    # STRUCK the knob/rim instead of straddling it — honest failure
     guard = GuardSpec(touch_nm=m.touch_nm, trip="obstruction", target_z=button[2])
     down, st = _plan_motion(
         ctx,

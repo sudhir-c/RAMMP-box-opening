@@ -255,8 +255,11 @@ def test_open_box_grip_and_place_legs():
     open_leg, down, close, lift = legs
     assert open_leg.gripper_cmd == 0.0 and close.gripper_cmd == 0.8
     button = from_container(c.cpose, c.model.button_offset)
-    # same depth the press reached, obstruction semantics on the way down
-    assert down.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
+    # ABOVE the tag/lid plane (press depth = into the lid — field
+    # 2026-08-26), with the bench-measured lateral trim applied
+    assert down.target[1][2] == pytest.approx(button[2] + cfg.grip_clear_m)
+    assert down.target[1][0] == pytest.approx(button[0] + cfg.grip_offset_xy[0])
+    assert down.target[1][1] == pytest.approx(button[1] + cfg.grip_offset_xy[1])
     assert down.guard is not None and down.guard.trip == "obstruction"
     assert down.invalidates_downstream
     # closed-on-air (0.8) fails the band; holding the knob passes
@@ -265,7 +268,7 @@ def test_open_box_grip_and_place_legs():
     ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.6))
     assert ok
     assert lift.speed == pytest.approx(cfg.lift_speed)  # "slowly lift"
-    assert lift.target[1][2] == pytest.approx(button[2] - cfg.travel_m + cfg.lift_m)
+    assert lift.target[1][2] == pytest.approx(button[2] + cfg.grip_clear_m + cfg.lift_m)
 
     place_legs = press_demo.build_place_legs(c, cfg)
     assert names(place_legs) == [

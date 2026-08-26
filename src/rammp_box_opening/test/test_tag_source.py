@@ -87,6 +87,8 @@ def test_load_press_demo_cfg():
     assert cfg.tag_id == 0
     assert cfg.tag_size_m == pytest.approx(0.03)  # 30 mm file — MEASURE print
     assert cfg.grip_band[0] < cfg.grip_band[1] < 0.8
+    assert 0.0 <= cfg.grip_clear_m <= 0.02
+    assert all(abs(v) <= 0.02 for v in cfg.grip_offset_xy)
     assert cfg.lift_m > 0 and 0 < cfg.lift_speed <= 1.0
     assert cfg.press_speed == pytest.approx(0.35)  # owner decision 2026-08-25
     assert cfg.travel_m > 0

@@ -45,6 +45,18 @@ open_box:
                                   # bench on the first grip)
   lift_m: 0.15                    # slow pull height before the carry
   lift_speed: 0.15                # "slowly lift upwards" (owner)
+  grip_clear_m: 0.002             # fingertip stop height ABOVE the tag
+                                  # plane. The tag plane IS the lid top
+                                  # (tag on the flush button at scan): the
+                                  # popped-up button is grabbed at its
+                                  # BASE — press depth is 15 mm INTO the
+                                  # lid and trips the guard (field
+                                  # 2026-08-26, first grip attempt)
+  grip_offset_xy: [-0.003, 0.0]   # base-frame grasp trim: first grip
+                                  # landed ~3 mm too far +x (measured
+                                  # 2026-08-26); at 85 mm aperture around
+                                  # a 75 mm box there is only 5 mm of
+                                  # side clearance — this trim matters
 
 # --- press_demo (tag-driven press flow, owner design 2026-08-24) ---------
 tag:                              # printed marker on the button top
