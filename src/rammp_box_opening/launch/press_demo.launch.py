@@ -47,15 +47,24 @@ def _sweep_strays():
     import time as _time
 
     def strays():
+        found = []
         out = _sp.run(
             ["pgrep", "-af", "rammp_curobo_ros"], capture_output=True, text=True
         ).stdout
-        found = []
         for ln in out.splitlines():
             pid, _, cmd = ln.partition(" ")
             parts = cmd.split()
             if len(parts) >= 2 and "/lib/rammp_curobo_ros/" in parts[1]:
                 found.append((int(pid), parts[1].rsplit("/", 1)[-1]))
+        # a stale camera driver keeps the D405 claimed: the new driver gets
+        # "Device or resource busy", the device drops off the bus, and both
+        # die (field 2026-08-26: two overlapping launches killed the camera)
+        out = _sp.run(
+            ["pgrep", "-af", "realsense2_camera_node"], capture_output=True, text=True
+        ).stdout
+        for ln in out.splitlines():
+            pid, _, _cmd = ln.partition(" ")
+            found.append((int(pid), "realsense2_camera_node"))
         return found
 
     found = strays()
