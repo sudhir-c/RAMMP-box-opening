@@ -149,7 +149,7 @@ def _plan_motion(
     return leg, PlanState(joints=end, chain=next_chain, contact_broke_chain=invalidates)
 
 
-def _gripper_leg(ctx, state, name, cmd, world, verify=None):
+def _gripper_leg(ctx, state, name, cmd, world, verify=None, defer_join=False):
     world_name, world_path = world
     return Leg(
         name=name,
@@ -164,6 +164,7 @@ def _gripper_leg(ctx, state, name, cmd, world, verify=None):
         goal_joints=None,
         gripper_cmd=cmd,
         verify=verify,
+        defer_join=defer_join,
     )
 
 

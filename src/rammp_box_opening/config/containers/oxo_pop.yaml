@@ -50,12 +50,35 @@ open_box:
                                   # 0.15 it shipped at (speed pass 2026-08-28).
                                   # Unguarded, so runner._refusal exempts
                                   # "lift" alongside "retreat".
+  grip_hop_m: 0.05                # how far ABOVE the tag plane the press
+                                  # retreat stops before the fingers open and
+                                  # re-descend. Was staging_m (0.12), making a
+                                  # 253 mm rise-and-fall for a 2 mm reposition.
+                                  # 0.05 clears the err-tall container cuboid
+                                  # (top sits ~20 mm above the plane) and still
+                                  # leaves the fingers room to swing open over
+                                  # the popped knob. Only interaction-world
+                                  # legs plan from this height — press-only
+                                  # keeps the full retreat, because its home
+                                  # is planned in the FULL world where the
+                                  # finger spheres need ~0.10 m of clearance.
   grip_speed: 0.15                # descent onto the popped button. NOT yet
                                   # raised: a trip here means FAILURE and the
                                   # stop height is 2 mm above the lid, vs
                                   # POSE_UNCERTAINTY_M 0.02. Ramp at the bench
                                   # 0.15 -> 0.25 -> 0.35, three descents each,
                                   # watching torque_peak in the run jsonl.
+  warp_fast_speed: 0.5            # free-air portion of a GUARDED descent.
+                                  # A guarded leg used one scale for its whole
+                                  # length, so grip:down crawled 118 mm at 0.15
+                                  # (4.16 s) when only the last stretch is near
+                                  # anything. Positions are unchanged by the
+                                  # warp and every scale stays <= 1.0, so no
+                                  # executed velocity exceeds what cuRobo
+                                  # already limit-checked. The guard stays
+                                  # armed throughout and re-baselines at the
+                                  # transition. 0 disables warping entirely.
+  warp_slow_frac: 0.30            # final fraction of the PATH at contact speed
   setdown_speed: 0.35             # guarded set-down; a trip IS the success
                                   # here, and the guard arms in 1.7 mm once
                                   # the executor polls at 0.02 s

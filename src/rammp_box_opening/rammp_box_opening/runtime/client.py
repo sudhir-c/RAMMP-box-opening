@@ -309,10 +309,33 @@ class PlannerClient:
         goal.command.max_effort = 100.0
         if not self._gripper.wait_for_server(timeout_sec=2.0):
             return False, 0.0, False
+        handle = self.gripper_send(position)
+        if handle is None:
+            return False, 0.0, False
+        return self.gripper_join(handle)
+
+    def gripper_send(self, position):
+        """Start a gripper command and return a handle WITHOUT waiting.
+
+        Lets a close overlap the motion that follows it — the fingers shut
+        while the arm transits instead of the arm standing still for a
+        full action round trip. The caller MUST join before anything that
+        depends on the fingers having arrived.
+        """
+        goal = GripperCommand.Goal()
+        goal.command.position = float(position)
+        goal.command.max_effort = 100.0
+        if not self._gripper.wait_for_server(timeout_sec=2.0):
+            return None
         send = spin_until_done(self.node, self._gripper.send_goal_async(goal), 5.0)
         if send is None or not send.accepted:
-            return False, 0.0, False
-        wrapped = spin_until_done(self.node, send.get_result_async(), 10.0)
+            return None
+        return send
+
+    def gripper_join(self, handle):
+        """Wait out a gripper_send. Same (ok, position, stalled) as
+        gripper_cmd — the overlap must not change what callers verify."""
+        wrapped = spin_until_done(self.node, handle.get_result_async(), 10.0)
         if wrapped is None:
             return False, 0.0, False
         return True, float(wrapped.result.position), bool(wrapped.result.stalled)

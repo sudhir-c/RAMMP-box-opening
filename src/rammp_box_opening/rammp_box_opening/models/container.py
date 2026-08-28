@@ -160,7 +160,10 @@ class PressDemoCfg:
     lift_m: float
     lift_speed: float
     grip_speed: float  # descent onto the popped button (ramp at the bench)
+    grip_hop_m: float  # retreat height above the plane between press and grip
     setdown_speed: float  # guarded set-down; the trip IS the success
+    warp_fast_speed: float  # free-air scale of a warped descent
+    warp_slow_frac: float  # final path fraction at contact speed
     grip_clear_m: float  # fingertip stop height above the tag/lid plane
     grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
     detect_period_s: float  # detector tick; min_hits * this = commit floor
@@ -191,7 +194,10 @@ def load_press_demo(path):
         lift_m=float(raw["open_box"]["lift_m"]),
         lift_speed=float(raw["open_box"]["lift_speed"]),
         grip_speed=float(raw["open_box"].get("grip_speed", 0.15)),
+        grip_hop_m=float(raw["open_box"].get("grip_hop_m", 0.12)),
         setdown_speed=float(raw["open_box"].get("setdown_speed", 0.15)),
+        warp_fast_speed=float(raw["open_box"].get("warp_fast_speed", 0.0)),
+        warp_slow_frac=float(raw["open_box"].get("warp_slow_frac", 0.3)),
         grip_clear_m=float(raw["open_box"]["grip_clear_m"]),
         grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
         detect_period_s=float(raw["detect"].get("period_s", 0.15)),
@@ -231,6 +237,13 @@ def load_press_demo(path):
                 "open_box.%s must be in (0, 0.5] — contact/carry legs are "
                 "guard-limited, not transit legs" % field
             )
+    if cfg.warp_fast_speed and not 0.0 < cfg.warp_fast_speed <= 0.6:
+        raise ValueError(
+            "open_box.warp_fast_speed must be in (0, 0.6] — the free-air part "
+            "of a GUARDED descent, not a transit leg"
+        )
+    if not 0.0 < cfg.warp_slow_frac < 1.0:
+        raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
     if not 0.0 < cfg.detect_period_s <= 0.5:
         raise ValueError("detect.period_s must be in (0, 0.5] s")
     # staging is anchored at the BUTTON TOP; the full-world obstacle tops

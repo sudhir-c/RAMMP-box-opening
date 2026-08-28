@@ -106,8 +106,11 @@ def test_press_demo_legs_compose_close_staging_press_retreat_home():
     retreat = legs[3]
     assert retreat.world.startswith("interaction")
     assert retreat.speed == pytest.approx(TRANSIT_SPEED)  # fast up
-    # retreat returns to staging height from the press bottom
-    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
+    # the OPEN-BOX composition re-descends straight away, so the retreat
+    # stops at the hop height instead of climbing back to staging — a
+    # 253 mm round trip for a 2 mm reposition (speed pass 2026-08-28)
+    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.grip_hop_m)
+    assert cfg.grip_hop_m < cfg.staging_m
 
 
 def test_press_demo_scan_and_no_tag_home_use_bench_world():
@@ -392,7 +395,9 @@ def test_contact_leg_speeds_come_from_config():
     grip = press_demo.build_grip_legs(c, cfg)
     down = next(x for x in grip if x.name == "grip:down")
     lift = next(x for x in grip if x.name == "lift")
-    assert down.speed == pytest.approx(cfg.grip_speed)
+    # grip:down is time-warped, so its contact scale lives in leg.warp and
+    # leg.speed is 1.0 (the profile is already baked into the timing)
+    assert down.warp[1] == pytest.approx(cfg.grip_speed)
     assert lift.speed == pytest.approx(cfg.lift_speed)
 
     c.lid_drop = None
@@ -418,3 +423,48 @@ def test_shipped_config_speeds_are_guard_safe():
     # every contact/carry speed stays inside the guard-limited band
     for v in (cfg.grip_speed, cfg.setdown_speed, cfg.lift_speed):
         assert 0.0 < v <= 0.5
+
+
+def test_guarded_descents_are_time_warped_and_rebaseline_the_guard():
+    """grip:down and the set-down run fast through free air and slow into
+    contact, and the guard re-baselines where the speed changes."""
+    import pytest
+
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    grip = press_demo.build_grip_legs(c, cfg)
+    down = next(x for x in grip if x.name == "grip:down")
+    assert down.warp == (cfg.warp_fast_speed, cfg.grip_speed, cfg.warp_slow_frac)
+    # the profile is baked into the timing, so it must NOT be dilated again
+    assert down.speed == pytest.approx(1.0)
+    # ...and the guard is told where the regime changes
+    assert down.guard is not None and down.guard.rebaseline_after is not None
+    assert 0.0 < down.guard.rebaseline_after <= 1.0
+    assert down.guard.trip == "obstruction"  # semantics unchanged
+
+    # the set-down goes through the same _apply_warp; the fake planner
+    # returns a zero-length descent for it, so exercise the hook directly
+    # on a trajectory that actually moves
+    from rammp_box_opening.runtime.guards import GuardSpec
+
+    moving = next(x for x in grip if x.name == "grip:down")
+    probe = replace(moving, warp=None, speed=cfg.setdown_speed)
+    probe.guard = GuardSpec(touch_nm=6.0, trip="setdown", target_z=0.0)
+    press_demo._apply_warp(probe, cfg, cfg.setdown_speed)
+    assert probe.warp == (cfg.warp_fast_speed, cfg.setdown_speed, cfg.warp_slow_frac)
+    assert probe.guard.trip == "setdown" and probe.guard.rebaseline_after is not None
+
+
+def test_warping_is_off_when_the_config_disables_it():
+    from dataclasses import replace as _replace
+
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _replace(_demo_cfg(), warp_fast_speed=0.0)
+    down = next(x for x in press_demo.build_grip_legs(c, cfg) if x.name == "grip:down")
+    assert down.warp is None
+    assert down.speed == cfg.grip_speed  # plain single-scale behaviour
+    assert down.guard.rebaseline_after is None

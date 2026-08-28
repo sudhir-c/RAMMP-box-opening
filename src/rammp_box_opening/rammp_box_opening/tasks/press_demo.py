@@ -20,6 +20,7 @@ apply.
 import math
 import sys
 import time
+from dataclasses import replace
 
 import rclpy
 
@@ -57,6 +58,7 @@ from rammp_box_opening.primitives.core import (
     band_verify,
 )
 from rammp_box_opening.runtime.guards import GuardSpec
+from rammp_box_opening.runtime.warp import warp_trajectory
 from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.runtime.runner import Runner
 from rammp_box_opening.tasks import cli_common
@@ -109,6 +111,10 @@ def build_close_and_approach(ctx, cfg):
         "press:close",
         GRIPPER_CMD_CLOSED,
         _full_world(ctx),
+        # the fingers shut into free air while the arm transits to staging,
+        # instead of the arm standing still for a full action round trip.
+        # The Runner joins before the guarded press, which needs them shut.
+        defer_join=True,
     )
     return [close, build_approach_leg(ctx, cfg)]
 
@@ -139,15 +145,43 @@ def build_press_legs(ctx, cfg, include_home=True):
     st = _state(ctx.client.joints())
     press_legs, st = PressFixed(cfg).plan(ctx, st)
     # retreat at TRANSIT speed (owner: everything fast EXCEPT the press
-    # stroke) — with home appended they merge into one continuous motion
-    retreat_legs, st = Retreat(cfg.staging_m + cfg.travel_m, speed=TRANSIT_SPEED).plan(
-        ctx, st
-    )
+    # stroke) — with home appended they merge into one continuous motion.
+    #
+    # How FAR up depends on what comes next. The open-box tail re-descends
+    # immediately, so it stops at grip_hop_m and saves a 253 mm round trip
+    # for a 2 mm reposition. press-only continues to HOME, which is planned
+    # in the FULL world where the finger spheres need the taller staging
+    # clearance (staging_m 0.12 is the measured boundary, not a guess).
+    up_to = cfg.staging_m if include_home else cfg.grip_hop_m
+    retreat_legs, st = Retreat(up_to + cfg.travel_m, speed=TRANSIT_SPEED).plan(ctx, st)
     legs = [*press_legs, *retreat_legs]
     if include_home:
         home_legs, st = Home().plan(ctx, st)
         legs += home_legs
     return legs
+
+
+def _apply_warp(leg, cfg, slow_speed):
+    """Run a guarded descent fast through free air and slow into contact.
+
+    Positions are untouched; only the timing changes, and every scale is
+    <= 1.0 so no executed velocity exceeds the plan's. The guard stays
+    armed the whole way and re-baselines at the speed change, so contact
+    is judged against a same-regime reference (spec §6 intent preserved).
+    Returns the leg, warped in place, or unchanged when warping is off.
+    """
+    if not cfg.warp_fast_speed or cfg.warp_fast_speed <= slow_speed:
+        return leg
+    warped, arm_frac = warp_trajectory(
+        leg.traj, cfg.warp_slow_frac, cfg.warp_fast_speed, slow_speed
+    )
+    if arm_frac is None:
+        return leg
+    leg.traj = warped
+    leg.speed = 1.0  # the profile is baked in; do not dilate it again
+    leg.warp = (cfg.warp_fast_speed, slow_speed, cfg.warp_slow_frac)
+    leg.guard = replace(leg.guard, rebaseline_after=arm_frac)
+    return leg
 
 
 def build_grip_legs(ctx, cfg):
@@ -186,6 +220,7 @@ def build_grip_legs(ctx, cfg):
         guard=guard,
         invalidates=True,
     )
+    _apply_warp(down, cfg, cfg.grip_speed)
     close = _gripper_leg(
         ctx,
         st,
@@ -247,6 +282,9 @@ def build_place_legs(ctx, cfg):
     legs, st = Place(
         target, quat, open_after=True, name="place:lid", speed=cfg.setdown_speed
     ).plan(ctx, st)
+    for lg in legs:
+        if lg.name == "place:lid:down":
+            _apply_warp(lg, cfg, cfg.setdown_speed)
     ctx.lid_at = lid  # worlds carry the placed lid from here on
     retreat_legs, st = Retreat(
         m.hover_standoff + m.lid_dims[2], speed=TRANSIT_SPEED

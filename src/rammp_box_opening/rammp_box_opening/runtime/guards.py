@@ -22,15 +22,31 @@ from rammp_box_opening.constants import (
 
 
 class TorqueGuard:
-    def __init__(self, touch_nm):
+    def __init__(self, touch_nm, rebaseline_after=None):
         self.touch_nm = float(touch_nm)
         self.armed = False
         self._baseline = None
         self.peak = 0.0
+        # Time fraction at which a warped descent changes speed. The guard
+        # stays ARMED throughout — coverage is not reduced — but its
+        # reference is re-taken once the arm is in the slow regime, so the
+        # dynamic-torque shift from decelerating is not mistaken for
+        # contact, and the touch is judged against a same-regime baseline.
+        self.rebaseline_after = (
+            None if rebaseline_after is None else float(rebaseline_after)
+        )
+        self._rebaselined = False
 
     def on_progress(self, progress):
         if progress > 0.0:
             self.armed = True
+        if (
+            self.rebaseline_after is not None
+            and not self._rebaselined
+            and progress >= self.rebaseline_after
+        ):
+            self._rebaselined = True
+            self._baseline = None  # re-captured on the next efforts reading
 
     def on_efforts(self, wrist_efforts):
         if not self.armed or wrist_efforts is None:
@@ -56,6 +72,10 @@ class GuardSpec:
     # judges by progress + torque instead, so it leaves this False and the
     # Runner skips the lookup entirely.
     needs_depth: bool = False
+    # time fraction at which a warped descent enters its slow zone;
+    # the Runner hands it to TorqueGuard so the baseline is re-taken
+    # in the regime the touch actually happens in
+    rebaseline_after: float = None
 
 
 def sanity_violations(traj, margin_rad):
@@ -177,8 +197,15 @@ def time_fraction_at_path_fraction(traj, path_frac):
         cum.append(total)
     if total <= 0.0:
         return float(path_frac)
+
+    def stamp(p):
+        return p.time_from_start.sec + p.time_from_start.nanosec * 1e-9
+
+    duration = stamp(pts[-1])
+    if duration <= 0.0:
+        return float(path_frac)
     target = float(path_frac) * total
     for i, c in enumerate(cum):
         if c >= target:
-            return (i + 1) / len(pts)
+            return stamp(pts[i]) / duration
     return 1.0

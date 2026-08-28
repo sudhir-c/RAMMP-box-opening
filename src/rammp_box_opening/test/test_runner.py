@@ -411,3 +411,63 @@ def test_world_is_repushed_when_its_CONTENT_changed(tmp_path):
     b.world_path = "/w/full-bbbb.yaml"  # same name, new contents
     runner(c, tmp_path).run([a, b], execute=True, assume_yes=True)
     assert c.worlds_pushed == ["/w/full-aaaa.yaml", "/w/full-bbbb.yaml"]
+
+
+class _AsyncGripClient(FakeClient):
+    """FakeClient that records send/join ordering against motion."""
+
+    def __init__(self):
+        super().__init__()
+        self.events = []
+
+    def gripper_send(self, position):
+        self.events.append("send")
+        return ("handle", position)
+
+    def gripper_join(self, handle):
+        self.events.append("join")
+        return True, float(handle[1]), False
+
+    def gripper_cmd(self, position):
+        # the real client's blocking path is send + join; mirror it so the
+        # ordering assertions mean the same thing on both paths
+        if position is None:
+            return super().gripper_cmd(position)
+        return self.gripper_join(self.gripper_send(position))
+
+    def execute(self, traj, speed, guard=None):
+        self.events.append("execute")
+        return super().execute(traj, speed, guard=guard)
+
+
+def test_deferred_gripper_close_overlaps_the_next_transit(tmp_path):
+    """The owner's own example: fingers shut WHILE the arm moves."""
+    c = _AsyncGripClient()
+    close = leg("press:close", kind=Kind.GRIPPER, cmd=0.8)
+    close.defer_join = True
+    legs = [close, leg("approach", Q0, Q1, chain=0)]
+    res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert all(r.ok for r in res)
+    # sent, THEN the transit ran, and only afterwards was it collected
+    assert c.events == ["send", "execute", "join"]
+
+
+def test_deferred_gripper_is_joined_before_any_guarded_leg(tmp_path):
+    """A press descends with the fingers closed — the overlap must not
+    let a guarded leg start while they are still moving."""
+    c = _AsyncGripClient()
+    g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
+    close = leg("press:close", kind=Kind.GRIPPER, cmd=0.8)
+    close.defer_join = True
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    legs = [close, leg("press:down", Q0, Q1, chain=0, guard=g, world="interaction_b")]
+    runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert c.events.index("join") < c.events.index("execute")
+
+
+def test_a_release_is_never_deferred(tmp_path):
+    """defer_join is opt-in; an un-flagged gripper leg still blocks."""
+    c = _AsyncGripClient()
+    legs = [leg("place:lid:open", kind=Kind.GRIPPER, cmd=0.0), leg("retreat", Q0, Q1)]
+    runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert c.events[:2] == ["send", "join"], "release settles before the arm moves"

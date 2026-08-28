@@ -57,7 +57,7 @@ class Runner:
     # -- preview -----------------------------------------------------------
     def preview(self, legs):
         rows = [
-            "%-18s %-7s %5s %-18s %5s %8s %7s %7s"
+            "%-18s %-7s %9s %-18s %5s %8s %7s %7s"
             % (
                 "leg",
                 "kind",
@@ -75,14 +75,19 @@ class Runner:
             if leg.kind is Kind.MOTION and leg.traj is not None:
                 last = leg.traj.points[-1].time_from_start
                 secs = "%.2f" % ((last.sec + last.nanosec * 1e-9) / leg.speed)
+            speed_txt = "%5.2f" % leg.speed
+            if leg.warp:
+                # the profile is baked into the timing; showing 1.00 would
+                # read as "transit speed" when it is fast-then-contact
+                speed_txt = "%.2f>%.2f" % (leg.warp[0], leg.warp[1])
             plan_total += leg.plan_s or 0.0
             solve_total += leg.plan_server_s or 0.0
             rows.append(
-                "%-18s %-7s %5.2f %-18s %5d %8s %7s %7s"
+                "%-18s %-7s %9s %-18s %5d %8s %7s %7s"
                 % (
                     leg.name,
                     leg.kind.value,
-                    leg.speed,
+                    speed_txt,
                     leg.world,
                     leg.chain,
                     secs,
@@ -95,7 +100,7 @@ class Runner:
             # difference is transport/queueing, and it is the half we have
             # not yet accounted for (see Leg.plan_s)
             rows.append(
-                "%-18s %-7s %5s %-18s %5s %8s %7.2f %7.2f"
+                "%-18s %-7s %9s %-18s %5s %8s %7.2f %7.2f"
                 % ("(planning total)", "", "", "", "", "", plan_total, solve_total)
             )
         return "\n".join(rows)
@@ -167,6 +172,7 @@ class Runner:
                 return [res]
 
         results = []
+        pending = None  # (leg, handle, t0) of an overlapped gripper command
         next_chain = max((leg.chain for leg in legs), default=0) + 1
         for group in merge_groups(legs):
             lead = group[0]
@@ -187,7 +193,33 @@ class Runner:
                     return results
                 self._last_world = world_key
 
+            # A deferred gripper command must be settled before anything
+            # that depends on the fingers having arrived: another gripper
+            # leg, or any guarded motion (the press descends with them
+            # closed). Everything else — a plain transit — is exactly what
+            # we want it to overlap with.
+            if pending is not None and (
+                lead.kind is Kind.GRIPPER or any(g.guard is not None for g in group)
+            ):
+                res = self._join_gripper(*pending)
+                self._log(res, pending[0])
+                pending = None
+                results.append(res)
+                if not res.ok:
+                    print(
+                        "STOP: leg %s -> %s (%s) — arm holds"
+                        % (res.leg_name, res.outcome, res.detail)
+                    )
+                    return results
+
             if lead.kind is Kind.GRIPPER:
+                if lead.defer_join and lead.verify is None:
+                    handle = self.client.gripper_send(lead.gripper_cmd)
+                    if handle is not None:
+                        pending = (lead, handle, time.monotonic())
+                        continue
+                    # send failed — fall through to the blocking path so
+                    # the failure is reported the same way as ever
                 res = self._run_gripper(lead)
             else:
                 # replan only on MEASURED drift (live vs planned start,
@@ -216,6 +248,10 @@ class Runner:
                     % (res.leg_name, res.outcome, res.detail)
                 )
                 return results
+        if pending is not None:  # nothing needed it; settle before we finish
+            res = self._join_gripper(*pending)
+            self._log(res, pending[0])
+            results.append(res)
         return results
 
     # -- helpers -------------------------------------------------------------
@@ -293,7 +329,14 @@ class Runner:
             if len(group) > 1
             else group[0].traj
         )
-        guard = TorqueGuard(lead.guard.touch_nm) if lead.guard else None
+        guard = (
+            TorqueGuard(
+                lead.guard.touch_nm,
+                rebaseline_after=lead.guard.rebaseline_after,
+            )
+            if lead.guard
+            else None
+        )
         t0 = time.monotonic()
         outcome, info = self.client.execute(traj, lead.speed, guard=guard)
         if outcome == "failed" and NO_MOTION_SIGNATURE in info.get("message", ""):
@@ -340,6 +383,19 @@ class Runner:
         if leg.guard.trip == "obstruction":
             return outcome == "arrived"  # a trip means we struck the lid/rim
         return outcome == "touch"  # press: verify refines via depth
+
+    def _join_gripper(self, leg, handle, t0):
+        """Collect an overlapped gripper command. Identical verdicts to
+        the blocking path — only the waiting moved."""
+        ok, pos, stalled = self.client.gripper_join(handle)
+        outcome = "arrived" if ok else "failed"
+        detail = "gripper at %.3f%s (overlapped)" % (
+            pos,
+            " (stalled)" if stalled else "",
+        )
+        if ok and leg.verify is not None:
+            ok, detail = leg.verify(VerifyCtx(outcome=outcome, gripper_pos=pos))
+        return LegResult(leg.name, outcome, ok, detail, t_wall=time.monotonic() - t0)
 
     def _run_gripper(self, leg):
         t0 = time.monotonic()

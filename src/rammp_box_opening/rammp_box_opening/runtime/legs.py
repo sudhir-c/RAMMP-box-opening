@@ -40,6 +40,11 @@ class Leg:
     invalidates_downstream: bool = False
     verify: object = None  # Callable[[VerifyCtx], tuple[bool, str]] | None
     gripper_cmd: float = None
+    # GRIPPER legs only: start the command and carry on, joining before
+    # anything that needs the fingers to have arrived. Set it where the
+    # overlap is SAFE — a close during a transit — never on a release,
+    # which must complete before the arm moves away from what it dropped.
+    defer_join: bool = False
     world_path: str = None  # generated world YAML to push (SetWorld wants a path)
     stale: bool = field(default=False, compare=False)  # set by the Runner
     # Planning cost, for the preview table. plan_s is the client's round
@@ -49,6 +54,9 @@ class Leg:
     # per plan, and only these two numbers side by side say which half.
     plan_s: float = field(default=None, compare=False)
     plan_server_s: float = field(default=None, compare=False)
+    # (fast_scale, slow_scale, slow_path_fraction) when a guarded descent
+    # was time-warped; display only — leg.speed is 1.0 once it is baked in
+    warp: tuple = field(default=None, compare=False)
 
 
 def can_merge(a, b):
