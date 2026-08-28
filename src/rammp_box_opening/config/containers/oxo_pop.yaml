@@ -68,6 +68,24 @@ open_box:
                                   # POSE_UNCERTAINTY_M 0.02. Ramp at the bench
                                   # 0.15 -> 0.25 -> 0.35, three descents each,
                                   # watching torque_peak in the run jsonl.
+  merge_press: true               # ONE continuous motion from the scan pose
+                                  # straight to the button, replacing
+                                  # [transit to staging] STOP [press down].
+                                  # No seam and no splice: a single cuRobo
+                                  # solve is continuous by construction, and
+                                  # the warp below supplies the slow-into-
+                                  # contact profile. Only legal because the
+                                  # servo leaves the arm ALREADY ABOVE the
+                                  # tag — the descent is near-vertical, so
+                                  # the container being unmodelled above the
+                                  # reduction plane costs no real clearance.
+                                  # Guarded by merge_press_max_lateral_m.
+  merge_press_max_lateral_m: 0.05 # refuse the merge (and fall back to the
+                                  # two-leg path) when the arm is further
+                                  # than this from the button in xy: the
+                                  # merged solve plans in the reduced world,
+                                  # so a long LATERAL leg through it would
+                                  # travel where the container is invisible.
   warp_fast_speed: 0.5            # free-air portion of a GUARDED descent.
                                   # A guarded leg used one scale for its whole
                                   # length, so grip:down crawled 118 mm at 0.15

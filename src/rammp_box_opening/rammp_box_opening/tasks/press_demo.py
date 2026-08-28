@@ -57,7 +57,10 @@ from rammp_box_opening.primitives.core import (
     _plan_motion,
     band_verify,
 )
-from rammp_box_opening.runtime.guards import GuardSpec
+from rammp_box_opening.runtime.guards import (
+    GuardSpec,
+    time_fraction_at_path_fraction,
+)
 from rammp_box_opening.runtime.warp import warp_trajectory
 from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.runtime.runner import Runner
@@ -182,6 +185,103 @@ def _apply_warp(leg, cfg, slow_speed):
     leg.warp = (cfg.warp_fast_speed, slow_speed, cfg.warp_slow_frac)
     leg.guard = replace(leg.guard, rebaseline_after=arm_frac)
     return leg
+
+
+def merged_press_ok(ctx, cfg):
+    """May the approach and the press become ONE motion?
+
+    Only when the arm is already essentially above the button. The merged
+    solve is planned in the REDUCED world (the container's top has to be
+    absent, or there is no way to plan to a point inside it), so a long
+    LATERAL run through that world would travel where the container is
+    invisible. A near-vertical descent does not: it stays inside the
+    column above the button, which is free by construction.
+
+    Returns (ok, lateral_m). last_pose is the last COMMANDED tool pose —
+    this TF tree has no tool_frame to ask (field 2026-08-25).
+    """
+    if not cfg.merge_press or ctx.last_pose is None:
+        return False, None
+    button = from_container(ctx.cpose, ctx.model.button_offset)
+    here = ctx.last_pose[0]
+    lateral = math.hypot(here[0] - button[0], here[1] - button[1])
+    return lateral <= cfg.merge_press_max_lateral_m, lateral
+
+
+def build_merged_press_legs(ctx, cfg):
+    """Close the fingers, then ONE continuous descent to the button.
+
+    Replaces [transit to staging] STOP [guarded press]. There is no seam
+    and no splice: a single cuRobo solve is velocity-continuous by
+    construction, and the time warp gives it the fast-then-slow profile
+    that the two-leg version got from two different speed scales.
+
+    What this gives up is the close-range re-fix, which used the staging
+    STOP to re-measure the tag from ~20 cm. The press therefore leans
+    entirely on the fix taken at scan height (owner: no recalibrating mid
+    flight). If presses start landing off-centre, that is the reason.
+    """
+    m = ctx.model
+    button = from_container(ctx.cpose, m.button_offset)
+    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
+    world = _interaction_world(
+        ctx, button, button[2], cfg.travel_m, "button", ring=False
+    )
+    ctx.last_world = world
+    st = _state(ctx.client.joints())
+    close = _gripper_leg(
+        ctx, st, "press:close", GRIPPER_CMD_CLOSED, world, defer_join=True
+    )
+    guard = GuardSpec(
+        touch_nm=m.touch_nm,
+        trip="press",
+        depth_window=(0.0, cfg.travel_m),
+        target_z=button[2],
+    )
+    # contact is expected once the tool has covered all but the last
+    # travel_m of the descent; converted to a TIME fraction below, after
+    # the warp, because progress is elapsed/duration
+    target = [button[0], button[1], button[2] - cfg.travel_m]
+    expect = {"frac": 1.0}
+
+    def verify(v):
+        expected = expect["frac"]
+        if v.outcome == "touch":
+            if v.progress is not None and v.progress < expected - 0.15:
+                return False, (
+                    "guard tripped EARLY at %.0f%% of the stroke (contact "
+                    "expected ~%.0f%%) — struck something above the button"
+                    % (v.progress * 100, expected * 100)
+                )
+            peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
+            return True, "guard stopped the stroke%s — pressed" % peak
+        if v.outcome == "arrived":
+            return True, "full travel %.1f mm, no trip — pressed" % (
+                cfg.travel_m * 1000
+            )
+        return False, "press %s" % v.outcome
+
+    press, st = _plan_motion(
+        ctx,
+        st,
+        "press:down",
+        ("pose", target, quat),
+        world,
+        cfg.press_speed,
+        guard=guard,
+        invalidates=True,
+        verify=verify,
+    )
+    _apply_warp(press, cfg, cfg.press_speed)
+    # after the warp, because warping changes the time base
+    here = ctx.last_pose[0] if ctx.last_pose else None
+    total = abs((here[2] - target[2])) if here else cfg.staging_m + cfg.travel_m
+    dist_frac = max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9
+    expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
+    retreat_legs, st = Retreat(cfg.grip_hop_m + cfg.travel_m, speed=TRANSIT_SPEED).plan(
+        ctx, st
+    )
+    return [close, press, *retreat_legs]
 
 
 def build_grip_legs(ctx, cfg):
@@ -598,81 +698,130 @@ def main():
                 )
             ctx.lid_drop = ContainerPose(xyz=tuple(drop), yaw=lid.yaw)
 
-        res = runner.run(
-            build_close_and_approach(ctx, cfg), execute=args.execute, assume_yes=True
-        )
-        if any(not r.ok for r in res):
-            sys.exit(1)
-
-        # close-range re-fix: from staging (~20 cm range) any residual
-        # mount error shrinks proportionally. Opportunistic — the closed
-        # gripper may occlude the tag; the centered fix then stands.
-        got2 = wait_for_fix(node, watcher, cfg, timeout_s=1.5)
-        if got2 is not None:
-            cp2 = container_pose_from_tag(got2[0], got2[1], model, cfg.tag_offset)
-            d = math.dist(cp2.xyz, ctx.cpose.xyz)
-            if d > 0.05:
-                try_home(
-                    ctx,
-                    runner,
-                    args.execute,
-                    "close-range re-fix is %.3f m from the centered fix — "
-                    "inconsistent" % d,
-                )
-                sys.exit(3)
-            shift_xy = math.hypot(
-                cp2.xyz[0] - ctx.cpose.xyz[0], cp2.xyz[1] - ctx.cpose.xyz[1]
-            )
-            ctx.cpose = cp2
-            if shift_xy > 0.02:
-                # a sub-2cm shift presses as a slightly diagonal stroke
-                # (bounded, trivial over a 13 cm descent); beyond that,
-                # re-approach above the NEW xy so the descent stays
-                # overhead (2026-08-25 review + owner: fewer pauses)
-                print(
-                    "[press_demo] re-fix shifts the target %.1f mm laterally "
-                    "— re-approaching overhead" % (shift_xy * 1000)
-                )
-                res = runner.run(
-                    [build_approach_leg(ctx, cfg)],
-                    execute=args.execute,
-                    assume_yes=True,
-                )
-                if any(not r.ok for r in res):
-                    sys.exit(1)
-            elif d > 0.005:
-                print(
-                    "[press_demo] close-range re-fix shifts the target "
-                    "%.1f mm — using it" % (d * 1000)
-                )
-        else:
+        # ONE continuous motion when the arm is already above the button:
+        # close the fingers, then descend straight to contact with no stop
+        # at staging and no close-range re-fix (owner: constant motion, no
+        # recalibrating mid flight). Falls back to the two-leg path — with
+        # its stop and its re-fix — whenever the guard-rail says the run
+        # through the reduced world would be too lateral.
+        merged, lateral = merged_press_ok(ctx, cfg)
+        if merged and not args.press_only:
             print(
-                "[press_demo] no close-range re-fix (gripper may occlude) — "
-                "keeping the centered fix"
+                "[press_demo] MERGED PRESS — one motion to the button "
+                "(%.0f mm off-axis, limit %.0f mm; no staging stop, no re-fix)"
+                % (lateral * 1000, cfg.merge_press_max_lateral_m * 1000)
             )
+            print(
+                "[press_demo] PRESS target origin [%.3f, %.3f, %.3f] yaw %.1f deg"
+                % (
+                    ctx.cpose.xyz[0],
+                    ctx.cpose.xyz[1],
+                    ctx.cpose.xyz[2],
+                    math.degrees(ctx.cpose.yaw),
+                )
+            )
+            res = runner.run(
+                build_merged_press_legs(ctx, cfg),
+                execute=args.execute,
+                assume_yes=True,
+            )
+            bad = [r for r in res if not r.ok]
+            if bad:
+                sys.exit(1)
+            press = [r for r in res if r.leg_name.startswith("press:down")]
+            print(
+                "[press_demo] PRESSED — %s"
+                % (press[-1].detail if press else "no press leg ran (dry-run)")
+            )
+        else:
+            if cfg.merge_press and not args.press_only:
+                print(
+                    "[press_demo] merged press declined (%s) — using the "
+                    "staged approach"
+                    % (
+                        "no commanded pose yet"
+                        if lateral is None
+                        else "%.0f mm off-axis > %.0f mm limit"
+                        % (lateral * 1000, cfg.merge_press_max_lateral_m * 1000)
+                    )
+                )
+            res = runner.run(
+                build_close_and_approach(ctx, cfg),
+                execute=args.execute,
+                assume_yes=True,
+            )
+            if any(not r.ok for r in res):
+                sys.exit(1)
 
-        print(
-            "[press_demo] PRESS target origin [%.3f, %.3f, %.3f] yaw %.1f deg"
-            % (
-                ctx.cpose.xyz[0],
-                ctx.cpose.xyz[1],
-                ctx.cpose.xyz[2],
-                math.degrees(ctx.cpose.yaw),
+            # close-range re-fix: from staging (~20 cm range) any residual
+            # mount error shrinks proportionally. Opportunistic — the closed
+            # gripper may occlude the tag; the centered fix then stands.
+            got2 = wait_for_fix(node, watcher, cfg, timeout_s=1.5)
+            if got2 is not None:
+                cp2 = container_pose_from_tag(got2[0], got2[1], model, cfg.tag_offset)
+                d = math.dist(cp2.xyz, ctx.cpose.xyz)
+                if d > 0.05:
+                    try_home(
+                        ctx,
+                        runner,
+                        args.execute,
+                        "close-range re-fix is %.3f m from the centered fix — "
+                        "inconsistent" % d,
+                    )
+                    sys.exit(3)
+                shift_xy = math.hypot(
+                    cp2.xyz[0] - ctx.cpose.xyz[0], cp2.xyz[1] - ctx.cpose.xyz[1]
+                )
+                ctx.cpose = cp2
+                if shift_xy > 0.02:
+                    # a sub-2cm shift presses as a slightly diagonal stroke
+                    # (bounded, trivial over a 13 cm descent); beyond that,
+                    # re-approach above the NEW xy so the descent stays
+                    # overhead (2026-08-25 review + owner: fewer pauses)
+                    print(
+                        "[press_demo] re-fix shifts the target %.1f mm laterally "
+                        "— re-approaching overhead" % (shift_xy * 1000)
+                    )
+                    res = runner.run(
+                        [build_approach_leg(ctx, cfg)],
+                        execute=args.execute,
+                        assume_yes=True,
+                    )
+                    if any(not r.ok for r in res):
+                        sys.exit(1)
+                elif d > 0.005:
+                    print(
+                        "[press_demo] close-range re-fix shifts the target "
+                        "%.1f mm — using it" % (d * 1000)
+                    )
+            else:
+                print(
+                    "[press_demo] no close-range re-fix (gripper may occlude) — "
+                    "keeping the centered fix"
+                )
+
+            print(
+                "[press_demo] PRESS target origin [%.3f, %.3f, %.3f] yaw %.1f deg"
+                % (
+                    ctx.cpose.xyz[0],
+                    ctx.cpose.xyz[1],
+                    ctx.cpose.xyz[2],
+                    math.degrees(ctx.cpose.yaw),
+                )
             )
-        )
-        res = runner.run(
-            build_press_legs(ctx, cfg, include_home=args.press_only),
-            execute=args.execute,
-            assume_yes=True,
-        )
-        bad = [r for r in res if not r.ok]
-        if bad:
-            sys.exit(1)
-        press = [r for r in res if r.leg_name.startswith("press")]
-        print(
-            "[press_demo] PRESSED — %s"
-            % (press[-1].detail if press else "no press leg ran (dry-run)")
-        )
+            res = runner.run(
+                build_press_legs(ctx, cfg, include_home=args.press_only),
+                execute=args.execute,
+                assume_yes=True,
+            )
+            bad = [r for r in res if not r.ok]
+            if bad:
+                sys.exit(1)
+            press = [r for r in res if r.leg_name.startswith("press")]
+            print(
+                "[press_demo] PRESSED — %s"
+                % (press[-1].detail if press else "no press leg ran (dry-run)")
+            )
         if args.press_only:
             sys.exit(0)
 

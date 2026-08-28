@@ -12,10 +12,11 @@ pixels) and the tag carries a 30 deg yaw plus a nonzero tag->button
 offset, so wrong-pixel depth sampling and wrong rotation composition
 both move the recovered origin and FAIL the 5 mm / 3 deg checks.
 
-  tag:    full flow, no trip — exit 0, 4 exec goals, 1 gripper goal, no
-          cancels, origin within 5 mm and yaw within 3 deg of the
+  tag:    full flow — exit 0, 8 exec goals, 4 gripper goals, one cancel
+          (the guarded set-down trips by design), origin within 5 mm and
+          yaw within 3 deg of the
           geometry the synthetic camera encoded.
-  trip:   efforts spike late in the press (STUB_TRIP_EXEC_N=3) — the guard
+  trip:   efforts spike late in the press (STUB_TRIP_EXEC_N=2) — the guard
           cancels the stroke, the CLI reports pressed-via-trip, retreat
           and home replan from the stop, exit 0. Exactly one cancel.
   no-tag: tagless frames — scan, a detect wait that provably lasts
@@ -122,9 +123,9 @@ def run_scenario(tmp, cfg, mode):
     # the guarded set-down (place:lid:down) must always trip; the trip
     # scenario also trips the press stroke
     stub_env = (
-        "export STUB_TRIP_EXEC_N=3,8; "
+        "export STUB_TRIP_EXEC_N=2,7; "
         if mode == "trip"
-        else "export STUB_TRIP_EXEC_N=8; "
+        else "export STUB_TRIP_EXEC_N=7; "
     )
     stub = cam = cli = None
     try:
@@ -197,10 +198,10 @@ def run_scenario(tmp, cfg, mode):
     # tag and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
-    if execs != 9:
+    if execs != 8:
         # scan, approach, press, retreat, grip:down, lift, place transit,
         # place:down, place-retreat+home (merged)
-        fails.append("exec goals %d != 9" % execs)
+        fails.append("exec goals %d != 8" % execs)
     if said.count("GRIPPER GOAL") != 4:
         fails.append("gripper goals %d != 4" % said.count("GRIPPER GOAL"))
     if "LID PULLED" not in cli_said:

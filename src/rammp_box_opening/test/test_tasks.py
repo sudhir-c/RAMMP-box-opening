@@ -468,3 +468,63 @@ def test_warping_is_off_when_the_config_disables_it():
     assert down.warp is None
     assert down.speed == cfg.grip_speed  # plain single-scale behaviour
     assert down.guard.rebaseline_after is None
+
+
+def test_merged_press_is_one_continuous_motion_with_no_staging_stop():
+    """[transit to staging] STOP [press] becomes close + ONE descent."""
+    import pytest
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    button = from_container(c.cpose, c.model.button_offset)
+    # the servo leaves the arm above the tag: directly over the button
+    c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
+    ok, lateral = press_demo.merged_press_ok(c, cfg)
+    assert ok and lateral == pytest.approx(0.0, abs=1e-9)
+
+    legs = press_demo.build_merged_press_legs(c, cfg)
+    assert names(legs) == ["press:close", "press:down", "retreat"]
+    assert "approach:staging" not in names(legs)  # the stop is gone
+    close, press, retreat = legs
+    assert close.defer_join  # fingers shut while the arm is already moving
+    assert press.guard is not None and press.guard.trip == "press"
+    assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
+    # continuous by construction: ONE solve, then warped fast-into-slow
+    assert press.warp is not None and press.guard.rebaseline_after is not None
+    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.grip_hop_m)
+
+
+def test_merged_press_is_declined_when_the_arm_is_off_axis():
+    """The merged solve plans in the REDUCED world, so a long lateral run
+    through it — where the container is invisible — must not happen."""
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    button = from_container(c.cpose, c.model.button_offset)
+    c.last_pose = (
+        [button[0] + 0.30, button[1], button[2] + 0.35],
+        [0.0, 1.0, 0.0, 0.0],
+    )
+    ok, lateral = press_demo.merged_press_ok(c, cfg)
+    assert not ok and lateral > cfg.merge_press_max_lateral_m
+
+    c.last_pose = None  # nothing commanded yet
+    assert press_demo.merged_press_ok(c, cfg) == (False, None)
+
+
+def test_merged_press_off_by_config_uses_the_staged_path():
+    from dataclasses import replace as _replace
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _replace(_demo_cfg(), merge_press=False)
+    button = from_container(c.cpose, c.model.button_offset)
+    c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
+    assert press_demo.merged_press_ok(c, cfg) == (False, None)

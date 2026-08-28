@@ -162,6 +162,8 @@ class PressDemoCfg:
     grip_speed: float  # descent onto the popped button (ramp at the bench)
     grip_hop_m: float  # retreat height above the plane between press and grip
     setdown_speed: float  # guarded set-down; the trip IS the success
+    merge_press: bool  # one continuous motion instead of approach+stop+press
+    merge_press_max_lateral_m: float  # xy limit for allowing the merge
     warp_fast_speed: float  # free-air scale of a warped descent
     warp_slow_frac: float  # final path fraction at contact speed
     grip_clear_m: float  # fingertip stop height above the tag/lid plane
@@ -196,6 +198,10 @@ def load_press_demo(path):
         grip_speed=float(raw["open_box"].get("grip_speed", 0.15)),
         grip_hop_m=float(raw["open_box"].get("grip_hop_m", 0.12)),
         setdown_speed=float(raw["open_box"].get("setdown_speed", 0.15)),
+        merge_press=bool(raw["open_box"].get("merge_press", False)),
+        merge_press_max_lateral_m=float(
+            raw["open_box"].get("merge_press_max_lateral_m", 0.05)
+        ),
         warp_fast_speed=float(raw["open_box"].get("warp_fast_speed", 0.0)),
         warp_slow_frac=float(raw["open_box"].get("warp_slow_frac", 0.3)),
         grip_clear_m=float(raw["open_box"]["grip_clear_m"]),
@@ -241,6 +247,12 @@ def load_press_demo(path):
         raise ValueError(
             "open_box.warp_fast_speed must be in (0, 0.6] — the free-air part "
             "of a GUARDED descent, not a transit leg"
+        )
+    if not 0.0 < cfg.merge_press_max_lateral_m <= 0.15:
+        raise ValueError(
+            "open_box.merge_press_max_lateral_m must be in (0, 0.15] — the "
+            "merged solve plans in the reduced world, so the lateral run "
+            "through it has to stay short"
         )
     if not 0.0 < cfg.warp_slow_frac < 1.0:
         raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
