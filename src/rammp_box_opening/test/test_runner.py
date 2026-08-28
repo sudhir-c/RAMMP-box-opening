@@ -246,7 +246,11 @@ def test_press_verify_uses_depth(tmp_path):
     c = FakeClient()
     c.tool_z = 0.082  # 8 mm below target_z 0.09
     g = GuardSpec(
-        touch_nm=3.0, trip="press", depth_window=(0.004, 0.012), target_z=0.09
+        touch_nm=3.0,
+        trip="press",
+        depth_window=(0.004, 0.012),
+        target_z=0.09,
+        needs_depth=True,  # Descend-style press: its verify reads depth_m
     )
     c.exec_script = [
         ("touch", {"message": "contact", "progress": 0.6, "torque_peak": 4.2})
@@ -326,3 +330,48 @@ def test_no_replan_when_contact_left_arm_on_plan(tmp_path):
     # live == planned start (FakeClient tracks to traj end): NO replan —
     # the pre-planned retreat executed as built (no pause at the bottom)
     assert c.exec_starts[1] == Q1
+
+
+def test_tf_depth_lookup_skipped_unless_the_verify_needs_it(tmp_path):
+    """PressFixed judges by progress + torque, never by depth.
+
+    The lookup blocks for its whole timeout on this TF tree (no
+    tool_frame exists), so a guard that does not consume depth must not
+    trigger it — 0.5 s per press trip, measured 2026-08-28."""
+    c = FakeClient()
+    calls = []
+    inner = c.tool_xyz
+    c.tool_xyz = lambda *a, **k: (calls.append(1), inner(*a, **k))[1]
+
+    g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)  # needs_depth False
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    res = runner(c, tmp_path).run(
+        [leg("press", guard=g, world="interaction_b", invalidates=True)],
+        execute=True,
+        assume_yes=True,
+    )
+    assert res[0].outcome == "touch"
+    assert calls == [], "no tool_frame lookup when the verify ignores depth"
+
+
+def test_lift_may_run_faster_than_contact_in_an_interaction_world(tmp_path):
+    """Lift ascends out of the corridor it just descended, exactly like
+    retreat — both are exempt from the transit-speed world gate."""
+    c = FakeClient()
+    res = runner(c, tmp_path).run(
+        [leg("lift", speed=0.35, world="interaction_button")],
+        execute=True,
+        assume_yes=True,
+    )
+    assert res[0].ok and res[0].outcome != "refused"
+
+
+def test_unguarded_fast_leg_in_an_interaction_world_is_still_refused(tmp_path):
+    """The exemption is name-scoped — it must not open the gate widely."""
+    c = FakeClient()
+    res = runner(c, tmp_path).run(
+        [leg("place:lid:transit", speed=0.35, world="interaction_place")],
+        execute=True,
+        assume_yes=True,
+    )
+    assert res[0].outcome == "refused"

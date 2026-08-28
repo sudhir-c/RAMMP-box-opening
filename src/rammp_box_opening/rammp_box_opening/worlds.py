@@ -24,16 +24,32 @@ def _bench_obstacles(bench):
     return [dict(o) for o in bench["obstacles"]]
 
 
+# the arm's own mounting column is never removed from a world, only ever
+# thinned: a set-down low enough to push the reduction plane under the
+# pedestal's base would otherwise delete the one obstacle the arm is
+# bolted to (found by review 2026-08-28, never yet hit in the field)
+NEVER_DROP = ("pedestal",)
+STUB_DZ_M = 0.01
+
+
 def _cap_top(obs, top_z):
     """Copy of a cuboid with its top lowered to top_z; None if nothing of
-    it remains. No-op when the top is already at or below top_z."""
+    it remains. No-op when the top is already at or below top_z.
+
+    Obstacles named in NEVER_DROP are thinned to a STUB_DZ_M slab at their
+    base instead of being dropped."""
     x, y, z = obs["position"]
     dx, dy, dz = obs["dims"]
     top, bottom = z + dz / 2, z - dz / 2
     if top <= top_z:
         return dict(obs)
     if bottom >= top_z:
-        return None
+        if obs.get("name") not in NEVER_DROP:
+            return None
+        stub = dict(obs)
+        stub["position"] = [x, y, bottom + STUB_DZ_M / 2]
+        stub["dims"] = [dx, dy, STUB_DZ_M]
+        return stub
     capped = dict(obs)
     capped["position"] = [x, y, bottom + (top_z - bottom) / 2]
     capped["dims"] = [dx, dy, top_z - bottom]
@@ -128,9 +144,7 @@ def interaction_world(
     # set-down goal 25 mm over the solid table). For button-height
     # contacts the plane sits below every bench top — a no-op. Only
     # guarded/slow legs live in this world; the transit gate stands.
-    obstacles = [
-        c for c in (_cap_top(o, plane) for o in _bench_obstacles(bench)) if c
-    ]
+    obstacles = [c for c in (_cap_top(o, plane) for o in _bench_obstacles(bench)) if c]
     if plane > cpose.xyz[2]:  # body below the plane stays solid
         obstacles.append(
             _container_cuboid(model, cpose, name="container_body", top_z=plane)

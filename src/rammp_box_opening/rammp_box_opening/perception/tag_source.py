@@ -147,7 +147,14 @@ class TagWatcher:
     base_link with TF at that frame's stamp (grabber-composed mount),
     depth-refined, and fed to the FixWindow."""
 
-    def __init__(self, node, cfg, period_s=0.15):
+    def __init__(self, node, cfg, period_s=None):
+        # tick rate: cfg.detect_period_s when the config carries one.
+        # min_hits * period is the hard floor on time-to-commit, so the
+        # 0.15 s default cost 0.45 s before a single miss (speed pass
+        # 2026-08-28). Over-ticking is self-limiting — _tick returns in
+        # microseconds when the frame stamp has not advanced.
+        if period_s is None:
+            period_s = float(getattr(cfg, "detect_period_s", 0.15))
         import cv2
 
         from rammp_curobo_ros.seek_core import D405Grabber

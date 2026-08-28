@@ -159,8 +159,11 @@ class PressDemoCfg:
     grip_band: tuple  # gripper feedback band = holding the popped button
     lift_m: float
     lift_speed: float
+    grip_speed: float  # descent onto the popped button (ramp at the bench)
+    setdown_speed: float  # guarded set-down; the trip IS the success
     grip_clear_m: float  # fingertip stop height above the tag/lid plane
     grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
+    detect_period_s: float  # detector tick; min_hits * this = commit floor
 
 
 def load_press_demo(path):
@@ -187,8 +190,11 @@ def load_press_demo(path):
         grip_band=tuple(raw["open_box"]["grip_band"]),
         lift_m=float(raw["open_box"]["lift_m"]),
         lift_speed=float(raw["open_box"]["lift_speed"]),
+        grip_speed=float(raw["open_box"].get("grip_speed", 0.15)),
+        setdown_speed=float(raw["open_box"].get("setdown_speed", 0.15)),
         grip_clear_m=float(raw["open_box"]["grip_clear_m"]),
         grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
+        detect_period_s=float(raw["detect"].get("period_s", 0.15)),
     )
     if not raw["open_box"]["grip_band"][0] < raw["open_box"]["grip_band"][1] < 0.8:
         raise ValueError(
@@ -213,6 +219,20 @@ def load_press_demo(path):
         raise ValueError("press_demo.travel_m must be positive")
     if not 0.0 < cfg.press_speed <= 1.0:
         raise ValueError("press_demo.speed outside (0, 1]")
+    # Contact-leg speeds are bounded well below transit: the torque guard
+    # only arms after the first execution feedback, so the descent travels
+    # speed * executor_poll before a baseline exists (BASELINE_TRAVEL_M is
+    # the 10 mm budget). 0.5 keeps that inside budget even if the poll
+    # regresses to 0.1 s. Raise the poll rate, not this bound.
+    for field in ("grip_speed", "setdown_speed", "lift_speed"):
+        v = getattr(cfg, field)
+        if not 0.0 < v <= 0.5:
+            raise ValueError(
+                "open_box.%s must be in (0, 0.5] — contact/carry legs are "
+                "guard-limited, not transit legs" % field
+            )
+    if not 0.0 < cfg.detect_period_s <= 0.5:
+        raise ValueError("detect.period_s must be in (0, 0.5] s")
     # staging is anchored at the BUTTON TOP; the full-world obstacle tops
     # out at container top + err-tall (2 cm) + collision padding (2 cm),
     # and the finger collision spheres reach ~6 cm below tool_frame.

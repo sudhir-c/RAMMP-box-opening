@@ -91,4 +91,10 @@ def test_reverse_retrace_reverses_executed_portion():
     assert starts[0] == pytest.approx(0.4)  # from deepest executed
     assert starts[-1] == pytest.approx(0.0)  # back to the start
     times = [p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 for p in r.points]
-    assert times == sorted(times) and times[0] == 0.0  # re-timed, monotonic
+    assert times == sorted(times)
+    # Strictly POSITIVE first stamp, not 0.0: the executor rejects a goal
+    # whose diff(times, prepend=0) contains a non-positive dt, so a retrace
+    # starting at t=0 was refused on first contact with the arm.
+    assert times[0] > 0.0
+    dts = [b - a for a, b in zip(times, times[1:])]
+    assert all(d > 0.0 for d in dts)

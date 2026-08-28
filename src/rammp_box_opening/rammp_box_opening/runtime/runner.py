@@ -57,17 +57,46 @@ class Runner:
     # -- preview -----------------------------------------------------------
     def preview(self, legs):
         rows = [
-            "%-18s %-7s %5s %-18s %5s %8s"
-            % ("leg", "kind", "speed", "world", "chain", "time_s")
+            "%-18s %-7s %5s %-18s %5s %8s %7s %7s"
+            % (
+                "leg",
+                "kind",
+                "speed",
+                "world",
+                "chain",
+                "time_s",
+                "plan_s",
+                "solve_s",
+            )
         ]
+        plan_total = solve_total = 0.0
         for leg in legs:
             secs = "-"
             if leg.kind is Kind.MOTION and leg.traj is not None:
                 last = leg.traj.points[-1].time_from_start
                 secs = "%.2f" % ((last.sec + last.nanosec * 1e-9) / leg.speed)
+            plan_total += leg.plan_s or 0.0
+            solve_total += leg.plan_server_s or 0.0
             rows.append(
-                "%-18s %-7s %5.2f %-18s %5d %8s"
-                % (leg.name, leg.kind.value, leg.speed, leg.world, leg.chain, secs)
+                "%-18s %-7s %5.2f %-18s %5d %8s %7s %7s"
+                % (
+                    leg.name,
+                    leg.kind.value,
+                    leg.speed,
+                    leg.world,
+                    leg.chain,
+                    secs,
+                    "-" if leg.plan_s is None else "%.2f" % leg.plan_s,
+                    "-" if leg.plan_server_s is None else "%.2f" % leg.plan_server_s,
+                )
+            )
+        if plan_total > 0.0:
+            # round trip vs. what the planner says it spent solving: the
+            # difference is transport/queueing, and it is the half we have
+            # not yet accounted for (see Leg.plan_s)
+            rows.append(
+                "%-18s %-7s %5s %-18s %5s %8s %7.2f %7.2f"
+                % ("(planning total)", "", "", "", "", "", plan_total, solve_total)
             )
         return "\n".join(rows)
 
@@ -85,11 +114,14 @@ class Runner:
                 leg.guard is None
                 and leg.speed > CONTACT_SPEED
                 and not leg.world.startswith(("full", "bench"))
-                # retreat ascends OUT of the corridor it descended, planned
-                # collision-free in that same interaction world — transit
-                # speed is fine for it (owner: fast up, 2026-08-26)
+                # retreat and lift both ascend OUT of the corridor just
+                # descended, planned collision-free in that same
+                # interaction world — faster-than-contact is fine for them
+                # (owner: fast up, 2026-08-26; lift added 2026-08-28).
+                # Retreat already runs at TRANSIT_SPEED here, so a 0.35
+                # lift is the milder of the two.
                 and not (
-                    leg.name.startswith("retreat")
+                    leg.name.startswith(("retreat", "lift"))
                     and leg.world.startswith("interaction")
                 )
             ):
@@ -223,7 +255,11 @@ class Runner:
             time.sleep(3.0)
             outcome, info = self.client.execute(traj, lead.speed, guard=guard)
         depth = None
-        if outcome == "touch" and lead.guard and lead.guard.trip == "press":
+        if outcome == "touch" and lead.guard and lead.guard.needs_depth:
+            # gated on needs_depth: the lookup blocks for its full timeout
+            # on a TF tree with no tool_frame, and PressFixed — the press
+            # the mission actually runs — never reads the result (0.5 s
+            # per press trip, measured 2026-08-28)
             tool = self.client.tool_xyz()
             depth = (lead.guard.target_z - tool[2]) if tool else None
         ok = self._leg_ok(lead, outcome)

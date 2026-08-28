@@ -25,7 +25,6 @@ import rclpy
 
 
 from rammp_box_opening.constants import (
-    CONTACT_SPEED,
     GRIPPER_CMD_CLOSED,
     GRIPPER_CMD_OPEN,
     HOME,
@@ -183,7 +182,7 @@ def build_grip_legs(ctx, cfg):
         "grip:down",
         ("pose", target, quat),
         world,
-        CONTACT_SPEED,
+        cfg.grip_speed,
         guard=guard,
         invalidates=True,
     )
@@ -245,7 +244,9 @@ def build_place_legs(ctx, cfg):
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(lid.xyz[1], lid.xyz[0]))
     target = [lid.xyz[0], lid.xyz[1], lid.xyz[2] + m.lid_dims[2]]
     st = _state(ctx.client.joints())
-    legs, st = Place(target, quat, open_after=True, name="place:lid").plan(ctx, st)
+    legs, st = Place(
+        target, quat, open_after=True, name="place:lid", speed=cfg.setdown_speed
+    ).plan(ctx, st)
     ctx.lid_at = lid  # worlds carry the placed lid from here on
     retreat_legs, st = Retreat(
         m.hover_standoff + m.lid_dims[2], speed=TRANSIT_SPEED

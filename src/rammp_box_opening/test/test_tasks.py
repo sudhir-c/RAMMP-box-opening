@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from pathlib import Path
 
 from test_runner import FakeClient, FakeStore
@@ -186,7 +187,9 @@ def test_center_on_tag_converges_after_one_move():
 
     c = ctx()
     c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
-    cfg = load_press_demo(CFG)
+    # ships with servo.max_iters 0 (detect once, press); these tests
+    # cover the loop mechanics, so they pin their own budget
+    cfg = replace(load_press_demo(CFG), servo_max_iters=4)
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.001, 0.0, 0.4]])
     runner = _FakeRunner()
     got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
@@ -200,7 +203,9 @@ def test_center_on_tag_unconverged_presses_on_freshest_fix():
 
     c = ctx()
     c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
-    cfg = load_press_demo(CFG)
+    # ships with servo.max_iters 0 (detect once, press); these tests
+    # cover the loop mechanics, so they pin their own budget
+    cfg = replace(load_press_demo(CFG), servo_max_iters=4)
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4]] * (cfg.servo_max_iters + 1))
     runner = _FakeRunner()
     got, why = center_on_tag(None, watcher, c, cfg, runner, True, wait=wait)
@@ -214,7 +219,9 @@ def test_center_on_tag_failure_semantics():
 
     c = ctx()
     c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
-    cfg = load_press_demo(CFG)
+    # ships with servo.max_iters 0 (detect once, press); these tests
+    # cover the loop mechanics, so they pin their own budget
+    cfg = replace(load_press_demo(CFG), servo_max_iters=4)
     # servo exec failure: holds, never homes
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.10, 0.0, 0.4]])
     runner = _FakeRunner(ok=False)
@@ -232,7 +239,9 @@ def test_center_on_tag_divergence_stops():
 
     c = ctx()
     c.last_pose = ([0.42, 0.0, 0.45], [0.0, 1.0, 0.0, 0.0])
-    cfg = load_press_demo(CFG)
+    # ships with servo.max_iters 0 (detect once, press); these tests
+    # cover the loop mechanics, so they pin their own budget
+    cfg = replace(load_press_demo(CFG), servo_max_iters=4)
     # a mirrored camera frame: the error GROWS after the first move
     watcher, wait = _servo_fixture([[0.10, 0.0, 0.4], [0.22, 0.0, 0.4]])
     runner = _FakeRunner()
@@ -367,3 +376,45 @@ def test_place_legs_use_the_resolved_drop_spot():
     assert transit.target[1][0] == pytest.approx(0.30)
     assert transit.target[1][1] == pytest.approx(0.30)
     assert c.lid_at is c.lid_drop  # the placed-lid world follows the shift
+
+
+def test_contact_leg_speeds_come_from_config():
+    """grip:down, lift and the set-down each read their own config knob.
+
+    They were three hardcoded 0.15s; the set-down and lift now run at
+    0.35 while grip:down stays conservative until the bench ramp."""
+    import pytest
+
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    grip = press_demo.build_grip_legs(c, cfg)
+    down = next(x for x in grip if x.name == "grip:down")
+    lift = next(x for x in grip if x.name == "lift")
+    assert down.speed == pytest.approx(cfg.grip_speed)
+    assert lift.speed == pytest.approx(cfg.lift_speed)
+
+    c.lid_drop = None
+    place = press_demo.build_place_legs(c, cfg)
+    setdown = next(x for x in place if x.name == "place:lid:down")
+    assert setdown.speed == pytest.approx(cfg.setdown_speed)
+    # the set-down keeps its guard: speed rose, the trip=success did not move
+    assert setdown.guard is not None and setdown.guard.trip == "setdown"
+
+
+def test_shipped_config_speeds_are_guard_safe():
+    """The shipped values are what actually runs at the bench."""
+    import pytest
+
+    from rammp_box_opening.models.container import load_press_demo
+
+    cfg = load_press_demo(CFG)
+    assert cfg.lift_speed == pytest.approx(0.35)
+    assert cfg.setdown_speed == pytest.approx(0.35)
+    assert cfg.grip_speed == pytest.approx(0.15)  # ramp at the bench first
+    assert cfg.servo_max_iters == 0  # detect once, press on that fix
+    assert cfg.detect_period_s == pytest.approx(0.05)
+    # every contact/carry speed stays inside the guard-limited band
+    for v in (cfg.grip_speed, cfg.setdown_speed, cfg.lift_speed):
+        assert 0.0 < v <= 0.5

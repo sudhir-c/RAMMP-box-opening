@@ -46,7 +46,19 @@ open_box:
                                   # closed on something too wide (the box
                                   # itself reads ~0.09); 0.8 = air
   lift_m: 0.15                    # slow pull height before the carry
-  lift_speed: 0.15                # "slowly lift upwards" (owner)
+  lift_speed: 0.35                # visibly gentle pull, 2.3x faster than the
+                                  # 0.15 it shipped at (speed pass 2026-08-28).
+                                  # Unguarded, so runner._refusal exempts
+                                  # "lift" alongside "retreat".
+  grip_speed: 0.15                # descent onto the popped button. NOT yet
+                                  # raised: a trip here means FAILURE and the
+                                  # stop height is 2 mm above the lid, vs
+                                  # POSE_UNCERTAINTY_M 0.02. Ramp at the bench
+                                  # 0.15 -> 0.25 -> 0.35, three descents each,
+                                  # watching torque_peak in the run jsonl.
+  setdown_speed: 0.35             # guarded set-down; a trip IS the success
+                                  # here, and the guard arms in 1.7 mm once
+                                  # the executor polls at 0.02 s
   grip_clear_m: 0.002             # fingertip stop height ABOVE the tag
                                   # plane. The tag plane IS the lid top
                                   # (tag on the flush button at scan): the
@@ -85,10 +97,25 @@ detect:
   tol_m: 0.03                     # pairwise agreement (stable_fix)
   window_s: 2.0                   # sightings older than this leave the window
   fresh_s: 1.0                    # a fix older than this cannot commit
+  period_s: 0.05                  # detector tick. min_hits * period is the
+                                  # hard floor on time-to-commit: 0.15 s here
+                                  # vs 0.45 s at the 0.15 s default. Not the
+                                  # camera's 0.033 s: this tick shares the
+                                  # single-threaded spin that polls the torque
+                                  # guard, so 20 Hz buys most of the win
+                                  # without tripling the load during contact.
 servo:                            # center-the-tag loop (owner 2026-08-25):
   tol_px: 40.0                    # ~1.8 cm at scan range: one servo move
                                   # usually suffices; the close-range re-fix
                                   # absorbs the residual (owner: fewer pauses)
-  max_iters: 4                    # lateral looks before pressing on anyway
+  max_iters: 0                    # lateral looks before pressing on anyway.
+                                  # 0 = detect once and press on that fix.
+                                  # Measured over the live runs: iteration 0
+                                  # committed 5/5, iteration 1 only 1/4 — the
+                                  # re-acquisition after the servo move was
+                                  # the demo's single biggest failure source
+                                  # (three 10 s no-tag aborts). The
+                                  # close-range re-fix at staging already
+                                  # absorbs the lateral residual.
   min_step_m: 0.01                # skip micro-moves (kortex small-goal lore)
   max_step_m: 0.25                # clamp one servo translation

@@ -12,6 +12,7 @@ Retreat) need no pose argument of their own.
 """
 
 import math
+import time
 from dataclasses import dataclass
 
 from rammp_box_opening.constants import (
@@ -114,11 +115,13 @@ def _plan_motion(
             raise RuntimeError("set_world before planning %s failed: %s" % (name, msg))
         ctx.pushed_world = str(world_path)
     kind, *rest = target
+    t_plan = time.monotonic()
     if kind == "pose":
         plan = ctx.client.plan_to_pose(rest[0], rest[1], state.joints)
         ctx.last_pose = (list(rest[0]), list(rest[1]))
     else:
         plan = ctx.client.plan_to_joints(rest[0], state.joints)
+    plan_s = time.monotonic() - t_plan
     if plan is None or not plan.success:
         raise RuntimeError(
             "planning failed for %s: %s"
@@ -138,6 +141,8 @@ def _plan_motion(
         goal_joints=end,
         invalidates_downstream=invalidates,
         verify=verify,
+        plan_s=plan_s,
+        plan_server_s=getattr(plan, "planning_time", None),
     )
     next_chain = state.chain + 1 if invalidates else state.chain
     return leg, PlanState(joints=end, chain=next_chain, contact_broke_chain=invalidates)
@@ -203,6 +208,7 @@ class Press:
             trip="press",
             depth_window=window,
             target_z=button[2],
+            needs_depth=True,  # press_outcome below reads v.depth_m
         )
 
         def verify(v):
@@ -293,11 +299,14 @@ class Place:
     model a held object), guarded descent where a trip = set-down, then
     open the gripper (spec §5, §6)."""
 
-    def __init__(self, target_xyz, quat, open_after=True, name="place"):
+    def __init__(self, target_xyz, quat, open_after=True, name="place", speed=None):
         self.target_xyz = list(target_xyz)
         self.quat = list(quat)
         self.open_after = open_after
         self.name = name
+        # descent speed; None keeps the conservative contact default for
+        # callers that predate the config knob (tests, isolated CLI use)
+        self.speed = CONTACT_SPEED if speed is None else float(speed)
 
     def plan(self, ctx, state):
         m = ctx.model
@@ -345,7 +354,7 @@ class Place:
             self.name + ":down",
             ("pose", down_xyz, self.quat),
             world,
-            CONTACT_SPEED,
+            self.speed,
             guard=guard,
             invalidates=True,
         )

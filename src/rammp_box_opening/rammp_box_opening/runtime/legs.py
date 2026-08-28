@@ -42,6 +42,13 @@ class Leg:
     gripper_cmd: float = None
     world_path: str = None  # generated world YAML to push (SetWorld wants a path)
     stale: bool = field(default=False, compare=False)  # set by the Runner
+    # Planning cost, for the preview table. plan_s is the client's round
+    # trip; plan_server_s is what the planner reports it spent solving.
+    # The gap between them is action/transport overhead — worth watching:
+    # off-bench the solve measures ~0.21 s while live runs showed ~1.0 s
+    # per plan, and only these two numbers side by side say which half.
+    plan_s: float = field(default=None, compare=False)
+    plan_server_s: float = field(default=None, compare=False)
 
 
 def can_merge(a, b):

@@ -48,6 +48,13 @@ class GuardSpec:
     trip: str  # "press" | "obstruction" | "setdown"
     depth_window: tuple = None  # "press" only, m below nominal contact z
     target_z: float = None  # nominal contact z (base_link) for depth calc
+    # Whether this leg's verify actually CONSUMES the measured depth.
+    # Only Descend's press_outcome does. Reading it costs a tool_frame TF
+    # lookup, and this TF tree has no tool_frame at all — the lookup spins
+    # its full timeout and returns None (field 2026-08-25). PressFixed
+    # judges by progress + torque instead, so it leaves this False and the
+    # Runner skips the lookup entirely.
+    needs_depth: bool = False
 
 
 def sanity_violations(traj, margin_rad):
@@ -129,11 +136,20 @@ def reverse_retrace(traj, progress):
     out.joint_names = list(traj.joint_names)
     times = [p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 for p in done]
     t_deep = times[-1]
+    # One interpolation step of lead-in. Mirroring times about t_deep puts
+    # the FIRST point at exactly t=0.0, and the executor rejects a goal
+    # whose diff(times, prepend=0) contains a non-positive dt — so the
+    # naive retrace was refused on contact with the arm. Offsetting by one
+    # step matches how the planner stamps point k at (k+1)*dt.
+    step = (times[-1] - times[0]) / max(1, len(times) - 1) if len(times) > 1 else 0.05
     for p, t in zip(reversed(done), reversed(times)):
         q = copy.deepcopy(p)
+        # velocities/accelerations zeroed deliberately: a retrace starts
+        # from a standstill after a guard cancel, so mirroring the source
+        # cruise velocity would command full speed at the first point.
         q.velocities = [0.0] * len(p.positions)
         q.accelerations = [0.0] * len(p.positions)
-        t_new = t_deep - t
+        t_new = t_deep - t + step
         q.time_from_start.sec = int(t_new)
         q.time_from_start.nanosec = int(round((t_new - int(t_new)) * 1e9))
         out.points.append(q)

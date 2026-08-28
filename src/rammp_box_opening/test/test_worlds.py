@@ -142,10 +142,33 @@ def test_interaction_world_caps_bench_at_the_reduction_plane():
     plane = reduction_plane_z(contact, 0.005)
     assert plane < table_top
     for o in w["obstacles"]:
-        if o["name"].startswith(("container", "ring", "placed_lid")):
+        if o["name"].startswith(("container", "ring", "placed_lid", "pedestal")):
             continue
         assert o["position"][2] + o["dims"][2] / 2 <= plane + 1e-9
     # press-like: contact at button height leaves the bench untouched
     w = interaction_world(bench, m, cp, [0.45, 0.0, 0.09], 0.09, 0.015)
     tops = {o["name"]: o["position"][2] + o["dims"][2] / 2 for o in w["obstacles"]}
     assert tops["table"] == pytest.approx(table_top)
+
+
+def test_pedestal_survives_a_plane_below_its_base():
+    """The arm's own mount is thinned, never deleted.
+
+    A set-down low enough to push the reduction plane under the pedestal's
+    base used to drop it from the world entirely — the planner would then
+    route the arm through the column it is bolted to."""
+    m, cp = _model_pose()
+    bench = _bench()
+    ped = next(o for o in bench["obstacles"] if o["name"] == "pedestal")
+    base = ped["position"][2] - ped["dims"][2] / 2
+    # a contact low enough that the plane sits BELOW the pedestal's base
+    contact = base - PLANE_MARGIN_M + 0.005
+    plane = reduction_plane_z(contact, 0.005)
+    assert plane < base, "test needs a plane under the pedestal base"
+
+    w = interaction_world(bench, m, cp, [0.54, -0.27, contact], contact, 0.005)
+    kept = [o for o in w["obstacles"] if o["name"] == "pedestal"]
+    assert kept, "pedestal must never be dropped from a collision world"
+    stub = kept[0]
+    assert stub["dims"][0] == ped["dims"][0] and stub["dims"][1] == ped["dims"][1]
+    assert stub["position"][2] - stub["dims"][2] / 2 == pytest.approx(base)
