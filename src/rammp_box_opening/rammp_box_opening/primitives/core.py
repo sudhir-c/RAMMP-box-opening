@@ -29,6 +29,7 @@ from rammp_box_opening.runtime.guards import (
     check_standoff,
     in_band,
     press_outcome,
+    time_fraction_at_path_fraction,
 )
 from rammp_box_opening.runtime.legs import Kind, Leg
 
@@ -429,10 +430,19 @@ class PressFixed:
             depth_window=(0.0, cfg.travel_m),
             target_z=button[2],
         )
-        # contact is expected at ~staging/(staging+travel) of the stroke
-        expected = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
+        # Contact is expected after staging/(staging+travel) of the stroke's
+        # DISTANCE — but v.progress is a TIME fraction. The two differ
+        # because cuRobo's profile is not constant-speed, and the live
+        # trips landed at 0.826/0.835 against a 0.739 floor: 0.087 of
+        # margin, less than any velocity-profile change would move it.
+        # The conversion needs the planned trajectory, which exists only
+        # after _plan_motion, so verify reads it from this holder at
+        # execution time.
+        dist_frac = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
+        expect = {"frac": dist_frac}
 
         def verify(v):
+            expected = expect["frac"]
             if v.outcome == "touch":
                 if v.progress is not None and v.progress < expected - 0.15:
                     return False, (
@@ -460,6 +470,7 @@ class PressFixed:
             invalidates=True,
             verify=verify,
         )
+        expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
         return [press], state
 
 

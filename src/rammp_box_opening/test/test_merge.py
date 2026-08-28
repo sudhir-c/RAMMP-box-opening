@@ -104,3 +104,13 @@ def test_merge_trajectories_offsets_time():
 def test_verify_ctx_defaults():
     ctx = VerifyCtx(outcome="arrived")
     assert ctx.depth_m is None and ctx.gripper_pos is None
+
+
+def test_a_verify_carrying_leg_is_never_absorbed_into_a_group():
+    """Only the owning member of an execution gets verified, so a leg with
+    a verify must not be appended as a non-lead member."""
+    from rammp_box_opening.runtime.legs import can_merge
+
+    a = leg("a")
+    assert can_merge(a, leg("b"))
+    assert not can_merge(a, leg("b", verify=lambda ctx: (True, "")))

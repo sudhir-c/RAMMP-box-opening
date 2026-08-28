@@ -172,3 +172,21 @@ def test_pedestal_survives_a_plane_below_its_base():
     stub = kept[0]
     assert stub["dims"][0] == ped["dims"][0] and stub["dims"][1] == ped["dims"][1]
     assert stub["position"][2] - stub["dims"][2] / 2 == pytest.approx(base)
+
+
+def test_world_path_is_content_derived(tmp_path):
+    """A world whose CONTENT changed must get a new path, or the SetWorld
+    dedup skips the push and the arm plans against a stale container."""
+    m, _cp = _model_pose()
+    store = WorldStore(BENCH, out_dir=tmp_path)
+    near = ContainerPose(xyz=(0.45, 0.0, -0.07), yaw=0.0)
+    far = ContainerPose(xyz=(0.52, -0.03, -0.07), yaw=0.0)  # after a re-fix
+
+    n1, p1 = store.push_name("full", model=m, cpose=near)
+    n2, p2 = store.push_name("full", model=m, cpose=far)
+    n3, p3 = store.push_name("full", model=m, cpose=near)
+
+    assert n1 == n2 == n3 == "full"  # the NAME still drives the gates
+    assert p1 != p2, "a moved container must produce a different world path"
+    assert p1 == p3, "an identical rebuild must reuse its file"
+    assert p1.exists() and p2.exists()

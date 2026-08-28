@@ -46,6 +46,7 @@ class PlannerClient:
         self._abort = abort  # AbortFlag when the CLI owns SIGINT (abort.py)
         self._q = None
         self._eff = None
+        self._eff_at = 0.0  # monotonic stamp of the last joint_states message
         self._gripper_pos = None
         node.create_subscription(JointState, "/joint_states", self._js_cb, 10)
         self._plan_pose = ActionClient(
@@ -79,6 +80,7 @@ class PlannerClient:
             return
         self._q = q
         self._eff = eff
+        self._eff_at = time.monotonic()
         for name in msg.name:
             if any(h in name for h in _GRIPPER_JOINT_HINTS):
                 self._gripper_pos = float(msg.position[idx[name]])
@@ -97,8 +99,20 @@ class PlannerClient:
                 )
         return list(self._q)
 
+    # A guarded leg polls wrist_efforts() and trips on deviation from a
+    # baseline. If the /joint_states subscription STALLS, self._eff keeps
+    # its last value forever: the deviation stays flat, the guard can never
+    # trip, and the existing "efforts lost" watchdog never fires either —
+    # it only catches messages that arrive WITHOUT effort fields. Stale
+    # readings must therefore read as no readings (review 2026-08-28).
+    EFFORT_STALE_S = 0.5
+
     def wrist_efforts(self):
-        return None if self._eff is None else list(self._eff[3:])
+        if self._eff is None:
+            return None
+        if time.monotonic() - self._eff_at > self.EFFORT_STALE_S:
+            return None  # frozen stream: the guard has lost its senses
+        return list(self._eff[3:])
 
     def efforts_present(self):
         self.joints()  # ensure at least one message arrived

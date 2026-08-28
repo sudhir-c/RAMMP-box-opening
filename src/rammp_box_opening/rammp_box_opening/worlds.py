@@ -5,6 +5,7 @@ Runner tracks what it last pushed; this module only builds and writes the
 variants. Cuboids only — v0.7.8 drops other shapes.
 """
 
+import hashlib
 from pathlib import Path
 
 import yaml
@@ -233,6 +234,18 @@ class WorldStore:
             name = "interaction" + (("_" + tag) if tag else "")
         else:
             raise ValueError("unknown world kind %r" % kind)
-        path = self._dir / (name + ".yaml")
-        path.write_text(yaml.safe_dump(world, sort_keys=False))
+        # The FILENAME carries a content hash, the NAME does not. Callers
+        # gate on the name's prefix ("full"/"bench"/"interaction"), while
+        # both SetWorld dedup checks compare the path — so a world whose
+        # CONTENT changed gets a new path and is re-pushed, while an
+        # identical rebuild reuses the same file and is correctly skipped.
+        # Before this, the close-range re-fix rewrote full.yaml with the
+        # corrected container pose under the SAME path, the dedup skipped
+        # the push, and the re-approach was planned against the stale
+        # container position (found by review 2026-08-28).
+        text = yaml.safe_dump(world, sort_keys=False)
+        digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
+        path = self._dir / ("%s-%s.yaml" % (name, digest))
+        if not path.exists():
+            path.write_text(text)
         return name, path

@@ -98,3 +98,24 @@ def test_reverse_retrace_reverses_executed_portion():
     assert times[0] > 0.0
     dts = [b - a for a, b in zip(times, times[1:])]
     assert all(d > 0.0 for d in dts)
+
+
+def test_time_fraction_conversion_tracks_the_path_not_the_clock():
+    """progress is elapsed/duration; contact is expected at a DISTANCE.
+
+    A profile that covers most of its path early must report a LOWER time
+    fraction for the same path fraction than a constant-speed one would."""
+    from rammp_box_opening.runtime.guards import time_fraction_at_path_fraction
+
+    # front-loaded: 90% of the path covered in the first half of the points
+    fast_first = _traj([[0.0], [0.45], [0.9], [0.95], [1.0]], dt=1.0)
+    frac = time_fraction_at_path_fraction(fast_first, 0.9)
+    assert frac < 0.9, "front-loaded motion reaches 90%% of path early in time"
+
+    # uniform motion: time fraction and path fraction agree
+    uniform = _traj([[0.0], [0.25], [0.5], [0.75], [1.0]], dt=1.0)
+    assert time_fraction_at_path_fraction(uniform, 0.5) == pytest.approx(0.6, abs=0.21)
+    # degenerate inputs fall back to the requested fraction
+    assert time_fraction_at_path_fraction(
+        _traj([[0.0]], dt=1.0), 0.42
+    ) == pytest.approx(0.42)

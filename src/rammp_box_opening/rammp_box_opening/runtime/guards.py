@@ -7,6 +7,7 @@ without effort fields (enforced by the Runner, which owns the streams).
 """
 
 import copy
+import math
 from dataclasses import dataclass
 
 from trajectory_msgs.msg import JointTrajectory
@@ -154,3 +155,30 @@ def reverse_retrace(traj, progress):
         q.time_from_start.nanosec = int(round((t_new - int(t_new)) * 1e9))
         out.points.append(q)
     return out
+
+
+def time_fraction_at_path_fraction(traj, path_frac):
+    """Time fraction at which `traj` has covered `path_frac` of its own
+    joint-space path length.
+
+    Execution feedback reports `progress` as elapsed/duration — a TIME
+    fraction (executor.py, and the action's own comment). Callers that know
+    where along the PATH contact is expected must convert, because the two
+    only coincide for a constant-speed profile and cuRobo's is not one.
+    Trajectory points are uniformly spaced in time, so a point's time
+    fraction is just its index over the count.
+    """
+    pts = list(traj.points)
+    if len(pts) < 2:
+        return float(path_frac)
+    cum, total = [0.0], 0.0
+    for a, b in zip(pts, pts[1:]):
+        total += math.sqrt(sum((x - y) ** 2 for x, y in zip(a.positions, b.positions)))
+        cum.append(total)
+    if total <= 0.0:
+        return float(path_frac)
+    target = float(path_frac) * total
+    for i, c in enumerate(cum):
+        if c >= target:
+            return (i + 1) / len(pts)
+    return 1.0

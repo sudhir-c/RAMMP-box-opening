@@ -60,6 +60,12 @@ def can_merge(a, b):
         and a.guard is None
         and b.guard is None
         and a.verify is None  # a verify CLOSES its merge group
+        # ...and a verify cannot be ABSORBED into one either: only the
+        # execution's owning member is verified, so appending a
+        # verify-carrying leg as a non-lead member silently discarded its
+        # check (review 2026-08-28 — latent, never yet triggered because
+        # every verify-carrying MOTION leg today also carries a guard).
+        and b.verify is None
     )
 
 

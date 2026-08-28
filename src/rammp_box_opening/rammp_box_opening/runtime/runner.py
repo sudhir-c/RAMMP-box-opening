@@ -170,7 +170,13 @@ class Runner:
         next_chain = max((leg.chain for leg in legs), default=0) + 1
         for group in merge_groups(legs):
             lead = group[0]
-            if lead.world != self._last_world:
+            # dedup on the PATH, not the name: world files are content-
+            # hashed, so a world whose contents changed (e.g. the container
+            # pose after a close-range re-fix) has a different path and is
+            # re-pushed. Comparing names skipped that push and executed
+            # against a stale container (found by review 2026-08-28).
+            world_key = str(lead.world_path or lead.world)
+            if world_key != self._last_world:
                 ok, msg = self.client.set_world(lead.world_path or lead.world)
                 if not ok:
                     res = LegResult(
@@ -179,7 +185,7 @@ class Runner:
                     self._log(res, lead)
                     results.append(res)
                     return results
-                self._last_world = lead.world
+                self._last_world = world_key
 
             if lead.kind is Kind.GRIPPER:
                 res = self._run_gripper(lead)
@@ -222,6 +228,20 @@ class Runner:
         """Re-plan each leg of the group from live state, same targets."""
         live = self.client.joints()
         for leg in group:
+            # Push THIS leg's world before re-planning it. Without this the
+            # replan used whatever world happened to be loaded — for the
+            # merged [retreat, home] group that meant re-planning `home` at
+            # transit speed against an interaction world, whose obstacles
+            # are deliberately capped (review 2026-08-28).
+            key = str(leg.world_path or leg.world)
+            if key != self._last_world:
+                ok, msg = self.client.set_world(leg.world_path or leg.world)
+                if not ok:
+                    print(
+                        "REFUSED replan of %s — set_world failed: %s" % (leg.name, msg)
+                    )
+                    return None, next_chain
+                self._last_world = key
             kind, *rest = leg.target
             if kind == "pose":
                 plan = self.client.plan_to_pose(rest[0], rest[1], live)
@@ -239,13 +259,39 @@ class Runner:
             leg.chain = next_chain
             leg.stale = False
             leg.goal_joints = list(plan.trajectory.points[-1].positions)
+            # the pre-execution gates ran against the ORIGINAL trajectory;
+            # a replan produces a new one and must clear them again
+            why = self._refusal(leg)
+            if why:
+                print("REFUSED replan of %s — %s" % (leg.name, why))
+                return None, next_chain
             live = leg.goal_joints
         return group, next_chain + 1
 
     def _run_motion(self, group):
-        lead = group[0]
+        # The member that OWNS this execution's contact semantics. Today
+        # can_merge forbids guarded legs in a group, so this is group[0];
+        # the lookup exists so that relaxing can_merge cannot silently run
+        # a guarded stroke with the lead's guard (None), the lead's speed
+        # and the lead's verify — which would be an unguarded press with no
+        # error and no log line (review 2026-08-28).
+        guarded = [g for g in group if g.guard is not None]
+        if len(guarded) > 1:
+            raise RuntimeError(
+                "merged group has %d guarded legs (%s) — one execution can "
+                "carry at most one contact guard"
+                % (len(guarded), ", ".join(g.name for g in guarded))
+            )
+        if guarded and guarded[0] is not group[-1]:
+            raise RuntimeError(
+                "guarded leg %r is not last in its merged group — a trip "
+                "must not strand queued motion behind it" % guarded[0].name
+            )
+        lead = guarded[0] if guarded else group[0]
         traj = (
-            merge_trajectories([g.traj for g in group]) if len(group) > 1 else lead.traj
+            merge_trajectories([g.traj for g in group])
+            if len(group) > 1
+            else group[0].traj
         )
         guard = TorqueGuard(lead.guard.touch_nm) if lead.guard else None
         t0 = time.monotonic()

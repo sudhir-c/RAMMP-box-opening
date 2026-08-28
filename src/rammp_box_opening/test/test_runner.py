@@ -375,3 +375,39 @@ def test_unguarded_fast_leg_in_an_interaction_world_is_still_refused(tmp_path):
         assume_yes=True,
     )
     assert res[0].outcome == "refused"
+
+
+def test_merged_group_takes_its_guard_from_the_guarded_member(tmp_path):
+    """can_merge forbids this today; the lookup is what keeps a future
+    relaxation from running a guarded stroke with the lead's (absent)
+    guard, the lead's speed and the lead's verify."""
+    c = FakeClient()
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    group = [leg("fast", Q0, Q1, chain=0), leg("descend", Q1, Q2, chain=0, guard=g)]
+    r = runner(c, tmp_path)
+    res = r._run_motion(group)
+    # setdown semantics come from the guarded member: a trip is SUCCESS
+    assert res.outcome == "touch" and res.ok
+
+
+def test_merged_group_refuses_a_guard_that_is_not_last(tmp_path):
+    c = FakeClient()
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0)
+    group = [leg("descend", Q0, Q1, chain=0, guard=g), leg("after", Q1, Q2, chain=0)]
+    import pytest as _pytest
+
+    with _pytest.raises(RuntimeError, match="not last"):
+        runner(c, tmp_path)._run_motion(group)
+
+
+def test_world_is_repushed_when_its_CONTENT_changed(tmp_path):
+    """Same world NAME, different content (the container moved after a
+    close-range re-fix) must reach the planner."""
+    c = FakeClient()
+    a = leg("a", world="full", chain=0)
+    a.world_path = "/w/full-aaaa.yaml"
+    b = leg("b", Q1, Q2, world="full", chain=1)
+    b.world_path = "/w/full-bbbb.yaml"  # same name, new contents
+    runner(c, tmp_path).run([a, b], execute=True, assume_yes=True)
+    assert c.worlds_pushed == ["/w/full-aaaa.yaml", "/w/full-bbbb.yaml"]
