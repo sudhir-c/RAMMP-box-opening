@@ -34,6 +34,7 @@ class FakeClient:
         self.plans = []  # scripted plan_to_* responses (FIFO), else auto
         self.exec_script = []  # scripted execute outcomes (FIFO)
         self.tool_z = 0.08
+        self.approach_offsets = []  # per plan_to_pose call
 
     def joints(self):
         return list(self.live)
@@ -55,7 +56,8 @@ class FakeClient:
         R.trajectory = _traj(start if start else self.live, end)
         return R
 
-    def plan_to_pose(self, xyz, quat_xyzw, start_joints):
+    def plan_to_pose(self, xyz, quat_xyzw, start_joints, approach_offset_m=0.0):
+        self.approach_offsets.append(float(approach_offset_m))
         if self.plans:
             return self.plans.pop(0)
         return self._plan(Q1, start_joints)

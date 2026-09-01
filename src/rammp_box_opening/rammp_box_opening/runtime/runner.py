@@ -280,7 +280,10 @@ class Runner:
                 self._last_world = key
             kind, *rest = leg.target
             if kind == "pose":
-                plan = self.client.plan_to_pose(rest[0], rest[1], live)
+                off = float(rest[2]) if len(rest) > 2 else 0.0
+                plan = self.client.plan_to_pose(
+                    rest[0], rest[1], live, approach_offset_m=off
+                )
             else:
                 plan = self.client.plan_to_joints(rest[0], live)
             if plan is None or not plan.success:

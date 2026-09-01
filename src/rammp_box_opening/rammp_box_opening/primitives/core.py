@@ -131,7 +131,10 @@ def _plan_motion(
     t_plan = time.monotonic()
 
     if kind == "pose":
-        plan = ctx.client.plan_to_pose(rest[0], rest[1], state.joints)
+        offset = float(rest[2]) if len(rest) > 2 else 0.0
+        plan = ctx.client.plan_to_pose(
+            rest[0], rest[1], state.joints, approach_offset_m=offset
+        )
         ctx.last_pose = (list(rest[0]), list(rest[1]))
     else:
         plan = ctx.client.plan_to_joints(rest[0], state.joints)

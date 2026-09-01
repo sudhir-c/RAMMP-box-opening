@@ -278,11 +278,15 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
             )
         return False, "press %s" % v.outcome
 
+    # the final 60 mm are constrained VERTICAL: a diagonal descent
+    # touches the button before its lateral convergence finishes (10 mm
+    # off-centre at 20 mm height from a 199 mm start — the edge presses
+    # of 2026-09-01); the constrained plan measures 0.0-0.3 mm there
     press, st = _plan_motion(
         ctx,
         st,
         "press:down",
-        ("pose", target, quat),
+        ("pose", target, quat, 0.06),
         world,
         cfg.press_speed,
         guard=guard,

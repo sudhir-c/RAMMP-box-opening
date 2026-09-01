@@ -567,3 +567,22 @@ def test_merged_press_accepts_a_realistic_off_axis_box():
     )
     ok, lateral = press_demo.merged_press_ok(c, cfg)
     assert ok and 0.14 < lateral < 0.16
+
+
+def test_merged_press_constrains_the_final_approach_vertical():
+    """A diagonal descent touches the button before lateral convergence
+    finishes (edge presses, 2026-09-01) — the merged press target carries
+    a 60 mm vertical-final constraint, and replans preserve it."""
+    import pytest
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    button = from_container(c.cpose, c.model.button_offset)
+    c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
+    legs = press_demo.build_merged_press_legs(c, cfg)
+    press = next(x for x in legs if x.name == "press:down")
+    assert len(press.target) == 4
+    assert press.target[3] == pytest.approx(0.06)

@@ -156,8 +156,13 @@ class PlannerClient:
         wrapped = spin_until_done(self.node, send.get_result_async(), timeout_s)
         return None if wrapped is None else wrapped.result
 
-    def plan_to_pose(self, xyz, quat_xyzw, start_joints):
+    def plan_to_pose(self, xyz, quat_xyzw, start_joints, approach_offset_m=0.0):
         g = PlanToPose.Goal()
+        # >0: the planner constrains the FINAL approach_offset_m metres to
+        # a straight -z descent onto the goal — a diagonal descent touches
+        # a surface before its lateral convergence finishes (edge presses,
+        # field 2026-09-01)
+        g.approach_offset_m = float(approach_offset_m)
         g.target.position.x, g.target.position.y, g.target.position.z = (
             float(v) for v in xyz
         )
