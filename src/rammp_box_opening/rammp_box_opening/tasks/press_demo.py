@@ -208,7 +208,7 @@ def merged_press_ok(ctx, cfg):
     return lateral <= cfg.merge_press_max_lateral_m, lateral
 
 
-def build_merged_press_legs(ctx, cfg):
+def build_merged_press_legs(ctx, cfg, include_home=False):
     """Close the fingers, then ONE continuous descent to the button.
 
     Replaces [transit to staging] STOP [guarded press]. There is no seam
@@ -278,10 +278,16 @@ def build_merged_press_legs(ctx, cfg):
     total = abs((here[2] - target[2])) if here else cfg.staging_m + cfg.travel_m
     dist_frac = max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9
     expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
-    retreat_legs, st = Retreat(cfg.grip_hop_m + cfg.travel_m, speed=TRANSIT_SPEED).plan(
-        ctx, st
-    )
-    return [close, press, *retreat_legs]
+    # retreat height mirrors build_press_legs: the open-box tail re-descends
+    # at once, so the hop suffices; press-only continues to HOME, planned in
+    # the FULL world where the finger spheres need the staging clearance.
+    up_to = cfg.staging_m if include_home else cfg.grip_hop_m
+    retreat_legs, st = Retreat(up_to + cfg.travel_m, speed=TRANSIT_SPEED).plan(ctx, st)
+    legs = [close, press, *retreat_legs]
+    if include_home:
+        home_legs, st = Home().plan(ctx, st)
+        legs += home_legs
+    return legs
 
 
 def build_grip_legs(ctx, cfg):
@@ -705,7 +711,26 @@ def main():
         # its stop and its re-fix — whenever the guard-rail says the run
         # through the reduced world would be too lateral.
         merged, lateral = merged_press_ok(ctx, cfg)
-        if merged and not args.press_only:
+        declined_why = None
+        merged_legs = None
+        if merged:
+            # a plan failure here must FALL BACK, not crash: the staged
+            # path still exists and still works (field 2026-09-01)
+            try:
+                merged_legs = build_merged_press_legs(
+                    ctx, cfg, include_home=args.press_only
+                )
+            except RuntimeError as e:
+                declined_why = "plan failed: %s" % e
+                merged = False
+        elif cfg.merge_press:
+            declined_why = (
+                "no commanded pose yet"
+                if lateral is None
+                else "%.0f mm off-axis > %.0f mm limit"
+                % (lateral * 1000, cfg.merge_press_max_lateral_m * 1000)
+            )
+        if merged:
             print(
                 "[press_demo] MERGED PRESS — one motion to the button "
                 "(%.0f mm off-axis, limit %.0f mm; no staging stop, no re-fix)"
@@ -721,7 +746,7 @@ def main():
                 )
             )
             res = runner.run(
-                build_merged_press_legs(ctx, cfg),
+                merged_legs,
                 execute=args.execute,
                 assume_yes=True,
             )
@@ -734,16 +759,10 @@ def main():
                 % (press[-1].detail if press else "no press leg ran (dry-run)")
             )
         else:
-            if cfg.merge_press and not args.press_only:
+            if declined_why is not None:
                 print(
                     "[press_demo] merged press declined (%s) — using the "
-                    "staged approach"
-                    % (
-                        "no commanded pose yet"
-                        if lateral is None
-                        else "%.0f mm off-axis > %.0f mm limit"
-                        % (lateral * 1000, cfg.merge_press_max_lateral_m * 1000)
-                    )
+                    "staged approach" % declined_why
                 )
             res = runner.run(
                 build_close_and_approach(ctx, cfg),

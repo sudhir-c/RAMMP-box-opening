@@ -528,3 +528,42 @@ def test_merged_press_off_by_config_uses_the_staged_path():
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
     assert press_demo.merged_press_ok(c, cfg) == (False, None)
+
+
+def test_merged_press_press_only_keeps_full_retreat_and_home():
+    """press-only may merge too — but its retreat must climb back to
+    staging height (home is planned in the FULL world) and home follows."""
+    import pytest
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    button = from_container(c.cpose, c.model.button_offset)
+    c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
+    legs = press_demo.build_merged_press_legs(c, cfg, include_home=True)
+    assert names(legs) == ["press:close", "press:down", "retreat", "home"]
+    retreat = legs[2]
+    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
+    assert legs[3].world.startswith("full")
+
+
+def test_merged_press_accepts_a_realistic_off_axis_box():
+    """Field 2026-09-01: a real box sat 152 mm from the scan axis and the
+    old 50 mm rail declined the merge — the pause the owner asked to
+    remove. 0.20 admits it; the descent converges over the button."""
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    assert cfg.merge_press_max_lateral_m >= 0.20
+    button = from_container(c.cpose, c.model.button_offset)
+    # scan pose 152 mm off the button, like the field run
+    c.last_pose = (
+        [button[0] - 0.038, button[1] + 0.147, 0.45],
+        [0.0, 1.0, 0.0, 0.0],
+    )
+    ok, lateral = press_demo.merged_press_ok(c, cfg)
+    assert ok and 0.14 < lateral < 0.16

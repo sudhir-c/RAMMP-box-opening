@@ -248,11 +248,11 @@ def load_press_demo(path):
             "open_box.warp_fast_speed must be in (0, 0.6] — the free-air part "
             "of a GUARDED descent, not a transit leg"
         )
-    if not 0.0 < cfg.merge_press_max_lateral_m <= 0.15:
+    if not 0.0 < cfg.merge_press_max_lateral_m <= 0.35:
         raise ValueError(
-            "open_box.merge_press_max_lateral_m must be in (0, 0.15] — the "
-            "merged solve plans in the reduced world, so the lateral run "
-            "through it has to stay short"
+            "open_box.merge_press_max_lateral_m must be in (0, 0.35] — past "
+            "the camera's own scan footprint the tag could not have been "
+            "seen, and the merged solve plans in the reduced world"
         )
     if not 0.0 < cfg.warp_slow_frac < 1.0:
         raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
