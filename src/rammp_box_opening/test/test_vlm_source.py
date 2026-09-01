@@ -74,3 +74,67 @@ def test_shipped_config_uses_the_measured_model(cfg):
     assert cfg.detect_source == "vlm"
     assert cfg.vlm_model == "claude-opus-5"
     assert "OXO" in cfg.vlm_target
+
+
+# ---------------------------------------------------------------- ladder
+
+
+def _mk(roi, why):
+    return lambda color, cfg: (roi, why)
+
+
+def test_ladder_prefers_the_local_backend(cfg):
+    roi, lines = __import__(
+        "rammp_box_opening.perception.vlm_source", fromlist=["resolve_roi"]
+    ).resolve_roi(
+        FRAME,
+        cfg,
+        impls={"owl": _mk((1, 2, 3, 4), "OWL bbox"), "claude": _mk((9, 9, 9, 9), "x")},
+    )
+    assert roi == (1, 2, 3, 4)
+    assert lines == ["owl: OWL bbox"]  # claude never called
+
+
+def test_ladder_falls_through_to_claude(cfg):
+    from rammp_box_opening.perception.vlm_source import resolve_roi
+
+    roi, lines = resolve_roi(
+        FRAME,
+        cfg,
+        impls={
+            "owl": _mk(None, "still loading"),
+            "claude": _mk((5, 6, 7, 8), "bbox conf 0.95"),
+        },
+    )
+    assert roi == (5, 6, 7, 8)
+    assert [ln.split(":")[0] for ln in lines] == ["owl", "claude"]
+
+
+def test_ladder_exhausted_means_plain_depth(cfg):
+    from rammp_box_opening.perception.vlm_source import resolve_roi
+
+    roi, lines = resolve_roi(
+        FRAME, cfg, impls={"owl": _mk(None, "a"), "claude": _mk(None, "b")}
+    )
+    assert roi is None and len(lines) == 2
+
+
+def test_owl_pick_best_box_floor():
+    from rammp_box_opening.perception.owl_source import pick_best_box
+
+    got = pick_best_box(
+        [0.12, 0.24, 0.19],
+        [0, 0, 1],
+        [[0, 0, 1, 1], [10, 10, 20, 20], [5, 5, 9, 9]],
+        min_score=0.18,
+    )
+    assert got == (0.24, [10, 10, 20, 20])
+    assert pick_best_box([0.1], [0], [[0, 0, 1, 1]], 0.18) is None
+
+
+def test_shipped_ladder_is_local_first(cfg):
+    """The wheelchair will not always have internet (Swapnil 2026-09-01):
+    the local model leads, the cloud is the fallback."""
+    assert cfg.vlm_backends == ("owl", "claude")
+    assert cfg.owl_min_score == pytest.approx(0.18)
+    assert any("white" in q for q in cfg.owl_queries)

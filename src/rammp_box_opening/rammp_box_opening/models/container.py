@@ -170,7 +170,11 @@ class PressDemoCfg:
     grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
     detect_period_s: float  # detector tick; min_hits * this = commit floor
     detect_source: str  # 'vlm' | 'depth' | 'tag'
+    vlm_backends: tuple  # ladder order, e.g. ('owl', 'claude')
     vlm_model: str
+    owl_model: str
+    owl_queries: tuple
+    owl_min_score: float
     vlm_target: str  # what to ask Claude to box — plain English
     vlm_timeout_s: float
     vlm_pad_px: int
@@ -213,7 +217,15 @@ def load_press_demo(path):
         grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
         detect_period_s=float(raw["detect"].get("period_s", 0.15)),
         detect_source=str(raw["detect"].get("source", "tag")),
+        vlm_backends=tuple(raw.get("vlm", {}).get("backends", ("claude",))),
         vlm_model=str(raw.get("vlm", {}).get("model", "claude-opus-5")),
+        owl_model=str(
+            raw.get("vlm", {}).get("owl_model", "google/owlv2-base-patch16-ensemble")
+        ),
+        owl_queries=tuple(
+            raw.get("vlm", {}).get("owl_queries", ("a small white square box",))
+        ),
+        owl_min_score=float(raw.get("vlm", {}).get("owl_min_score", 0.18)),
         vlm_target=str(raw.get("vlm", {}).get("target", "the food-storage container")),
         vlm_timeout_s=float(raw.get("vlm", {}).get("timeout_s", 20.0)),
         vlm_pad_px=int(raw.get("vlm", {}).get("pad_px", 20)),
@@ -268,6 +280,11 @@ def load_press_demo(path):
         raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
     if cfg.detect_source not in ("tag", "depth", "vlm"):
         raise ValueError("detect.source must be 'tag', 'depth' or 'vlm'")
+    bad = set(cfg.vlm_backends) - {"owl", "claude"}
+    if bad or (cfg.detect_source == "vlm" and not cfg.vlm_backends):
+        raise ValueError("vlm.backends must be a non-empty subset of ['owl', 'claude']")
+    if not 0.0 < cfg.owl_min_score < 1.0:
+        raise ValueError("vlm.owl_min_score must be in (0, 1)")
     if not 0.0 < cfg.vlm_timeout_s <= 60.0:
         raise ValueError("vlm.timeout_s must be in (0, 60] s")
     if not 0.0 < cfg.detect_period_s <= 0.5:

@@ -102,3 +102,28 @@ def fetch_box_roi(color_rgb, cfg, client=None):
         min(h - 1, loc.y1 + pad),
     )
     return roi, "bbox (%d,%d)-(%d,%d) conf %.2f" % (*roi, loc.confidence)
+
+
+def resolve_roi(color_rgb, cfg, impls=None):
+    """Walk the configured backend ladder; first roi wins.
+
+    Ladder shape (Swapnil review, 2026-09-01): the wheelchair will not
+    always have internet, so LOCAL comes first and the cloud is the
+    fallback, with plain depth as the floor when every rung declines.
+    Returns (roi | None, [per-backend status lines]).
+    `impls` is injectable for tests."""
+    if impls is None:
+        from rammp_box_opening.perception.owl_source import owl_box_roi
+
+        impls = {"owl": owl_box_roi, "claude": fetch_box_roi}
+    lines = []
+    for name in cfg.vlm_backends:
+        fn = impls.get(name)
+        if fn is None:
+            lines.append("%s: unknown backend — skipped" % name)
+            continue
+        roi, why = fn(color_rgb, cfg)
+        lines.append("%s: %s" % (name, why))
+        if roi is not None:
+            return roi, lines
+    return None, lines

@@ -42,7 +42,7 @@ from rammp_box_opening.models.container import (
     load_press_demo,
 )
 from rammp_box_opening.perception.depth_source import BoxTopWatcher
-from rammp_box_opening.perception.vlm_source import fetch_box_roi
+from rammp_box_opening.perception.vlm_source import resolve_roi
 from rammp_box_opening.perception.tag_source import (
     TagWatcher,
     container_pose_from_tag,
@@ -637,6 +637,10 @@ def main():
     node, client = cli_common.init_runtime()
     worlds = WorldStore(bench)
     runner = Runner(client, worlds)
+    if cfg.detect_source == "vlm" and "owl" in cfg.vlm_backends:
+        from rammp_box_opening.perception.owl_source import preload
+
+        preload(cfg.owl_model)  # daemon thread; overlaps the scan motion
     if cfg.detect_source in ("depth", "vlm"):
         # the box found by geometry: lid plateau above the measured table.
         # No print to wear out — the press knuckles destroyed two tag
@@ -677,17 +681,18 @@ def main():
         )
         if cfg.detect_source in ("depth", "vlm"):
             if cfg.detect_source == "vlm":
-                # ONE Claude call decides WHICH surface is the container;
-                # the depth plateau inside the bbox does all geometry.
-                # Any failure here degrades to plain depth — the mission
-                # never stalls on the network.
+                # the backend LADDER decides WHICH surface is the container
+                # (local OWL first — the chair may be offline; Claude as the
+                # network fallback); the depth plateau inside the bbox does
+                # all geometry. Every rung declining degrades to plain
+                # depth — the mission never stalls on a model or network.
                 while watcher.grab.color is None:
                     _spin_detect(node)
-                roi, why_vlm = fetch_box_roi(watcher.grab.color, cfg)
-                print(
-                    "[press_demo] VLM %s"
-                    % (why_vlm if roi is not None else "gate off: " + why_vlm)
-                )
+                roi, lines = resolve_roi(watcher.grab.color, cfg)
+                for ln in lines:
+                    print("[press_demo] VLM %s" % ln)
+                if roi is None:
+                    print("[press_demo] VLM gate off — plain depth")
                 watcher.roi = roi
             # no servo loop: the depth fix is a base-frame measurement with
             # no optical-axis error to center away (the loop was tag PnP

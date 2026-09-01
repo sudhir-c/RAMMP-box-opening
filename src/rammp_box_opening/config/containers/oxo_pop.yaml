@@ -147,6 +147,17 @@ scan:
   xyz: [0.42, 0.0, 0.45]          # tool-down look pose; camera sees ~0.6 x
                                   # 0.4 m of bench around it at tag height
 vlm:                              # detect.source: vlm — the semantic gate
+  backends: [owl, claude]         # tried in order, first bbox wins. LOCAL
+                                  # first: the wheelchair will not always
+                                  # have internet (Swapnil 2026-09-01); the
+                                  # cloud is the fallback and plain depth is
+                                  # the floor when both decline.
+  owl_model: google/owlv2-base-patch16-ensemble
+  owl_queries:                    # phrasing matters more than the model:
+    - a small white square box    # 0.24 on the bench captures, 8/8 frames,
+    - a white plastic container with a lid  # bbox stable to +/-1 px
+  owl_min_score: 0.18             # false positives sat at 0.12-0.18 on the
+                                  # captures; the true box at 0.235-0.249
   model: claude-opus-5            # measured 2026-09-01: 3.3 s, box dead-on;
                                   # claude-haiku-4-5 was 0.4 s faster and
                                   # boxed the ROBOT'S OWN BASE. Fast loses.
