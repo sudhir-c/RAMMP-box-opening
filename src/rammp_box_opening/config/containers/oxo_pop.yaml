@@ -146,8 +146,24 @@ press_demo:
 scan:
   xyz: [0.42, 0.0, 0.45]          # tool-down look pose; camera sees ~0.6 x
                                   # 0.4 m of bench around it at tag height
+vlm:                              # detect.source: vlm — the semantic gate
+  model: claude-opus-5            # measured 2026-09-01: 3.3 s, box dead-on;
+                                  # claude-haiku-4-5 was 0.4 s faster and
+                                  # boxed the ROBOT'S OWN BASE. Fast loses.
+  target: the OXO POP food-storage container — a square white plastic container with a rounded-square white lid
+  timeout_s: 20.0                 # API budget; past it the mission falls
+                                  # back to plain depth, never stalls
+  pad_px: 20                      # bbox padding before it gates the depth
 detect:
-  source: depth                   # depth | tag. depth = the box found by
+  source: vlm                     # vlm | depth | tag. vlm = ONE Claude call
+                                  # picks WHICH surface is the container
+                                  # (bbox), then the depth plateau inside it
+                                  # supplies the mm geometry; every depth
+                                  # honesty gate still stands, and any VLM
+                                  # failure falls back to depth. depth = the
+                                  # geometry alone (refuses when ambiguous).
+                                  # tag = the retired ArUco path (A/B only).
+                                  # Old comment for depth/tag context:
                                   # geometry (lid plateau above the measured
                                   # table) — no print to wear out; the press
                                   # knuckles destroyed two tag prints in a

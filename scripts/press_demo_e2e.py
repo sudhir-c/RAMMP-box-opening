@@ -270,7 +270,7 @@ def main():
             # the synthetic camera renders TAGS; its flat depth plane
             # would (rightly) never pass the depth source's footprint
             # gate, so the harness pins the tag path explicitly
-            .replace("source: depth", "source: tag")
+            .replace("source: vlm", "source: tag")
             .replace(
                 "offset_xyz: [0.0, 0.0, 0.0]",
                 "offset_xyz: [%g, %g, %g]" % TAG_OFFSET,

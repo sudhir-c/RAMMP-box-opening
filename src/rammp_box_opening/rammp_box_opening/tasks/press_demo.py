@@ -42,6 +42,7 @@ from rammp_box_opening.models.container import (
     load_press_demo,
 )
 from rammp_box_opening.perception.depth_source import BoxTopWatcher
+from rammp_box_opening.perception.vlm_source import fetch_box_roi
 from rammp_box_opening.perception.tag_source import (
     TagWatcher,
     container_pose_from_tag,
@@ -636,7 +637,7 @@ def main():
     node, client = cli_common.init_runtime()
     worlds = WorldStore(bench)
     runner = Runner(client, worlds)
-    if cfg.detect_source == "depth":
+    if cfg.detect_source in ("depth", "vlm"):
         # the box found by geometry: lid plateau above the measured table.
         # No print to wear out — the press knuckles destroyed two tag
         # prints in a week (field 2026-09-01).
@@ -674,7 +675,20 @@ def main():
                 "container top" if noun == "BOX" else "tag id %d" % cfg.tag_id,
             )
         )
-        if cfg.detect_source == "depth":
+        if cfg.detect_source in ("depth", "vlm"):
+            if cfg.detect_source == "vlm":
+                # ONE Claude call decides WHICH surface is the container;
+                # the depth plateau inside the bbox does all geometry.
+                # Any failure here degrades to plain depth — the mission
+                # never stalls on the network.
+                while watcher.grab.color is None:
+                    _spin_detect(node)
+                roi, why_vlm = fetch_box_roi(watcher.grab.color, cfg)
+                print(
+                    "[press_demo] VLM %s"
+                    % (why_vlm if roi is not None else "gate off: " + why_vlm)
+                )
+                watcher.roi = roi
             # no servo loop: the depth fix is a base-frame measurement with
             # no optical-axis error to center away (the loop was tag PnP
             # machinery, and it is off at max_iters 0 anyway)
@@ -824,6 +838,8 @@ def main():
             # close-range re-fix: from staging (~20 cm range) any residual
             # mount error shrinks proportionally. Opportunistic — the closed
             # gripper may occlude the tag; the centered fix then stands.
+            if hasattr(watcher, "roi"):
+                watcher.roi = None  # the scan-pose bbox is stale from here
             got2 = wait_for_fix(node, watcher, cfg, timeout_s=1.5)
             if got2 is not None:
                 cp2 = fix_to_cpose(watcher, got2, model, cfg)

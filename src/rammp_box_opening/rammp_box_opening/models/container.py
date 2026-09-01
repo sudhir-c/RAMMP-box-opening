@@ -169,7 +169,11 @@ class PressDemoCfg:
     grip_clear_m: float  # fingertip stop height above the tag/lid plane
     grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
     detect_period_s: float  # detector tick; min_hits * this = commit floor
-    detect_source: str  # 'depth' (geometry, no print) | 'tag' (ArUco)
+    detect_source: str  # 'vlm' | 'depth' | 'tag'
+    vlm_model: str
+    vlm_target: str  # what to ask Claude to box — plain English
+    vlm_timeout_s: float
+    vlm_pad_px: int
 
 
 def load_press_demo(path):
@@ -209,6 +213,10 @@ def load_press_demo(path):
         grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
         detect_period_s=float(raw["detect"].get("period_s", 0.15)),
         detect_source=str(raw["detect"].get("source", "tag")),
+        vlm_model=str(raw.get("vlm", {}).get("model", "claude-opus-5")),
+        vlm_target=str(raw.get("vlm", {}).get("target", "the food-storage container")),
+        vlm_timeout_s=float(raw.get("vlm", {}).get("timeout_s", 20.0)),
+        vlm_pad_px=int(raw.get("vlm", {}).get("pad_px", 20)),
     )
     if not raw["open_box"]["grip_band"][0] < raw["open_box"]["grip_band"][1] < 0.8:
         raise ValueError(
@@ -258,8 +266,10 @@ def load_press_demo(path):
         )
     if not 0.0 < cfg.warp_slow_frac < 1.0:
         raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
-    if cfg.detect_source not in ("tag", "depth"):
-        raise ValueError("detect.source must be 'tag' or 'depth'")
+    if cfg.detect_source not in ("tag", "depth", "vlm"):
+        raise ValueError("detect.source must be 'tag', 'depth' or 'vlm'")
+    if not 0.0 < cfg.vlm_timeout_s <= 60.0:
+        raise ValueError("vlm.timeout_s must be in (0, 60] s")
     if not 0.0 < cfg.detect_period_s <= 0.5:
         raise ValueError("detect.period_s must be in (0, 0.5] s")
     # staging is anchored at the BUTTON TOP; the full-world obstacle tops

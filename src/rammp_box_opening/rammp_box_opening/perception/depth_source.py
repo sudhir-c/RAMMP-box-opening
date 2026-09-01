@@ -33,11 +33,19 @@ import numpy as np
 from rammp_box_opening.models.container import ContainerPose
 from rammp_box_opening.perception.tag_source import FixWindow, camera_pose_at
 
-# Height band above the table that could be a container top. Wide on
-# purpose: dims.z is nominal, the plateau refinement below re-tightens
-# around what it actually finds.
-BAND_LO_M = 0.05
-BAND_HI_M = 0.16
+# Height band around the EXPECTED container top (table + dims.z, which
+# is itself derived from live tag fixes 2026-08-25). Generous banding let
+# table stereo-noise sheets at +3..+7 cm into play (capture
+# 20260901-130610); the physical box top only ever reads within ~2 cm of
+# expectation, so +/-0.035 keeps calibration slack without the noise.
+BAND_TOL_M = 0.035
+# a real surface is locally SMOOTH; passive-stereo speckle on the blank
+# table is locally wild. Local z-std above this is not a surface.
+SURFACE_STD_M = 0.006
+# a real top face is solidish: plateau cells / min-area-rect cells. 0.35,
+# not higher: the core erosion opens holes in a real (white, low-texture)
+# lid, and the smoothness gate already killed the noise archipelagos
+MIN_FILL = 0.35
 # second-stage tightening around the found plateau's own median
 PLATEAU_TOL_M = 0.02
 # blob footprint sanity vs the model's xy dims (per side)
@@ -59,12 +67,17 @@ class TopFaceFix:
     n_px: int  # plateau pixels (at STRIDE) backing the fix
 
 
-def top_face_from_depth(depth, k, rot_cam, trans_cam, table_z, model):
+def top_face_from_depth(depth, k, rot_cam, trans_cam, table_z, model, roi=None):
     """One depth frame -> TopFaceFix, or None with honesty about why not.
 
-    Returns (fix, why): fix is None when nothing container-like is seen;
-    why is a short reason for the status line ("no plateau", "footprint
-    0.31 m", "touches border", ...).
+    Returns (fix, why). The candidate is the most BOX-LIKE in-band blob,
+    not the largest: the bench table is featureless and the D405 is
+    passive stereo, so a blank table speckles +/-5 cm of depth noise into
+    the height band (capture 20260901-130610 — 24%% of all pixels). The
+    speckle is morphologically opened away, every surviving blob is
+    scored against the model footprint, and ambiguity (two box-sized
+    tops) is refused rather than guessed — unless `roi` (a pixel-space
+    bbox from the VLM source) says which one is meant.
     """
     if depth is None or k is None:
         return None, "no depth frame"
@@ -80,7 +93,6 @@ def top_face_from_depth(depth, k, rot_cam, trans_cam, table_z, model):
     if not valid.any():
         return None, "no valid depth"
 
-    # deproject every subsampled pixel and lift to base_link
     x = (uu - cx) / fx * d
     y = (vv - cy) / fy * d
     pts_cam = np.stack([x, y, d], axis=-1).reshape(-1, 3)
@@ -88,53 +100,102 @@ def top_face_from_depth(depth, k, rot_cam, trans_cam, table_z, model):
     pts = pts_cam @ rot.T + np.asarray(trans_cam, dtype=float)
     z_base = pts[:, 2].reshape(gh, gw)
 
-    band = valid & (z_base > table_z + BAND_LO_M) & (z_base < table_z + BAND_HI_M)
+    expected_top = table_z + float(model.dims[2])
+    band = (
+        valid
+        & (z_base > expected_top - BAND_TOL_M)
+        & (z_base < expected_top + BAND_TOL_M)
+    )
+    # surface test: local smoothness of the height field. cv2.blur gives
+    # E[z] and E[z^2] in one pass each; speckle fails the std gate even
+    # where it lands inside the band.
+    import cv2
+
+    zf = np.where(valid, z_base, 0.0).astype(np.float32)
+    wt = valid.astype(np.float32)
+    ez = cv2.blur(zf, (3, 3)) / np.maximum(cv2.blur(wt, (3, 3)), 1e-6)
+    ez2 = cv2.blur(zf * zf, (3, 3)) / np.maximum(cv2.blur(wt, (3, 3)), 1e-6)
+    local_std = np.sqrt(np.maximum(ez2 - ez * ez, 0.0))
+    band &= local_std < SURFACE_STD_M
+    if roi is not None:
+        u0, v0, u1, v1 = (int(v) for v in roi)
+        gate = np.zeros_like(band)
+        gate[
+            max(0, v0 // STRIDE) : max(0, v1 // STRIDE) + 1,
+            max(0, u0 // STRIDE) : max(0, u1 // STRIDE) + 1,
+        ] = True
+        band &= gate
     if not band.any():
         return None, "no points at container height"
 
-    import cv2
-
-    n_blobs, labels, stats, _ = cv2.connectedComponentsWithStats(
-        band.astype(np.uint8), connectivity=8
+    # open away what little speckle survives the smoothness gate
+    opened = cv2.morphologyEx(
+        band.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)
     )
+    n_blobs, labels, stats, _ = cv2.connectedComponentsWithStats(opened, connectivity=8)
     if n_blobs < 2:
-        return None, "no plateau"
-    biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
-    blob = labels == biggest
+        return None, "no plateau after despeckle"
 
-    # border truncation = biased centroid: refuse rather than guess
-    edge = np.zeros_like(blob)
+    edge = np.zeros((gh, gw), dtype=bool)
     b = max(1, BORDER_PX // STRIDE)
     edge[:b, :] = edge[-b:, :] = edge[:, :b] = edge[:, -b:] = True
-    if (blob & edge).any():
-        return None, "container top touches the image border"
-
-    # plateau refinement: the coarse band also catches side-wall points
-    # seen at grazing angles — re-tighten around the blob's own top so
-    # walls cannot drag the centroid sideways
-    zb = z_base[blob]
-    top_z = float(np.median(zb))
-    plateau = blob & (np.abs(z_base - top_z) < PLATEAU_TOL_M)
-    if plateau.sum() < 12:
-        return None, "plateau too small (%d px)" % int(plateau.sum())
-
-    sel = pts.reshape(gh, gw, 3)[plateau]
-    xy = sel[:, :2].astype(np.float32)
-    (rcx, rcy), (w, h), angle = cv2.minAreaRect(xy)
-    w, h = float(w), float(h)
     ex, ey = float(model.dims[0]), float(model.dims[1])
     lo, hi = min(ex, ey) - FOOT_TOL_M, max(ex, ey) + FOOT_TOL_M
-    if not (lo <= min(w, h) and max(w, h) <= hi):
-        return None, "footprint %.2fx%.2f m vs model %.2fx%.2f" % (w, h, ex, ey)
 
-    top_z = float(np.median(sel[:, 2]))
-    fix = TopFaceFix(
-        center=(float(rcx), float(rcy), top_z),
-        yaw=math.radians(angle) % (math.pi / 2),
-        footprint=(w, h),
-        n_px=int(plateau.sum()),
-    )
-    return fix, "ok"
+    candidates, reasons = [], []
+    order = 1 + np.argsort(stats[1:, cv2.CC_STAT_AREA])[::-1]
+    for label in order[:8]:
+        blob = labels == label
+        if int(blob.sum()) < 12:
+            continue
+        if (blob & edge).any():
+            reasons.append("a top touches the image border")
+            continue
+        zb = z_base[blob]
+        top_z0 = float(np.median(zb))
+        plateau = blob & (np.abs(z_base - top_z0) < PLATEAU_TOL_M)
+        # measure the CORE: depth discontinuities smear a ~1-cell ring of
+        # flying pixels around the true face (capture 20260901-130610 read
+        # a 75 mm box as 90-120 mm); one erosion shaves the ring and the
+        # centroid/footprint come from real surface only
+        plateau = cv2.erode(plateau.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(
+            bool
+        )
+        if plateau.sum() < 12:
+            reasons.append("plateau too small (%d px)" % int(plateau.sum()))
+            continue
+        sel = pts.reshape(gh, gw, 3)[plateau]
+        xy = sel[:, :2].astype(np.float32)
+        (rcx, rcy), (w, h), angle = cv2.minAreaRect(xy)
+        w, h = float(w), float(h)
+        if not (lo <= min(w, h) and max(w, h) <= hi):
+            reasons.append("footprint %.2fx%.2f m vs model %.2fx%.2f" % (w, h, ex, ey))
+            continue
+        # a real top face is SOLID; a noise archipelago that happens to
+        # span a box-sized rect is not (fill = cells / rect area in cells)
+        ys, xs = np.nonzero(plateau)
+        rect_px = cv2.minAreaRect(np.stack([xs, ys], axis=-1).astype(np.float32))[1]
+        rect_cells = max(1.0, float(rect_px[0]) * float(rect_px[1]))
+        fill = float(plateau.sum()) / rect_cells
+        if fill < MIN_FILL:
+            reasons.append("top not solid (fill %.2f)" % fill)
+            continue
+        candidates.append(
+            TopFaceFix(
+                center=(float(rcx), float(rcy), float(np.median(sel[:, 2]))),
+                yaw=math.radians(angle) % (math.pi / 2),
+                footprint=(w, h),
+                n_px=int(plateau.sum()),
+            )
+        )
+
+    if not candidates:
+        return None, (reasons[0] if reasons else "no plateau")
+    if len(candidates) > 1:
+        # two box-sized tops and no roi to disambiguate: guessing which
+        # to press is exactly the mistake this gate exists to refuse
+        return None, "%d container-sized tops in view — ambiguous" % len(candidates)
+    return candidates[0], "ok"
 
 
 def container_pose_from_top(center, yaw, model):
@@ -167,6 +228,10 @@ class BoxTopWatcher:
         self.hits = 0
         self.refined_hits = 0  # == hits: every depth sighting IS refined
         self.last_debug = None  # the last TopFaceFix (bench diagnostics)
+        # pixel-space gate from the VLM source; None = whole frame. Set
+        # while PARKED at the scan pose and cleared before any re-fix
+        # from a different pose — a bbox is only valid where it was taken.
+        self.roi = None
         self.last_reject = None  # why the last non-hit frame was refused
         self._last_stamp = None
         node.create_timer(period_s, self._tick)
@@ -185,7 +250,7 @@ class BoxTopWatcher:
             return
         rot_cam, trans_cam = cam
         fix, why = top_face_from_depth(
-            g.depth, g.k, rot_cam, trans_cam, self.table_z, self.model
+            g.depth, g.k, rot_cam, trans_cam, self.table_z, self.model, roi=self.roi
         )
         if fix is None:
             self.last_reject = why
