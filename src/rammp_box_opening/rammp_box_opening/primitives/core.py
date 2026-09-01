@@ -240,7 +240,7 @@ class Press:
             ctx,
             state,
             "press:down",
-            ("pose", target, quat),
+            ("pose", target, quat, 0.06),  # vertical final (see PressFixed)
             world,
             CONTACT_SPEED,
             guard=guard,
@@ -374,7 +374,10 @@ class Place:
             ctx,
             state,
             self.name + ":down",
-            ("pose", down_xyz, self.quat),
+            # vertical final 50 mm: every free plan bows a little (the
+            # "small arch", field 2026-09-01); a set-down comes straight
+            # down onto its spot
+            ("pose", down_xyz, self.quat, 0.05),
             world,
             self.speed,
             guard=guard,
@@ -484,7 +487,11 @@ class PressFixed:
             ctx,
             state,
             self.name + ":down",
-            ("pose", target, quat),
+            # vertical final 60 mm — the staged stroke arched into the
+            # button edge just like the merged press did before it got
+            # this constraint (field 2026-09-01); contact happens
+            # travel_m above the goal, well inside the vertical segment
+            ("pose", target, quat, 0.06),
             world,
             cfg.press_speed,
             guard=guard,

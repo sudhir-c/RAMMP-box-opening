@@ -120,7 +120,11 @@ open_box:
   setdown_speed: 0.35             # guarded set-down; a trip IS the success
                                   # here, and the guard arms in 1.7 mm once
                                   # the executor polls at 0.02 s
-  grip_clear_m: 0.002             # fingertip stop height ABOVE the tag
+  grip_clear_m: 0.005             # fingertip stop height ABOVE the lid
+                                  # plane. 0.002 grazed the lid at the bench
+                                  # (2026-09-01 — z fixes are good to ~2-3 mm,
+                                  # so 2 mm of clearance had none to spare);
+                                  # 5 mm still grips the 15 mm knob low.
                                   # plane. The tag plane IS the lid top
                                   # (tag on the flush button at scan): the
                                   # popped-up button is grabbed at its

@@ -341,7 +341,9 @@ def build_grip_legs(ctx, cfg):
         ctx,
         st,
         "grip:down",
-        ("pose", target, quat),
+        # vertical final 40 mm: the fingers must straddle the knob from
+        # straight above, not arrive on an arc (field 2026-09-01)
+        ("pose", target, quat, 0.04),
         world,
         cfg.grip_speed,
         guard=guard,
@@ -416,7 +418,27 @@ def build_place_legs(ctx, cfg):
     retreat_legs, st = Retreat(
         m.hover_standoff + m.lid_dims[2], speed=TRANSIT_SPEED
     ).plan(ctx, st)
-    home_legs, st = Home().plan(ctx, st)
+    try:
+        home_legs, st = Home().plan(ctx, st)
+    except RuntimeError as e:
+        # The retreat plans in the REDUCED world, so its end config can
+        # be collision-free there yet read as inside the real (padded)
+        # container in the full world — a rare family draw did exactly
+        # that live (2026-09-01) and killed the mission at plan time
+        # while the arm held the lid. The transit end is full-world
+        # valid BY CONSTRUCTION and sits ~5 mm from the retreat end:
+        # re-plan home from there, in its own group so it cannot merge
+        # onto the retreat with a mismatched junction.
+        print(
+            "[press_demo] home from the retreat end refused (%s) — "
+            "re-planning from the transit end" % e
+        )
+        home_state = PlanState(
+            joints=list(legs[0].goal_joints),
+            chain=st.chain + 1,
+            contact_broke_chain=False,
+        )
+        home_legs, st = Home().plan(ctx, home_state)
     return [*legs, *retreat_legs, *home_legs]
 
 

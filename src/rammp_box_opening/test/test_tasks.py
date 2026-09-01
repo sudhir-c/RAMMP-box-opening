@@ -586,3 +586,61 @@ def test_merged_press_constrains_the_final_approach_vertical():
     press = next(x for x in legs if x.name == "press:down")
     assert len(press.target) == 4
     assert press.target[3] == pytest.approx(0.06)
+
+
+def test_every_descent_carries_a_vertical_final_constraint():
+    """The staged press arched into the button edge exactly like the
+    merged press did before it got the grasp-approach constraint (field
+    2026-09-01) — and a bowed grip or set-down misses the same way. Every
+    contact-bound descent now ends vertical; the constraint rides in the
+    target tuple so drift replans preserve it too."""
+    import pytest
+
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    legs = press_demo.build_demo_legs(c, cfg)
+    want = {"press:down": 0.06, "grip:down": 0.04, "place:lid:down": 0.05}
+    for name, off in want.items():
+        leg = next(x for x in legs if x.name == name)
+        assert len(leg.target) == 4, name
+        assert leg.target[3] == pytest.approx(off), name
+
+
+def test_place_home_replans_from_the_transit_end_when_the_retreat_end_is_refused():
+    """The place retreat plans in the REDUCED world, so a rare family
+    draw can end it inside the real padded container — the full-world
+    home pre-plan then dies with INVALID_START_STATE while the arm holds
+    the lid (field 2026-09-01). The fallback re-plans home from the
+    transit end (full-world valid by construction), in its own chain so
+    it cannot merge onto the retreat with a mismatched junction."""
+    from rammp_box_opening.tasks import press_demo
+
+    class HomeOnceRefused(FakeClient):
+        def __init__(self):
+            super().__init__()
+            self.joint_starts = []
+
+        def plan_to_joints(self, q7, start_joints):
+            self.joint_starts.append(list(start_joints))
+
+            class Bad:
+                success = False
+                message = "INVALID_START_STATE_WORLD_COLLISION"
+
+            if len(self.joint_starts) == 1:
+                return Bad()
+            return super().plan_to_joints(q7, start_joints)
+
+    c = ctx()
+    c.client = HomeOnceRefused()
+    legs = press_demo.build_place_legs(c, _demo_cfg())
+    assert names(legs)[-1] == "home"
+    transit = next(x for x in legs if x.name == "place:lid:transit")
+    home = legs[-1]
+    # the retry planned from the TRANSIT end, not the refused retreat end
+    assert c.client.joint_starts[1] == list(transit.goal_joints)
+    # separate chain: the runner may never merge home onto the retreat
+    retreat = next(x for x in legs if x.name == "retreat")
+    assert home.chain != retreat.chain
