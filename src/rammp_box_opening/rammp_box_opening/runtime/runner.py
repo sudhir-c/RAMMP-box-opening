@@ -16,7 +16,6 @@ from rammp_curobo.geometry import ang_diff
 from rammp_box_opening.constants import (
     CONTACT_SPEED,
     DRIFT_REPLAN_RAD,
-    MAX_LEG_SWING_RAD,
     SANITY_MARGIN_RAD,
 )
 from rammp_box_opening.runtime import confirm
@@ -139,22 +138,6 @@ class Runner:
                 bad = sanity_violations(leg.traj, self.margin_rad)
                 if bad:
                     return "trajectory sanity gate: " + "; ".join(bad)
-                # the sanity gate bounds wandering BEYOND the endpoints;
-                # this bounds the endpoints themselves. A plan from a
-                # failure-held pose can be collision-free yet swing the
-                # arm half upside down (field 2026-09-01) — no mission
-                # leg legitimately sweeps any joint this far.
-                a = leg.traj.points[0].positions
-                b = leg.traj.points[-1].positions
-                for j, (qa, qb) in enumerate(zip(a, b)):
-                    swing = abs(ang_diff(qb, qa))
-                    if swing > MAX_LEG_SWING_RAD:
-                        return (
-                            "plan sweeps joint_%d %.2f rad (cap %.1f) — the "
-                            "start pose is outside the mission workspace; "
-                            "recover with go_home.py first"
-                            % (j + 1, swing, MAX_LEG_SWING_RAD)
-                        )
             if leg.guard is not None and not self.client.efforts_present():
                 return (
                     "no effort fields in /joint_states — guarded legs "

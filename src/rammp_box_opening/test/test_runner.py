@@ -471,27 +471,3 @@ def test_a_release_is_never_deferred(tmp_path):
     legs = [leg("place:lid:open", kind=Kind.GRIPPER, cmd=0.0), leg("retreat", Q0, Q1)]
     runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
     assert c.events[:2] == ["send", "join"], "release settles before the arm moves"
-
-
-def test_a_giant_joint_swing_is_refused_even_when_sane(tmp_path):
-    """A plan from a failure-held pose can be collision-free and pass the
-    wander gate yet swing the arm half upside down (field 2026-09-01:
-    joint_6 saturated mid-swing). Endpoint sweep is capped per joint."""
-    c = FakeClient()
-    start = [0.0] * 7
-    end = [0.0] * 5 + [2.4, 0.0]  # joint_6 sweeps 2.4 rad, monotonic (sane)
-    res = runner(c, tmp_path).run(
-        [leg("scan", start, end)], execute=True, assume_yes=True
-    )
-    assert res[0].outcome == "refused"
-    assert "joint_6" in res[0].detail and "go_home" in res[0].detail
-    assert c.executed == []
-
-
-def test_normal_mission_swings_pass_the_cap(tmp_path):
-    c = FakeClient()
-    end = [0.9, -0.5, 1.2, -1.5, 0.4, 1.1, 1.9]  # big but legitimate
-    res = runner(c, tmp_path).run(
-        [leg("scan", [0.0] * 7, end)], execute=True, assume_yes=True
-    )
-    assert res[0].ok

@@ -16,15 +16,14 @@ TRANSIT_SPEED = 1.0  # full rated speed (owner 2026-08-26); the press
 CONTACT_SPEED = 0.15
 DRIFT_REPLAN_RAD = 0.04  # < server start gate (0.05); catches arrival-tol drift
 SANITY_MARGIN_RAD = 0.35  # per-joint excursion allowance beyond |start->end|
-# No single mission leg needs any joint to sweep more than this. A plan
-# from a failure-held pose can be collision-free and sanity-clean yet
-# swing the arm half upside down (field 2026-09-01: joint_6 planned
-# ~2+ rad from a contorted start and the wrist saturated mid-swing) —
-# such plans are refused, with go_home as the named recovery.
-MAX_LEG_SWING_RAD = 2.0
-# ...and a mission must START near HOME: every legit run begins there,
-# so a distant start means the last run ended badly. Refuse before any
-# motion instead of planning something dramatic from wreckage.
+# A mission must START near HOME: every legit run begins there, so a
+# distant start means the last run ended badly. Refuse before any motion
+# instead of planning something dramatic from wreckage (field
+# 2026-09-01: a plan from a failure-held pose swung the arm half upside
+# down). This is the ONLY start-shape guard: a per-leg joint-sweep cap
+# was tried and measured wrong the same day — wrap-aware endpoint sweep
+# saturates at pi, and six live HOME->scan plans legitimately swept
+# 2.4-2.9 rad on wrist/elbow joints for the tool-down reorientation.
 HOME_START_TOL_RAD = 1.2
 
 POSE_UNCERTAINTY_M = 0.02  # calibration floor (spec §3)
