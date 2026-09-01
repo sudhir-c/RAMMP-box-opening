@@ -1,6 +1,6 @@
 # Box opening with the RAMMP Kinova Gen3 — design
 
-Date: 2026-08-14. Status: approved by Chris in four interactive sections
+Date: 2026-08-14. Status: approved by the owner in four interactive sections
 (decision log in §9), then revised after a three-reviewer adversarial
 self-review (consistency, fact-check against sources, design attack);
 this is rev 2 with those fixes applied.
@@ -32,7 +32,7 @@ prerequisites exist.
 
 ### Non-goals
 
-- No modifications to RAMMP-CuRobo (change requests go to Chris; §10
+- No modifications to RAMMP-CuRobo (change requests go to the owner; §10
   lists one candidate).
 - No arm driver, bringup, or controller code — execution ownership stays
   with ros2_kortex from `~/RAMMP-Kinova/ros2_ws`, launched by the human.
@@ -424,10 +424,10 @@ Phase-3 metrics source and the hardware debugging record.
 - **Phase 3 — robustness + task 2:** randomized placement within reach,
   per-primitive retry with verification, `pickup_container`. Success
   metric: **5 consecutive** open+pickup cycles from random placements
-  (Chris may raise N at Phase-3 kickoff), zero human touches except the
+  (the owner may raise N at Phase-3 kickoff), zero human touches except the
   e-stop hand, measured from the run logs. Planned separately.
 
-## 9. Decision log (approved by Chris, 2026-08-14)
+## 9. Decision log (approved by the owner, 2026-08-14)
 
 1. Architecture: layered library (primitives / runner / tasks) over
    scripts-first and declarative-framework alternatives.
@@ -459,7 +459,7 @@ Phase-3 metrics source and the hardware debugging record.
   short segments + the sanity gate + the guard. If that proves
   insufficient on hardware, the change request to RAMMP-CuRobo is a
   linear-segment (or path-constrained) planning capability — specified
-  as a request to Chris, never patched locally.
+  as a request to the owner, never patched locally.
 - **D405 mount** must be re-verified before Phase 2 trust (bracket may
   have moved; the recovered yaml says re-verify after ANY bracket
   change).

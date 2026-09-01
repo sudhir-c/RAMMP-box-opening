@@ -1,7 +1,7 @@
 """Local open-vocabulary bbox: OWLv2 on the Jetson, no network in the loop.
 
-The wheelchair will not always have internet (Swapnil, 2026-09-01), so
-the semantic gate needs a local answer. OWLv2 is the model NanoOWL
+The wheelchair will not always have internet (deployment constraint,
+2026-09-01), so the semantic gate needs a local answer. OWLv2 is the model NanoOWL
 accelerates; on this Orin the plain-torch model already runs one frame
 in 0.62 s, and the gate fires once per mission — TensorRT is a future
 speed-up, not a prerequisite.

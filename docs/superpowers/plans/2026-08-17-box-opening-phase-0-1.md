@@ -2504,7 +2504,7 @@ git add -A && git commit -m "docs: hardware bringup runbook + measurement worksh
 
 **Files:** config value updates from the worksheet; no code (fixes discovered at the bench become their own reviewed commits).
 
-This task is executed WITH Chris per `docs/HARDWARE_BRINGUP.md`. The agent's role is preparation and log analysis between rungs; every `--execute` is typed by the human.
+This task is executed WITH the owner per `docs/HARDWARE_BRINGUP.md`. The agent's role is preparation and log analysis between rungs; every `--execute` is typed by the human.
 
 - [ ] **Step 1:** Measurement worksheet completed; `world_bench.yaml` + `oxo_pop.yaml` filled; `measure_me: false`; commit the measured configs.
 - [ ] **Step 2:** `preflight` PASS + abort drill PASS.
@@ -2517,5 +2517,5 @@ This task is executed WITH Chris per `docs/HARDWARE_BRINGUP.md`. The agent's rol
 ## Self-Review (completed at plan time)
 
 - **Spec coverage:** §4 layout → Tasks 1, 9 (CLI surface incl. preflight/smoke_plan); §5 primitives + contact/straightness honesty → Tasks 3, 4, 8; §6 runner/gates/worlds/guard/outcomes/log → Tasks 5, 6, 7; §7 testing rows 1–2 → every task's tests + Task 10 (row 3 sim is optional — not planned; row 4 → Tasks 11–12); §8 Phase 0 → Tasks 1–10, Phase 1 → Tasks 11–12. Phases 2–3: separate plans per spec.
-- **Known deviations, on the record:** (1) contact-primitive attitudes come from container config (default top-down) rather than the literal wrist-flat formula — wrist-flat tool z is horizontal and cannot press downward; wrist-flat remains the transit family. Flag to Chris at review. (2) Lift's grip re-check needs gripper state feedback; the plan specifies a query-only gripper leg with an honest "unchecked" fallback (Task 8).
+- **Known deviations, on the record:** (1) contact-primitive attitudes come from container config (default top-down) rather than the literal wrist-flat formula — wrist-flat tool z is horizontal and cannot press downward; wrist-flat remains the transit family. Flag to the owner at review. (2) Lift's grip re-check needs gripper state feedback; the plan specifies a query-only gripper leg with an honest "unchecked" fallback (Task 8).
 - **Type consistency check:** `PlannerClient` protocol (Task 6) matches `FakeClient` (Task 7 tests) method-for-method; `GuardSpec` fields consistent across Tasks 3/7/8; `Leg` fields consistent across 4/7/8/9; `push_name` signature consistent across 5/7(FakeStore)/8.

@@ -133,7 +133,7 @@ def test_owl_pick_best_box_floor():
 
 
 def test_shipped_ladder_is_local_first(cfg):
-    """The wheelchair will not always have internet (Swapnil 2026-09-01):
+    """The wheelchair will not always have internet (deployment, 2026-09-01):
     the local model leads, the cloud is the fallback."""
     assert cfg.vlm_backends == ("owl", "claude")
     assert cfg.owl_min_score == pytest.approx(0.18)

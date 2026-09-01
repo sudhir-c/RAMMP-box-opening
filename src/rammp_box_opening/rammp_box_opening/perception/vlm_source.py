@@ -107,7 +107,7 @@ def fetch_box_roi(color_rgb, cfg, client=None):
 def resolve_roi(color_rgb, cfg, impls=None):
     """Walk the configured backend ladder; first roi wins.
 
-    Ladder shape (Swapnil review, 2026-09-01): the wheelchair will not
+    Ladder shape (deployment review, 2026-09-01): the wheelchair will not
     always have internet, so LOCAL comes first and the cloud is the
     fallback, with plain depth as the floor when every rung declines.
     Returns (roi | None, [per-backend status lines]).

@@ -149,7 +149,7 @@ scan:
 vlm:                              # detect.source: vlm — the semantic gate
   backends: [owl, claude]         # tried in order, first bbox wins. LOCAL
                                   # first: the wheelchair will not always
-                                  # have internet (Swapnil 2026-09-01); the
+                                  # have internet (deployment 2026-09-01); the
                                   # cloud is the fallback and plain depth is
                                   # the floor when both decline.
   owl_model: google/owlv2-base-patch16-ensemble

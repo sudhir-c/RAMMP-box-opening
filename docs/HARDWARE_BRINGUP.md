@@ -9,7 +9,7 @@ Spec: `docs/superpowers/specs/2026-08-14-box-opening-design.md` (§6, §8).
 - Exactly ONE arm stack at a time. Check before starting:
   `pgrep -fa 'kortex|planner_node'` — note this Jetson has carried a
   root-owned planner_node from `/opt/rammp_curobo` (same `/rammp_curobo`
-  names!); confirm with Chris which instance owns the session before
+  names!); confirm with the owner which instance owns the session before
   launching another.
 - Bringup order (human, separate shells, each with
   `export ROS_LOCALHOST_ONLY=1` typed explicitly — non-interactive shells
