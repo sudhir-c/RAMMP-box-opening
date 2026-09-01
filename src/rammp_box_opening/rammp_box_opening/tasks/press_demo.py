@@ -708,32 +708,31 @@ def main():
             sys.exit(0)
 
         noun = "BOX" if cfg.detect_source in ("depth", "vlm") else "TAG"
-        print(
-            "[press_demo] DETECT: up to %.0f s for a stable fix (%s)"
-            % (
-                cfg.timeout_s,
-                "container top" if noun == "BOX" else "tag id %d" % cfg.tag_id,
-            )
-        )
         if cfg.detect_source in ("depth", "vlm"):
-            if cfg.detect_source == "vlm":
-                # the backend LADDER decides WHICH surface is the container
-                # (local OWL first — the chair may be offline; Claude as the
-                # network fallback); the depth plateau inside the bbox does
-                # all geometry. Every rung declining degrades to plain
-                # depth — the mission never stalls on a model or network.
+            # DEPTH FIRST, INSTANTLY. One box-sized plateau on the bench
+            # is unambiguous geometry — with in-flight samples the fix is
+            # often committed the moment the arm parks, and blocking on a
+            # semantic model first cost 13 s in the field (2026-09-01:
+            # OWL score dipped under threshold -> 5 s rung timeout ->
+            # 3.3 s Claude network call -> commit). The ladder now runs
+            # ONLY when depth cannot answer alone (ambiguity, or nothing
+            # found in the first beat) — semantics on demand.
+            t_detect = time.monotonic()
+            got = wait_for_fix(node, watcher, cfg, timeout_s=2.0)
+            if got is None and cfg.detect_source == "vlm":
                 while watcher.grab.color is None:
                     _spin_detect(node)
                 roi, lines = resolve_roi(watcher.grab.color, cfg, impls=impls)
                 for ln in lines:
                     print("[press_demo] VLM %s" % ln)
-                if roi is None:
-                    print("[press_demo] VLM gate off — plain depth")
-                watcher.roi = roi
-            # no servo loop: the depth fix is a base-frame measurement with
-            # no optical-axis error to center away (the loop was tag PnP
-            # machinery, and it is off at max_iters 0 anyway)
-            got = wait_for_fix(node, watcher, cfg)
+                watcher.roi = roi  # None = ungated, honest refusals stand
+                remaining = cfg.timeout_s - (time.monotonic() - t_detect)
+                if remaining > 0:
+                    got = wait_for_fix(node, watcher, cfg, timeout_s=remaining)
+            elif got is None:
+                remaining = cfg.timeout_s - (time.monotonic() - t_detect)
+                if remaining > 0:
+                    got = wait_for_fix(node, watcher, cfg, timeout_s=remaining)
             why = "ok" if got is not None else "no_tag"
         else:
             got, why = center_on_tag(node, watcher, ctx, cfg, runner, args.execute)

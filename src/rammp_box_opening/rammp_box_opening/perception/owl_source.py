@@ -170,7 +170,7 @@ def make_topic_rung(node, cfg, watcher_holder=None):
         import rclpy as _r
 
         saw_alive = False
-        deadline = _t.monotonic() + 5.0
+        deadline = _t.monotonic() + 2.0
         while _t.monotonic() < deadline:
             now = node.get_clock().now().nanoseconds * 1e-9
             kind = classify_bbox_msg(latest.get("m"), now)
