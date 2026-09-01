@@ -213,3 +213,70 @@ def test_contact_sets_the_container_pad_for_later_full_worlds():
     assert c.contact_pad == CONTACT_SHIFT_PAD_M
     _full_world(c)
     assert c.worlds.pushes[-1][1]["container_pad_xy"] == CONTACT_SHIFT_PAD_M
+
+
+class _SwingClient:
+    """plan_to_pose returns a far-family plan first, compact second."""
+
+    def __init__(self, plans):
+        self.plans = list(plans)
+        self.asked = 0
+
+    def set_world(self, path):
+        return True, "ok"
+
+    def plan_to_pose(self, xyz, quat, start):
+        self.asked += 1
+        q_end = self.plans.pop(0) if self.plans else [0.0] * 7
+
+        class R:
+            success = True
+            message = "ok"
+            planning_time = 0.01
+
+        from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+        t = JointTrajectory()
+        for i, q in enumerate(([0.0] * 7, q_end)):
+            p = JointTrajectoryPoint()
+            p.positions = [float(v) for v in q]
+            p.time_from_start.sec = i
+            t.points.append(p)
+        R.trajectory = t
+        return R
+
+
+def test_far_family_plans_are_retried_then_accepted():
+    """Stochastic planning: a 2.11 rad joint_3 family came back from HOME
+    at the bench (2026-09-01); asking again found the compact family."""
+    from rammp_box_opening.primitives.core import _plan_motion
+
+    c, st = ctx(), state()
+    far = [0.0, 0.0, 2.3, 0.0, 0.0, 0.0, 0.0]
+    compact = [0.0, 0.0, 0.4, 0.0, 0.0, 0.0, 0.0]
+    c.client = _SwingClient([far, compact])
+    leg, _ = _plan_motion(
+        c, st, "scan", ("pose", [0.4, 0.0, 0.45], [0, 1, 0, 0]), ("full", "w.yaml"), 1.0
+    )
+    assert c.client.asked == 2  # retried once
+    assert abs(leg.traj.points[-1].positions[2]) < 2.0
+
+
+def test_persistently_far_family_is_an_honest_failure():
+    import pytest as _pytest
+
+    from rammp_box_opening.primitives.core import _plan_motion
+
+    c, st = ctx(), state()
+    far = [0.0, 0.0, 2.3, 0.0, 0.0, 0.0, 0.0]
+    c.client = _SwingClient([far, far, far])
+    with _pytest.raises(RuntimeError, match="far IK family"):
+        _plan_motion(
+            c,
+            st,
+            "scan",
+            ("pose", [0.4, 0.0, 0.45], [0, 1, 0, 0]),
+            ("full", "w.yaml"),
+            1.0,
+        )
+    assert c.client.asked == 3

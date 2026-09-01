@@ -15,11 +15,14 @@ import math
 import time
 from dataclasses import dataclass
 
+from rammp_curobo.geometry import ang_diff
+
 from rammp_box_opening.constants import (
     CONTACT_SPEED,
     GRIPPER_CMD_CLOSED,
     GRIPPER_CMD_OPEN,
     HOME,
+    MAX_LEG_SWING_RAD,
     TRANSIT_SPEED,
 )
 from rammp_box_opening.models.container import attitude_quat, from_container
@@ -129,16 +132,49 @@ def _plan_motion(
         ctx.pushed_world = str(world_path)
     kind, *rest = target
     t_plan = time.monotonic()
+
+    def _ask():
+        if kind == "pose":
+            return ctx.client.plan_to_pose(rest[0], rest[1], state.joints)
+        return ctx.client.plan_to_joints(rest[0], state.joints)
+
+    def _max_swing(traj):
+        a, b = traj.points[0].positions, traj.points[-1].positions
+        return max(abs(ang_diff(y, x)) for x, y in zip(a, b))
+
+    # The planner is stochastic and can return a far IK family for a pose
+    # that also has a compact one — from HOME the scan pose came back with
+    # joint_3 swung 2.11 rad (field 2026-09-01) where the usual family
+    # barely moves it. Asking again usually lands the compact family; the
+    # Runner's swing gate stays as the hard backstop for what survives.
+    # joint-space targets already resolve to the NEAREST branch inside the
+    # planner (_nearest_branch), so family whim is a POSE-plan problem only
+    retries = 3 if kind == "pose" else 1
+    plan = None
+    for attempt in range(retries):
+        plan = _ask()
+        if plan is None or not plan.success:
+            break
+        if kind != "pose" or _max_swing(plan.trajectory) <= MAX_LEG_SWING_RAD:
+            break
+        print(
+            "[plan] %s sweeps %.2f rad (cap %.1f) — asking the planner for "
+            "a more compact family (attempt %d/3)"
+            % (name, _max_swing(plan.trajectory), MAX_LEG_SWING_RAD, attempt + 1)
+        )
     if kind == "pose":
-        plan = ctx.client.plan_to_pose(rest[0], rest[1], state.joints)
         ctx.last_pose = (list(rest[0]), list(rest[1]))
-    else:
-        plan = ctx.client.plan_to_joints(rest[0], state.joints)
     plan_s = time.monotonic() - t_plan
     if plan is None or not plan.success:
         raise RuntimeError(
             "planning failed for %s: %s"
             % (name, getattr(plan, "message", "no response"))
+        )
+    if kind == "pose" and _max_swing(plan.trajectory) > MAX_LEG_SWING_RAD:
+        raise RuntimeError(
+            "planning failed for %s: every attempt sweeps a joint more than "
+            "%.1f rad — the goal may only be reachable in a far IK family"
+            % (name, MAX_LEG_SWING_RAD)
         )
     end = list(plan.trajectory.points[-1].positions)
     leg = Leg(
