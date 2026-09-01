@@ -183,7 +183,14 @@ detect:
                                   # too flat for the height band.
   timeout_s: 10.0                 # scan-pose wait for a stable fix
   min_hits: 3                     # agreeing frames before the fix commits
-  tol_m: 0.03                     # pairwise agreement (stable_fix)
+  tol_m: 0.015                    # pairwise agreement (stable_fix). 0.03
+                                  # let in-flight samples agree with each
+                                  # other 20 mm off the truth (field
+                                  # 2026-09-01: two runs' fixes disagreed
+                                  # 21 mm in x and the grip closed on air);
+                                  # 15 mm forces the commit onto the
+                                  # consistent deceleration/parked tail
+                                  # for ~0.2 s more wait
   window_s: 2.0                   # sightings older than this leave the window
   fresh_s: 1.0                    # a fix older than this cannot commit
   period_s: 0.05                  # detector tick. min_hits * period is the

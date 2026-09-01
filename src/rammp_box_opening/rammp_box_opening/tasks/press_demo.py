@@ -949,25 +949,29 @@ def main():
         if args.press_only:
             sys.exit(0)
 
-        # the press can scoot the box (7-8 Nm moved it ~2 cm in the field);
-        # the depth watcher has kept ticking, so take a FRESH fix if one
-        # exists and grip the box where it is NOW. Opportunistic: at hop
-        # height the top may overflow the view and refuse — the scan fix
-        # then stands, exactly as before.
+        # The press can scoot the box (any rim contact shoves it — both
+        # 2026-09-01 air-grabs descended onto the PRE-press position). So
+        # the re-look before the grip is MANDATORY, not a peek: purge the
+        # window and wait briefly for a fix taken from the hop pose — the
+        # camera sits ~0.18 m over the lid there and the top fits the
+        # view. No fresh fix within the budget = the scan fix stands.
         if hasattr(watcher, "roi"):
             watcher.roi = None  # scan-pose bbox is stale here
-        got3 = watcher.fix()
+        watcher.reset()  # only hop-pose sightings may re-aim the grip
+        got3 = wait_for_fix(node, watcher, cfg, timeout_s=1.2)
         if got3 is not None:
             cp3 = fix_to_cpose(watcher, got3, model, cfg)
             d3 = math.hypot(
                 cp3.xyz[0] - ctx.cpose.xyz[0], cp3.xyz[1] - ctx.cpose.xyz[1]
             )
-            if 0.005 < d3 < 0.06:
-                print(
-                    "[press_demo] pre-grip re-fix: box moved %.1f mm — using "
-                    "the fresh pose" % (d3 * 1000)
-                )
-                ctx.cpose = cp3
+            if d3 < 0.08:
+                if d3 > 0.003:
+                    print(
+                        "[press_demo] pre-grip re-fix: box moved %.1f mm — "
+                        "gripping where it is NOW" % (d3 * 1000)
+                    )
+                ctx.cpose = cp3  # z re-measured too — grip height anchors
+                # to the CURRENT lid, not the scan-time estimate
         print("[press_demo] GRIP: open, descend to press depth, close, pull")
         res = runner.run(
             build_grip_legs(ctx, cfg), execute=args.execute, assume_yes=True
