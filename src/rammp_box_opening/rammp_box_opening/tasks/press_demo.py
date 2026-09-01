@@ -667,7 +667,7 @@ def main():
             detect_only_report(node, watcher, ctx, cfg, runner, args.execute)
             sys.exit(0)
 
-        noun = "BOX" if cfg.detect_source == "depth" else "TAG"
+        noun = "BOX" if cfg.detect_source in ("depth", "vlm") else "TAG"
         print(
             "[press_demo] DETECT: waiting %.0f s for a stable fix (%s)"
             % (
