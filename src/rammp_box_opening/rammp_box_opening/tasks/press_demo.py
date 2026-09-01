@@ -639,10 +639,11 @@ def main():
     node, client = cli_common.init_runtime()
     worlds = WorldStore(bench)
     runner = Runner(client, worlds)
-    if cfg.detect_source == "vlm" and "owl" in cfg.vlm_backends:
-        from rammp_box_opening.perception.owl_source import preload
-
-        preload(cfg.owl_model)  # daemon thread; overlaps the scan motion
+    # NOTE: no in-process OWL preload here. The persistent owl_detector
+    # node owns the model; the CLI's fallback copy loads lazily inside
+    # owl_box_roi only when the node's topic does not answer. A boot-time
+    # preload put TWO OWLv2 copies on the GPU beside cuRobo (field
+    # 2026-09-01) for the price of zero — the node path never used it.
     if cfg.detect_source in ("depth", "vlm"):
         # the box found by geometry: lid plateau above the measured table.
         # No print to wear out — the press knuckles destroyed two tag
