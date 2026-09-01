@@ -33,8 +33,10 @@ from rammp_box_opening.constants import (
     GRIPPER_CMD_CLOSED,
     GRIPPER_CMD_OPEN,
     HOME,
+    HOME_START_TOL_RAD,
     TRANSIT_SPEED,
 )
+from rammp_curobo.geometry import ang_diff
 from rammp_box_opening.models.container import (
     ContainerModel,
     ContainerPose,
@@ -659,8 +661,22 @@ def main():
 
     try:
         print("[press_demo] SCAN: tool-down look pose %s" % (list(cfg.scan_xyz),))
+        live = client.joints()
+        worst = max(abs(ang_diff(a, b)) for a, b in zip(live, HOME))
+        if worst > HOME_START_TOL_RAD:
+            # every legitimate run starts near HOME; a distant start means
+            # the previous run ended badly. Planning anything from wreckage
+            # produced a half-inverted swing in the field (2026-09-01) —
+            # refuse BEFORE any motion and name the recovery.
+            print(
+                "[press_demo] arm starts %.2f rad from HOME (tol %.1f) — "
+                "refusing to plan from a failure pose. Recover first:\n"
+                "    python3 ~/RAMMP-CuRobo/scripts/go_home.py --execute"
+                % (worst, HOME_START_TOL_RAD)
+            )
+            sys.exit(3)
         res = runner.run(
-            [build_scan_leg(ctx, cfg, client.joints())],
+            [build_scan_leg(ctx, cfg, live)],
             execute=args.execute,
             assume_yes=True,  # --execute alone arms the run (owner 2026-08-24)
         )

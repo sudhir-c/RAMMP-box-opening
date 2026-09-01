@@ -144,7 +144,11 @@ class StubPlanner(Node):
         print("PLAN GOAL #%d (pose)" % self.plan_goals, flush=True)
         q0 = list(gh.request.start_joints) or self.q
         q1 = list(q0)
-        q1[0] += 0.3
+        # bounded oscillation, not accumulation: the old unconditional
+        # +0.3 rad per plan walked joint_1 ~3 rad across a mission, which
+        # no real plan does — and the runner's joint-swing cap (a REAL
+        # safety gate, field 2026-09-01) rightly refused the fake home
+        q1[0] += 0.3 if q0[0] < 1.0 else -0.3
         res = PlanToPose.Result()
         res.success = True
         res.message = "stub plan"
