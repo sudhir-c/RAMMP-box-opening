@@ -116,9 +116,21 @@ def bench_world(bench, unseen_model=None):
     }
 
 
-def full_world(bench, model, cpose, lid_at=None):
+def full_world(bench, model, cpose, lid_at=None, container_pad_xy=0.0):
+    """container_pad_xy: extra xy half-extent on the container cuboid.
+    Non-zero AFTER a contact leg: a press can scoot the box (field
+    2026-09-01 — 8.1 Nm moved it ~2 cm and the home sweep then clipped
+    the real box standing outside its stale cuboid), so post-contact
+    transits allow for a shifted container."""
     obstacles = _bench_obstacles(bench)
-    obstacles.append(_container_cuboid(model, cpose))
+    c = _container_cuboid(model, cpose)
+    if container_pad_xy:
+        c["dims"] = [
+            c["dims"][0] + 2.0 * float(container_pad_xy),
+            c["dims"][1] + 2.0 * float(container_pad_xy),
+            c["dims"][2],
+        ]
+    obstacles.append(c)
     if lid_at is not None:
         obstacles.append(_lid_cuboid(model, lid_at))
     return {
@@ -219,12 +231,19 @@ class WorldStore:
         lid_at=None,
         tag="",
         ring=True,
+        container_pad_xy=0.0,
     ):
         if kind == "bench":
             world = bench_world(self._bench, unseen_model=model)
             name = "bench" + (("_" + tag) if tag else "")
         elif kind == "full":
-            world = full_world(self._bench, model, cpose, lid_at=lid_at)
+            world = full_world(
+                self._bench,
+                model,
+                cpose,
+                lid_at=lid_at,
+                container_pad_xy=container_pad_xy,
+            )
             name = "full" + (("_" + tag) if tag else "")
         elif kind == "interaction":
             world = interaction_world(

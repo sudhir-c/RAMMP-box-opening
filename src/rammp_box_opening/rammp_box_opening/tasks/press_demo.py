@@ -688,7 +688,20 @@ def main():
                 # depth — the mission never stalls on a model or network.
                 while watcher.grab.color is None:
                     _spin_detect(node)
-                roi, lines = resolve_roi(watcher.grab.color, cfg)
+                impls = None
+                if "owl" in cfg.vlm_backends:
+                    from rammp_box_opening.perception.owl_source import (
+                        make_topic_rung,
+                    )
+                    from rammp_box_opening.perception.vlm_source import (
+                        fetch_box_roi,
+                    )
+
+                    impls = {
+                        "owl": make_topic_rung(node, cfg),
+                        "claude": fetch_box_roi,
+                    }
+                roi, lines = resolve_roi(watcher.grab.color, cfg, impls=impls)
                 for ln in lines:
                     print("[press_demo] VLM %s" % ln)
                 if roi is None:
@@ -914,6 +927,25 @@ def main():
         if args.press_only:
             sys.exit(0)
 
+        # the press can scoot the box (7-8 Nm moved it ~2 cm in the field);
+        # the depth watcher has kept ticking, so take a FRESH fix if one
+        # exists and grip the box where it is NOW. Opportunistic: at hop
+        # height the top may overflow the view and refuse — the scan fix
+        # then stands, exactly as before.
+        if hasattr(watcher, "roi"):
+            watcher.roi = None  # scan-pose bbox is stale here
+        got3 = watcher.fix()
+        if got3 is not None:
+            cp3 = fix_to_cpose(watcher, got3, model, cfg)
+            d3 = math.hypot(
+                cp3.xyz[0] - ctx.cpose.xyz[0], cp3.xyz[1] - ctx.cpose.xyz[1]
+            )
+            if 0.005 < d3 < 0.06:
+                print(
+                    "[press_demo] pre-grip re-fix: box moved %.1f mm — using "
+                    "the fresh pose" % (d3 * 1000)
+                )
+                ctx.cpose = cp3
         print("[press_demo] GRIP: open, descend to press depth, close, pull")
         res = runner.run(
             build_grip_legs(ctx, cfg), execute=args.execute, assume_yes=True

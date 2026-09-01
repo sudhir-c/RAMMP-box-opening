@@ -191,3 +191,25 @@ def test_worlds_are_pushed_at_plan_time():
     assert c.client.worlds_pushed == ["full.yaml"]
     PressFixed(load_press_demo(CFG)).plan(c, state())
     assert c.client.worlds_pushed == ["full.yaml", "interaction_button.yaml"]
+
+
+def test_contact_sets_the_container_pad_for_later_full_worlds():
+    """Any guarded plan marks the mission contact-tainted: every later
+    FULL world allows for a scooted container."""
+    from rammp_box_opening.primitives.core import (
+        CONTACT_SHIFT_PAD_M,
+        PressFixed,
+        _full_world,
+    )
+
+    c, st = ctx(), state()
+    assert c.contact_pad == 0.0
+    _full_world(c)
+    assert c.worlds.pushes[-1][1].get("container_pad_xy", 0.0) == 0.0
+    from rammp_box_opening.models.container import load_press_demo
+
+    cfg = load_press_demo(CFG)
+    PressFixed(cfg).plan(c, st)
+    assert c.contact_pad == CONTACT_SHIFT_PAD_M
+    _full_world(c)
+    assert c.worlds.pushes[-1][1]["container_pad_xy"] == CONTACT_SHIFT_PAD_M

@@ -34,6 +34,7 @@ ARGS = [
     ("execute", "false", "allow motion (default: dry-run, nothing moves)"),
     ("config", "gen3_real.yaml", "planner YAML (world comes from it)"),
     ("camera", "true", "start the D405 driver (false: already running)"),
+    ("owl", "true", "start the persistent OWL bbox detector (loads once)"),
 ]
 
 
@@ -65,6 +66,13 @@ def _sweep_strays():
         for ln in out.splitlines():
             pid, _, _cmd = ln.partition(" ")
             found.append((int(pid), "realsense2_camera_node"))
+        out = _sp.run(
+            ["pgrep", "-af", "owl_detector"], capture_output=True, text=True
+        ).stdout
+        for ln in out.splitlines():
+            pid, _, cmd = ln.partition(" ")
+            if "rammp_box_opening" in cmd:
+                found.append((int(pid), "owl_detector"))
         return found
 
     found = strays()
@@ -104,6 +112,18 @@ def _nodes(context, *_args, **_kwargs):
         parameters=[{"config": val("config"), "execute": flag("execute")}],
     )
     nodes = [planner]
+    if flag("owl"):
+        # persistent semantic gate: the OWL model loads ONCE here,
+        # overlapping the planner's GPU init, instead of once per CLI run
+        # (field 2026-09-01: per-run loading made every detect wait)
+        nodes.append(
+            Node(
+                package="rammp_box_opening",
+                executable="owl_detector",
+                name="owl_detector",
+                output="screen",
+            )
+        )
     if flag("camera"):
         nodes.append(
             IncludeLaunchDescription(

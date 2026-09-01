@@ -190,3 +190,23 @@ def test_world_path_is_content_derived(tmp_path):
     assert p1 != p2, "a moved container must produce a different world path"
     assert p1 == p3, "an identical rebuild must reuse its file"
     assert p1.exists() and p2.exists()
+
+
+def test_full_world_container_pad_inflates_xy_only(tmp_path):
+    """After a contact leg the box may have been scooted off its detected
+    pose — post-contact FULL worlds widen the container cuboid so a
+    transit cannot thread the needle beside a stale box (field
+    2026-09-01: an 8.1 Nm press moved it ~2 cm and the home sweep
+    clipped it)."""
+    m, cp = _model_pose()
+    plain = _cuboids(full_world(_bench(), m, cp))["container"]
+    padded = _cuboids(full_world(_bench(), m, cp, container_pad_xy=0.03))["container"]
+    assert padded["dims"][0] == pytest.approx(plain["dims"][0] + 0.06)
+    assert padded["dims"][1] == pytest.approx(plain["dims"][1] + 0.06)
+    assert padded["dims"][2] == pytest.approx(plain["dims"][2])  # z untouched
+    assert padded["position"] == plain["position"]
+
+    store = WorldStore(BENCH, out_dir=tmp_path)
+    _, p1 = store.push_name("full", model=m, cpose=cp)
+    _, p2 = store.push_name("full", model=m, cpose=cp, container_pad_xy=0.03)
+    assert p1 != p2  # content-hashed: the padded world is its own file

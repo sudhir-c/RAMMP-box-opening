@@ -110,3 +110,54 @@ def owl_box_roi(color_rgb, cfg):
         min(h - 1, y1 + pad),
     )
     return roi, "OWL bbox (%d,%d)-(%d,%d) score %.2f" % (*roi, score)
+
+
+BBOX_TOPIC = "/rammp_box_opening/owl_bbox"
+TOPIC_FRESH_S = 3.0
+
+
+def make_topic_rung(node, cfg):
+    """An owl rung that reads the persistent owl_detector node's topic.
+
+    Returns a (color, cfg) -> (roi, why) callable with the backend
+    contract. The subscription is created once, here; the closure only
+    inspects the latest message. Falls back to the in-process model when
+    the node is not publishing (e.g. launched without it)."""
+    latest = {}
+
+    def _cb(msg):
+        latest["m"] = list(msg.data)
+
+    from std_msgs.msg import Float32MultiArray
+
+    node.create_subscription(Float32MultiArray, BBOX_TOPIC, _cb, 1)
+
+    def rung(color_rgb, cfg_):
+        import time as _t
+
+        import rclpy as _r
+
+        deadline = _t.monotonic() + 2.5
+        while _t.monotonic() < deadline:
+            m = latest.get("m")
+            if m is not None:
+                now = node.get_clock().now().nanoseconds * 1e-9
+                if now - m[5] <= TOPIC_FRESH_S:
+                    x0, y0, x1, y1, score = m[:5]
+                    h, w = color_rgb.shape[:2]
+                    pad = int(cfg_.vlm_pad_px)
+                    roi = (
+                        max(0, int(x0) - pad),
+                        max(0, int(y0) - pad),
+                        min(w - 1, int(x1) + pad),
+                        min(h - 1, int(y1) + pad),
+                    )
+                    return roi, "OWL node bbox (%d,%d)-(%d,%d) score %.2f" % (
+                        *roi,
+                        score,
+                    )
+            _r.spin_once(node, timeout_sec=0.1)
+        # node absent or silent: the in-process model is the slow fallback
+        return owl_box_roi(color_rgb, cfg_)
+
+    return rung

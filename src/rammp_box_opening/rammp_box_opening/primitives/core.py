@@ -42,6 +42,12 @@ SETDOWN_OVERDRIVE_M = 0.005
 # during the place transit — the planner cannot model a held object
 CARRY_CLEAR_M = 0.04
 
+# extra container xy half-extent in FULL worlds planned after a contact
+# leg: a press can scoot the box off its detected pose (field 2026-09-01,
+# ~2 cm at 8.1 Nm) and a transit must not thread the needle beside a
+# cuboid the box may no longer be inside
+CONTACT_SHIFT_PAD_M = 0.03
+
 
 @dataclass
 class Ctx:
@@ -55,6 +61,7 @@ class Ctx:
     last_pose: tuple = None  # (xyz, quat_xyzw) of the last commanded pose
     last_world: tuple = None  # (name, path) of the last interaction world
     pushed_world: str = None  # last world path pushed at PLAN time
+    contact_pad: float = 0.0  # container xy padding once contact has happened
 
 
 @dataclass
@@ -83,7 +90,12 @@ def band_verify(band):
 def _full_world(ctx, tag=""):
     tag = tag or ("lid" if ctx.lid_at is not None else "")
     return ctx.worlds.push_name(
-        "full", model=ctx.model, cpose=ctx.cpose, lid_at=ctx.lid_at, tag=tag
+        "full",
+        model=ctx.model,
+        cpose=ctx.cpose,
+        lid_at=ctx.lid_at,
+        tag=tag,
+        container_pad_xy=ctx.contact_pad,
     )
 
 
@@ -145,6 +157,10 @@ def _plan_motion(
         plan_s=plan_s,
         plan_server_s=getattr(plan, "planning_time", None),
     )
+    if guard is not None:
+        # from here on the box may not be exactly where it was detected —
+        # every later FULL world allows for a contact-shifted container
+        ctx.contact_pad = CONTACT_SHIFT_PAD_M
     next_chain = state.chain + 1 if invalidates else state.chain
     return leg, PlanState(joints=end, chain=next_chain, contact_broke_chain=invalidates)
 
