@@ -1,4 +1,8 @@
-"""press_demo — the tag-driven autonomous press (owner design 2026-08-24).
+"""press_demo — the camera-driven autonomous press (owner design 2026-08-24).
+
+The container pose comes from a configurable source (detect.source):
+depth (default — the lid plateau found by geometry, no print to wear
+out) or tag (the original ArUco path).
 
     ros2 launch rammp_box_opening press_demo.launch.py execute:=true
     ros2 run rammp_box_opening press_demo --execute
@@ -37,6 +41,7 @@ from rammp_box_opening.models.container import (
     load_lid_place,
     load_press_demo,
 )
+from rammp_box_opening.perception.depth_source import BoxTopWatcher
 from rammp_box_opening.perception.tag_source import (
     TagWatcher,
     container_pose_from_tag,
@@ -66,6 +71,15 @@ from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.runtime.runner import Runner
 from rammp_box_opening.tasks import cli_common
 from rammp_box_opening.worlds import WorldStore
+
+
+def fix_to_cpose(watcher, got, model, cfg):
+    """Fix -> ContainerPose, whichever source produced it. The depth
+    watcher owns its conversion; the tag path keeps the existing free
+    function (TagWatcher predates the model being available to it)."""
+    if hasattr(watcher, "to_container_pose"):
+        return watcher.to_container_pose(got)
+    return container_pose_from_tag(got[0], got[1], model, cfg.tag_offset)
 
 
 def _state(joints):
@@ -556,6 +570,22 @@ def detect_only_report(node, watcher, ctx, cfg, runner, execute):
         if key == last:
             continue
         last = key
+        if isinstance(watcher, BoxTopWatcher):
+            f = watcher.last_debug
+            print(
+                "fix: top [%.3f, %.3f, %.3f] yaw %.1f | footprint "
+                "%.3fx%.3f m | %d px"
+                % (
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    math.degrees(float(rot)),
+                    f.footprint[0],
+                    f.footprint[1],
+                    f.n_px,
+                )
+            )
+            continue
         yaw = math.degrees(math.atan2(rot[1][0], rot[0][0]))
         p_cam, rot_cam, t_cam = watcher.last_debug
         print(
@@ -606,7 +636,14 @@ def main():
     node, client = cli_common.init_runtime()
     worlds = WorldStore(bench)
     runner = Runner(client, worlds)
-    watcher = TagWatcher(node, cfg)  # camera on from here to exit
+    if cfg.detect_source == "depth":
+        # the box found by geometry: lid plateau above the measured table.
+        # No print to wear out — the press knuckles destroyed two tag
+        # prints in a week (field 2026-09-01).
+        watcher = BoxTopWatcher(node, cfg, model, worlds.table_top_z)
+    else:
+        watcher = TagWatcher(node, cfg)
+    # camera on from here to exit
     ctx = Ctx(
         model=model,
         cpose=None,
@@ -629,29 +666,41 @@ def main():
             detect_only_report(node, watcher, ctx, cfg, runner, args.execute)
             sys.exit(0)
 
+        noun = "BOX" if cfg.detect_source == "depth" else "TAG"
         print(
-            "[press_demo] DETECT: waiting %.0f s for a stable fix (tag id %d)"
-            % (cfg.timeout_s, cfg.tag_id)
+            "[press_demo] DETECT: waiting %.0f s for a stable fix (%s)"
+            % (
+                cfg.timeout_s,
+                "container top" if noun == "BOX" else "tag id %d" % cfg.tag_id,
+            )
         )
-        got, why = center_on_tag(node, watcher, ctx, cfg, runner, args.execute)
+        if cfg.detect_source == "depth":
+            # no servo loop: the depth fix is a base-frame measurement with
+            # no optical-axis error to center away (the loop was tag PnP
+            # machinery, and it is off at max_iters 0 anyway)
+            got = wait_for_fix(node, watcher, cfg)
+            why = "ok" if got is not None else "no_tag"
+        else:
+            got, why = center_on_tag(node, watcher, ctx, cfg, runner, args.execute)
         if got is None:
             if why == "no_tag":
                 try_home(
                     ctx,
                     runner,
                     args.execute,
-                    "NO TAG — %s" % watcher.status(),
+                    "NO %s — %s" % (noun, watcher.status()),
                 )
                 sys.exit(2)
             print("[press_demo] SERVO failed — arm holds (no blind homing)")
             sys.exit(1)
 
-        pos, rot = got
-        ctx.cpose = container_pose_from_tag(pos, rot, model, cfg.tag_offset)
+        pos, _rot = got
+        ctx.cpose = fix_to_cpose(watcher, got, model, cfg)
         print(
-            "[press_demo] TAG at [%.3f, %.3f, %.3f] (%s) -> container origin "
+            "[press_demo] %s at [%.3f, %.3f, %.3f] (%s) -> container origin "
             "[%.3f, %.3f, %.3f] yaw %.1f deg"
             % (
+                noun,
                 pos[0],
                 pos[1],
                 pos[2],
@@ -777,7 +826,7 @@ def main():
             # gripper may occlude the tag; the centered fix then stands.
             got2 = wait_for_fix(node, watcher, cfg, timeout_s=1.5)
             if got2 is not None:
-                cp2 = container_pose_from_tag(got2[0], got2[1], model, cfg.tag_offset)
+                cp2 = fix_to_cpose(watcher, got2, model, cfg)
                 d = math.dist(cp2.xyz, ctx.cpose.xyz)
                 if d > 0.05:
                     try_home(

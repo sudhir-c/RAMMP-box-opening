@@ -102,6 +102,33 @@ def servo_step(p_cam, rot_cam, k, tol_px, min_step_m, max_step_m):
     return [float(v) for v in disp], px
 
 
+def camera_pose_at(g):
+    """base_link <- camera AT THE FRAME'S STAMP (mount composition as in
+    D405Grabber.shot(), which cannot be used here: it spins). Shared by the
+    tag and depth pose sources.
+
+    No latest-TF fallback: upstream documents that fallback as safe only
+    while parked, and the watchers run during motion — at continuous frame
+    rates a dropped frame costs nothing, a wrong-pose frame poisons the fix
+    (2026-08-24 review)."""
+    import rclpy.time as rt
+
+    from rammp_curobo.perception import quat_to_mat
+
+    try:
+        tr = g.tf_buffer.lookup_transform(
+            "base_link", g.parent, rt.Time.from_msg(g.color_stamp)
+        )
+    except Exception:
+        return None
+    q, t = tr.transform.rotation, tr.transform.translation
+    r_p = quat_to_mat(q.x, q.y, q.z, q.w)
+    qx, qy, qz, qw = g.mount_quat
+    rot = r_p @ quat_to_mat(qx, qy, qz, qw)
+    trans = r_p @ np.asarray(g.mount_xyz, dtype=float) + np.array([t.x, t.y, t.z])
+    return rot, trans
+
+
 class FixWindow:
     """Rolling sightings -> a fresh, stable (position, rotation) fix.
 
@@ -226,29 +253,7 @@ class TagWatcher:
         self.window.add(pos, rot, time.monotonic())
 
     def _camera_pose(self, g):
-        """base_link <- camera AT THE FRAME'S STAMP (mount composition as
-        in D405Grabber.shot(), which cannot be used here: it spins).
-
-        No latest-TF fallback: upstream documents that fallback as safe
-        only while parked, and this watcher runs during motion — at
-        continuous frame rates a dropped frame costs nothing, a
-        wrong-pose frame poisons the fix (2026-08-24 review)."""
-        import rclpy.time as rt
-
-        from rammp_curobo.perception import quat_to_mat
-
-        try:
-            tr = g.tf_buffer.lookup_transform(
-                "base_link", g.parent, rt.Time.from_msg(g.color_stamp)
-            )
-        except Exception:
-            return None
-        q, t = tr.transform.rotation, tr.transform.translation
-        r_p = quat_to_mat(q.x, q.y, q.z, q.w)
-        qx, qy, qz, qw = g.mount_quat
-        rot = r_p @ quat_to_mat(qx, qy, qz, qw)
-        trans = r_p @ np.asarray(g.mount_xyz, dtype=float) + np.array([t.x, t.y, t.z])
-        return rot, trans
+        return camera_pose_at(g)
 
     def fix(self, now=None):
         return self.window.fix(time.monotonic() if now is None else now)

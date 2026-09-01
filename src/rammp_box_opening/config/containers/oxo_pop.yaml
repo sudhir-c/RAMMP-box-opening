@@ -147,6 +147,13 @@ scan:
   xyz: [0.42, 0.0, 0.45]          # tool-down look pose; camera sees ~0.6 x
                                   # 0.4 m of bench around it at tag height
 detect:
+  source: depth                   # depth | tag. depth = the box found by
+                                  # geometry (lid plateau above the measured
+                                  # table) — no print to wear out; the press
+                                  # knuckles destroyed two tag prints in a
+                                  # week (field 2026-09-01). tag = the ArUco
+                                  # path, kept for A/B and for containers
+                                  # too flat for the height band.
   timeout_s: 10.0                 # scan-pose wait for a stable fix
   min_hits: 3                     # agreeing frames before the fix commits
   tol_m: 0.03                     # pairwise agreement (stable_fix)

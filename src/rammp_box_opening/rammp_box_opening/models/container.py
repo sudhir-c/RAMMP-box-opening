@@ -169,6 +169,7 @@ class PressDemoCfg:
     grip_clear_m: float  # fingertip stop height above the tag/lid plane
     grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
     detect_period_s: float  # detector tick; min_hits * this = commit floor
+    detect_source: str  # 'depth' (geometry, no print) | 'tag' (ArUco)
 
 
 def load_press_demo(path):
@@ -207,6 +208,7 @@ def load_press_demo(path):
         grip_clear_m=float(raw["open_box"]["grip_clear_m"]),
         grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
         detect_period_s=float(raw["detect"].get("period_s", 0.15)),
+        detect_source=str(raw["detect"].get("source", "tag")),
     )
     if not raw["open_box"]["grip_band"][0] < raw["open_box"]["grip_band"][1] < 0.8:
         raise ValueError(
@@ -256,6 +258,8 @@ def load_press_demo(path):
         )
     if not 0.0 < cfg.warp_slow_frac < 1.0:
         raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
+    if cfg.detect_source not in ("tag", "depth"):
+        raise ValueError("detect.source must be 'tag' or 'depth'")
     if not 0.0 < cfg.detect_period_s <= 0.5:
         raise ValueError("detect.period_s must be in (0, 0.5] s")
     # staging is anchored at the BUTTON TOP; the full-world obstacle tops

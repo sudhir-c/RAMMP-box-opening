@@ -202,6 +202,12 @@ class WorldStore:
         )
         self._dir.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def table_top_z(self):
+        """Measured table-top height (base_link z) — the depth pose
+        source bands container candidates above this."""
+        return _table_top_z(self._bench)
+
     def push_name(
         self,
         kind,

@@ -267,6 +267,10 @@ def main():
             "size_m: %g" % TAG_SIZE_M,  # stay in sync with the synthetic
             src_cfg.read_text()
             .replace("measure_me: true", "measure_me: false")
+            # the synthetic camera renders TAGS; its flat depth plane
+            # would (rightly) never pass the depth source's footprint
+            # gate, so the harness pins the tag path explicitly
+            .replace("source: depth", "source: tag")
             .replace(
                 "offset_xyz: [0.0, 0.0, 0.0]",
                 "offset_xyz: [%g, %g, %g]" % TAG_OFFSET,
