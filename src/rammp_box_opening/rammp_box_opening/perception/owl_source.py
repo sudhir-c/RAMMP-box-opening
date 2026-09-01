@@ -130,7 +130,7 @@ def classify_bbox_msg(m, now, fresh_s=TOPIC_FRESH_S):
     return "bbox" if m[4] >= 0.0 else "alive"
 
 
-def make_topic_rung(node, cfg):
+def make_topic_rung(node, cfg, watcher_holder=None):
     """An owl rung that reads the persistent owl_detector node's topic.
 
     Returns a (color, cfg) -> (roi, why) callable with the backend
@@ -148,9 +148,17 @@ def make_topic_rung(node, cfg):
     about the same frames helps nobody.
     """
     latest = {}
+    pad = int(cfg.vlm_pad_px)
 
     def _cb(msg):
-        latest["m"] = list(msg.data)
+        m = list(msg.data)
+        latest["m"] = m
+        # live-gate the depth watcher the moment a bbox exists — the node
+        # sees the box MID-SCAN, so the watcher collects roi-gated samples
+        # while the arm is still moving and the fix can commit on arrival
+        w = (watcher_holder or {}).get("watcher")
+        if w is not None and m[4] >= 0.0:
+            w.roi = (m[0] - pad, m[1] - pad, m[2] + pad, m[3] + pad)
 
     from std_msgs.msg import Float32MultiArray
 

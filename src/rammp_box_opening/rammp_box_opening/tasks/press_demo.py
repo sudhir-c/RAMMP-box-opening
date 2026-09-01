@@ -462,10 +462,16 @@ def _spin_detect(node):
 def wait_for_fix(node, watcher, cfg, timeout_s=None):
     """Spin (the watcher ticks on its timer) until a fresh stable fix.
 
-    The window is purged first: sightings gathered while the arm was
-    still moving carry TF/depth timing skew — only parked-camera frames
-    may commit the fix the press will trust."""
-    watcher.reset()
+    Whether the window is purged first is the SOURCE's policy
+    (PURGE_ON_WAIT). The tag path purges: PnP orientation is fragile in
+    motion. The depth path keeps its in-flight samples — geometry is
+    lifted with frame-stamp TF, the freshness window (1 s) means only
+    the scan's DECELERATION tail can support a commit anyway, and the
+    3-agreeing gate still stands — so a fix is often ready the moment
+    the arm parks instead of half a second later (owner: detect during
+    the flip, 2026-09-01)."""
+    if getattr(watcher, "PURGE_ON_WAIT", True):
+        watcher.reset()
     limit = cfg.timeout_s if timeout_s is None else timeout_s
     t0 = time.monotonic()
     while time.monotonic() - t0 < limit:
@@ -644,11 +650,24 @@ def main():
     # owl_box_roi only when the node's topic does not answer. A boot-time
     # preload put TWO OWLv2 copies on the GPU beside cuRobo (field
     # 2026-09-01) for the price of zero — the node path never used it.
+    impls = None
+    if cfg.detect_source == "vlm" and "owl" in cfg.vlm_backends:
+        from rammp_box_opening.perception.owl_source import make_topic_rung
+        from rammp_box_opening.perception.vlm_source import fetch_box_roi
+
+        # listener starts NOW, not at detect time: the node sees the box
+        # mid-scan and its bbox gates the depth watcher while the arm is
+        # still flipping over — by arrival the fix is usually already
+        # committed (owner: detect during the flip, 2026-09-01)
+        rung = make_topic_rung(node, cfg, watcher_holder := {})
+        impls = {"owl": rung, "claude": fetch_box_roi}
     if cfg.detect_source in ("depth", "vlm"):
         # the box found by geometry: lid plateau above the measured table.
         # No print to wear out — the press knuckles destroyed two tag
         # prints in a week (field 2026-09-01).
         watcher = BoxTopWatcher(node, cfg, model, worlds.table_top_z)
+        if impls is not None:
+            watcher_holder["watcher"] = watcher
     else:
         watcher = TagWatcher(node, cfg)
     # camera on from here to exit
@@ -705,19 +724,6 @@ def main():
                 # depth — the mission never stalls on a model or network.
                 while watcher.grab.color is None:
                     _spin_detect(node)
-                impls = None
-                if "owl" in cfg.vlm_backends:
-                    from rammp_box_opening.perception.owl_source import (
-                        make_topic_rung,
-                    )
-                    from rammp_box_opening.perception.vlm_source import (
-                        fetch_box_roi,
-                    )
-
-                    impls = {
-                        "owl": make_topic_rung(node, cfg),
-                        "claude": fetch_box_roi,
-                    }
                 roi, lines = resolve_roi(watcher.grab.color, cfg, impls=impls)
                 for ln in lines:
                     print("[press_demo] VLM %s" % ln)

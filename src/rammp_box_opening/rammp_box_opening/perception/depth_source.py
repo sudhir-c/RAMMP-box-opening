@@ -214,6 +214,14 @@ class BoxTopWatcher:
     node timer, same FixWindow commit rules, same fix()/status()/reset()
     surface — the mission cannot tell which source produced its pose."""
 
+    # In-flight samples are KEPT across wait_for_fix: geometry is lifted
+    # with frame-stamp TF, the 1 s freshness window means only the scan's
+    # deceleration tail can support a commit, and the 3-agreeing gate
+    # stands — so the fix is often ready the moment the arm parks
+    # (owner: detect during the flip, 2026-09-01). The tag path purges
+    # (True default): in-motion PnP orientation is genuinely fragile.
+    PURGE_ON_WAIT = False
+
     def __init__(self, node, cfg, model, table_z, period_s=None):
         from rammp_curobo_ros.seek_core import D405Grabber
 

@@ -40,7 +40,10 @@ class OwlDetector(Node):
         warnings.filterwarnings("ignore", category=UserWarning)
 
         container = self.declare_parameter("container", "").value
-        period = float(self.declare_parameter("period_s", 1.0).value)
+        # 2 Hz: at 1 Hz the brief mid-scan view of the box could fall
+        # between ticks; inference is ~0.65 s so this saturates only
+        # while frames actually change
+        period = float(self.declare_parameter("period_s", 0.5).value)
         cfg_path = container or default_container_yaml()
         self.cfg = load_press_demo(str(cfg_path))
 

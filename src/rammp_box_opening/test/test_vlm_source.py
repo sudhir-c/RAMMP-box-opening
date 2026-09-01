@@ -151,3 +151,14 @@ def test_classify_bbox_msg_states():
     assert classify_bbox_msg(beat, now) == "alive"
     assert classify_bbox_msg(old, now) == "stale"
     assert classify_bbox_msg(None, now) == "stale"
+
+
+def test_purge_policy_is_per_source():
+    """The depth watcher keeps its in-flight samples (frame-stamp TF,
+    freshness keeps only the deceleration tail, agreement still gates);
+    the tag watcher purges — in-motion PnP orientation is fragile."""
+    from rammp_box_opening.perception.depth_source import BoxTopWatcher
+    from rammp_box_opening.perception.tag_source import TagWatcher
+
+    assert BoxTopWatcher.PURGE_ON_WAIT is False
+    assert getattr(TagWatcher, "PURGE_ON_WAIT", True) is True
