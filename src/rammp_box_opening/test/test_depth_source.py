@@ -170,3 +170,19 @@ def test_stereo_speckle_cannot_fake_a_box(model):
     ) * (rng.rand(*patch.shape) < 0.5)
     fix, why = top_face_from_depth(depth, K, ROT_DOWN, T_CAM, TABLE_Z, model)
     assert fix is None
+
+
+def test_camera_still_filter():
+    """Only still-camera frames may vote: moving frames carry a
+    systematic TF-vs-exposure bias that agreed with itself 10-15 mm off
+    the truth and pressed the button's EDGE (field 2026-09-01)."""
+    from rammp_box_opening.perception.depth_source import camera_is_still
+
+    eye = np.eye(3)
+    a = (eye, np.array([0.42, -0.07, 0.575]))
+    assert camera_is_still(a, (eye, a[1] + [0.001, 0.0, 0.0]))
+    assert not camera_is_still(a, (eye, a[1] + [0.01, 0.0, 0.0]))  # translating
+    c, s = np.cos(0.05), np.sin(0.05)
+    rz = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    assert not camera_is_still(a, (rz @ eye, a[1]))  # rotating
+    assert not camera_is_still(None, a)  # first frame never votes

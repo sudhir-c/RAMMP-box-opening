@@ -57,6 +57,26 @@ DEPTH_MIN_M = 0.10
 DEPTH_MAX_M = 0.90
 # pixel subsampling stride: 848x480/4 -> ~25k rays, milliseconds on CPU
 STRIDE = 4
+# a sample may only VOTE when the camera was still between consecutive
+# processed frames: in-flight samples carry a systematic TF-vs-exposure
+# lag bias that made three of them agree ~10-15 mm off the truth and the
+# press land on the button's EDGE (field 2026-09-01). Parked frames at
+# 20 Hz commit within ~150 ms of arrival — speed comes from committing
+# early on STILL frames, not from letting moving ones vote.
+STILL_TRANS_M = 0.004
+STILL_ROT_RAD = 0.02
+
+
+def camera_is_still(prev, cur, trans_tol=STILL_TRANS_M, rot_tol=STILL_ROT_RAD):
+    """True when two consecutive camera poses are effectively identical.
+    prev/cur: (rot 3x3, trans 3). Pure, testable."""
+    if prev is None:
+        return False
+    dp = float(np.linalg.norm(np.asarray(cur[1]) - np.asarray(prev[1])))
+    r = np.asarray(prev[0]).T @ np.asarray(cur[0])
+    cos_a = (float(np.trace(r)) - 1.0) / 2.0
+    ang = float(np.arccos(np.clip(cos_a, -1.0, 1.0)))
+    return dp <= trans_tol and ang <= rot_tol
 
 
 @dataclass(frozen=True)
@@ -242,6 +262,7 @@ class BoxTopWatcher:
         self.roi = None
         self.last_reject = None  # why the last non-hit frame was refused
         self._last_stamp = None
+        self._last_cam = None  # previous frame's camera pose (still filter)
         node.create_timer(period_s, self._tick)
 
     def _tick(self):
@@ -257,6 +278,11 @@ class BoxTopWatcher:
         if cam is None:
             return
         rot_cam, trans_cam = cam
+        still = camera_is_still(self._last_cam, cam)
+        self._last_cam = cam
+        if not still:
+            self.last_reject = "camera moving"
+            return
         fix, why = top_face_from_depth(
             g.depth, g.k, rot_cam, trans_cam, self.table_z, self.model, roi=self.roi
         )

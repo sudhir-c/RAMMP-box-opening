@@ -959,6 +959,11 @@ def main():
             watcher.roi = None  # scan-pose bbox is stale here
         watcher.reset()  # only hop-pose sightings may re-aim the grip
         got3 = wait_for_fix(node, watcher, cfg, timeout_s=1.2)
+        if got3 is None:
+            print(
+                "[press_demo] pre-grip re-look found nothing (%s) — gripping "
+                "the scan fix" % watcher.status()
+            )
         if got3 is not None:
             cp3 = fix_to_cpose(watcher, got3, model, cfg)
             d3 = math.hypot(
