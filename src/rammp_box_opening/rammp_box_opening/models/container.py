@@ -35,6 +35,7 @@ class ContainerModel:
     dims: tuple
     lid_dims: tuple
     button_offset: tuple
+    button_diameter_m: float
     press_depth_window: tuple
     touch_nm: float
     press_attitude_rpy_deg: tuple
@@ -63,6 +64,7 @@ class ContainerModel:
             dims=tuple(raw["dims"]),
             lid_dims=tuple(raw["lid_dims"]),
             button_offset=tuple(raw["button_offset"]),
+            button_diameter_m=float(raw.get("button_diameter_m", 0.036)),
             press_depth_window=tuple(raw["press"]["depth_window"]),
             touch_nm=float(raw["press"]["touch_nm"]),
             press_attitude_rpy_deg=tuple(raw["press_attitude_rpy_deg"]),

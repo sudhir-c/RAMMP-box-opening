@@ -218,6 +218,78 @@ def top_face_from_depth(depth, k, rot_cam, trans_cam, table_z, model, roi=None):
     return candidates[0], "ok"
 
 
+def button_circle_refine(color_rgb, depth, k, rot_cam, trans_cam, center, button_d_m):
+    """The round button's centre in base frame, or None.
+
+    The plateau centroid finds the LID; this finds the BUTTON — the
+    thing the press must actually hit (2026-09-01: centroid presses
+    landed slightly off-centre). Hough circles on a crop around the
+    plateau centre, radius-windowed from the button's physical diameter
+    and the measured range, winner = the circle nearest the centroid.
+    None on any doubt: the centroid fallback is always sane.
+    """
+    import cv2
+
+    if color_rgb is None:
+        return None
+    kk = np.asarray(k, dtype=float)
+    rot = np.asarray(rot_cam, dtype=float)
+    tr = np.asarray(trans_cam, dtype=float)
+    p_cam = rot.T @ (np.asarray(center, dtype=float) - tr)
+    if p_cam[2] <= 0.05:
+        return None
+    u0 = kk[0, 0] * p_cam[0] / p_cam[2] + kk[0, 2]
+    v0 = kk[1, 1] * p_cam[1] / p_cam[2] + kk[1, 2]
+    r_px = kk[0, 0] * (float(button_d_m) / 2.0) / float(p_cam[2])
+    if not 6.0 <= r_px <= 200.0:
+        return None
+    half = int(4.0 * r_px)
+    h, w = color_rgb.shape[:2]
+    x0, y0 = int(u0) - half, int(v0) - half
+    x1, y1 = int(u0) + half, int(v0) + half
+    if x0 < 0 or y0 < 0 or x1 >= w or y1 >= h:
+        return None  # crop truncated: centroid fallback beats a biased circle
+    gray = cv2.cvtColor(
+        np.ascontiguousarray(color_rgb[y0:y1, x0:x1]), cv2.COLOR_RGB2GRAY
+    )
+    # blur 3, NOT 5: the heavier blur smeared the button seam and
+    # Hough hit 1/37 capture frames; at 3 it hits 36/37 with 2.6 px
+    # centre std (parameter sweep on capture 20260901-130610)
+    gray = cv2.medianBlur(gray, 3)
+    circles = cv2.HoughCircles(
+        gray,
+        cv2.HOUGH_GRADIENT,
+        dp=1,
+        minDist=2 * r_px,
+        param1=90,
+        param2=14,
+        minRadius=int(0.7 * r_px),
+        maxRadius=int(1.4 * r_px),
+    )
+    if circles is None:
+        return None
+    cx = cy = None
+    best = None
+    for c in circles[0]:
+        d = math.hypot(c[0] - half, c[1] - half)
+        if best is None or d < best[0]:
+            best = (d, c)
+    d_px, c = best
+    # the circle must be NEAR the plateau centroid — a far circle is some
+    # other round thing (>25 mm at range is not this button)
+    if d_px * p_cam[2] / kk[0, 0] > 0.025:
+        return None
+    u, v = float(c[0]) + x0, float(c[1]) + y0
+    # range at the button's own pixel (handles the popped 15 mm knob);
+    # falls back to the plateau's height when depth is holey there
+    zwin = depth[int(v) - 2 : int(v) + 3, int(u) - 2 : int(u) + 3]
+    valid = zwin[(zwin > DEPTH_MIN_M) & (zwin < DEPTH_MAX_M) & np.isfinite(zwin)]
+    z = float(np.median(valid)) if valid.size >= 3 else float(p_cam[2])
+    pc = np.array([(u - kk[0, 2]) / kk[0, 0] * z, (v - kk[1, 2]) / kk[1, 1] * z, z])
+    out = rot @ pc + tr
+    return (float(out[0]), float(out[1]))
+
+
 def container_pose_from_top(center, yaw, model):
     """Top-face fix -> ContainerPose (bottom-center origin + yaw), the
     same contract container_pose_from_tag honours: origin z = measured
@@ -255,6 +327,7 @@ class BoxTopWatcher:
         self.frames = 0
         self.hits = 0
         self.refined_hits = 0  # == hits: every depth sighting IS refined
+        self.circle_hits = 0  # sightings where the BUTTON circle aimed
         self.last_debug = None  # the last TopFaceFix (bench diagnostics)
         # pixel-space gate from the VLM source; None = whole frame. Set
         # while PARKED at the scan pose and cleared before any re-fix
@@ -291,6 +364,23 @@ class BoxTopWatcher:
             return
         self.hits += 1
         self.refined_hits += 1
+        circle = button_circle_refine(
+            g.color,
+            g.depth,
+            g.k,
+            rot_cam,
+            trans_cam,
+            fix.center,
+            self.model.button_diameter_m,
+        )
+        if circle is not None:
+            fix = TopFaceFix(
+                center=(circle[0], circle[1], fix.center[2]),
+                yaw=fix.yaw,
+                footprint=fix.footprint,
+                n_px=fix.n_px,
+            )
+            self.circle_hits += 1
         self.last_debug = fix
         self.window.add(np.asarray(fix.center), fix.yaw, time.monotonic())
 
@@ -312,8 +402,9 @@ class BoxTopWatcher:
         if missing:
             return "camera streams missing: %s" % ", ".join(missing)
         why = " (last reject: %s)" % self.last_reject if self.last_reject else ""
-        return "%d/%d frames found a container top%s" % (
+        return "%d/%d frames found a container top, %d button-circle%s" % (
             self.hits,
             self.frames,
+            self.circle_hits,
             why if self.hits == 0 else "",
         )

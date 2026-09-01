@@ -186,3 +186,68 @@ def test_camera_still_filter():
     rz = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
     assert not camera_is_still(a, (rz @ eye, a[1]))  # rotating
     assert not camera_is_still(None, a)  # first frame never votes
+
+
+def _project(pt, rot=ROT_DOWN, t=T_CAM):
+    p = rot.T @ (np.asarray(pt, dtype=float) - t)
+    return (
+        K[0, 0] * p[0] / p[2] + K[0, 2],
+        K[1, 1] * p[1] / p[2] + K[1, 2],
+        p[2],
+    )
+
+
+def test_button_circle_refine_recovers_the_true_button(model):
+    """The plateau centroid finds the LID; the circle finds the BUTTON.
+    A dark disk painted 8 mm off the centroid must win the aim."""
+    import cv2
+
+    from rammp_box_opening.perception.depth_source import button_circle_refine
+
+    truth = (0.458, -0.147, 0.080, model.dims[0], model.dims[1], 0.0)
+    depth = render_depth([truth])
+    color = np.full((H, W, 3), 235, dtype=np.uint8)
+    button = (truth[0] + 0.008, truth[1] - 0.008, truth[2])
+    u, v, z = _project(button)
+    r_px = int(K[0, 0] * (model.button_diameter_m / 2) / z)
+    cv2.circle(color, (int(u), int(v)), r_px, (60, 60, 60), -1)
+
+    fix, why = top_face_from_depth(depth, K, ROT_DOWN, T_CAM, TABLE_Z, model)
+    assert fix is not None, why
+    got = button_circle_refine(
+        color, depth, K, ROT_DOWN, T_CAM, fix.center, model.button_diameter_m
+    )
+    assert got is not None
+    assert got[0] == pytest.approx(button[0], abs=0.003)
+    assert got[1] == pytest.approx(button[1], abs=0.003)
+
+
+def test_button_circle_declines_honestly(model):
+    """No circle in view, or a truncated crop -> None; the centroid
+    fallback is always sane."""
+    from rammp_box_opening.perception.depth_source import button_circle_refine
+
+    truth = (0.458, -0.147, 0.080, model.dims[0], model.dims[1], 0.0)
+    depth = render_depth([truth])
+    blank = np.full((H, W, 3), 235, dtype=np.uint8)
+    fix, _ = top_face_from_depth(depth, K, ROT_DOWN, T_CAM, TABLE_Z, model)
+    assert (
+        button_circle_refine(
+            blank, depth, K, ROT_DOWN, T_CAM, fix.center, model.button_diameter_m
+        )
+        is None
+    )
+    assert (
+        button_circle_refine(
+            None, depth, K, ROT_DOWN, T_CAM, fix.center, model.button_diameter_m
+        )
+        is None
+    )
+    # centre projected at the image edge -> truncated crop -> decline
+    edge_center = (0.85, -0.075, 0.080)
+    assert (
+        button_circle_refine(
+            blank, depth, K, ROT_DOWN, T_CAM, edge_center, model.button_diameter_m
+        )
+        is None
+    )
