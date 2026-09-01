@@ -38,8 +38,15 @@ def preload(model_name):
 
     def _load():
         try:
+            import warnings
+
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            warnings.filterwarnings("ignore", category=UserWarning)
             import torch  # noqa: F401  (fail here, not mid-mission)
             from transformers import Owlv2ForObjectDetection, Owlv2Processor
+            from transformers import logging as hf_logging
+
+            hf_logging.set_verbosity_error()
 
             proc = Owlv2Processor.from_pretrained(model_name)
             model = Owlv2ForObjectDetection.from_pretrained(model_name).eval().cuda()
@@ -116,13 +123,30 @@ BBOX_TOPIC = "/rammp_box_opening/owl_bbox"
 TOPIC_FRESH_S = 3.0
 
 
+def classify_bbox_msg(m, now, fresh_s=TOPIC_FRESH_S):
+    """One topic message -> "bbox" | "alive" | "stale". Pure, testable."""
+    if m is None or now - m[5] > fresh_s:
+        return "stale"
+    return "bbox" if m[4] >= 0.0 else "alive"
+
+
 def make_topic_rung(node, cfg):
     """An owl rung that reads the persistent owl_detector node's topic.
 
     Returns a (color, cfg) -> (roi, why) callable with the backend
-    contract. The subscription is created once, here; the closure only
-    inspects the latest message. Falls back to the in-process model when
-    the node is not publishing (e.g. launched without it)."""
+    contract. The node heartbeats every tick even with nothing seen, so
+    the rung can wait for a live node's answer instead of paying a cold
+    in-process model load the moment one window is missed:
+
+        fresh bbox       -> use it
+        fresh heartbeat  -> node alive: keep waiting (it answers ~1 Hz)
+        neither, ever    -> node absent: in-process fallback (slow, but
+                            the offline path still works)
+
+    A live node that finishes waiting having seen NO box is trusted:
+    the rung declines without the fallback — two models disagreeing
+    about the same frames helps nobody.
+    """
     latest = {}
 
     def _cb(msg):
@@ -137,27 +161,30 @@ def make_topic_rung(node, cfg):
 
         import rclpy as _r
 
-        deadline = _t.monotonic() + 2.5
+        saw_alive = False
+        deadline = _t.monotonic() + 5.0
         while _t.monotonic() < deadline:
-            m = latest.get("m")
-            if m is not None:
-                now = node.get_clock().now().nanoseconds * 1e-9
-                if now - m[5] <= TOPIC_FRESH_S:
-                    x0, y0, x1, y1, score = m[:5]
-                    h, w = color_rgb.shape[:2]
-                    pad = int(cfg_.vlm_pad_px)
-                    roi = (
-                        max(0, int(x0) - pad),
-                        max(0, int(y0) - pad),
-                        min(w - 1, int(x1) + pad),
-                        min(h - 1, int(y1) + pad),
-                    )
-                    return roi, "OWL node bbox (%d,%d)-(%d,%d) score %.2f" % (
-                        *roi,
-                        score,
-                    )
+            now = node.get_clock().now().nanoseconds * 1e-9
+            kind = classify_bbox_msg(latest.get("m"), now)
+            if kind == "bbox":
+                x0, y0, x1, y1, score = latest["m"][:5]
+                h, w = color_rgb.shape[:2]
+                pad = int(cfg_.vlm_pad_px)
+                roi = (
+                    max(0, int(x0) - pad),
+                    max(0, int(y0) - pad),
+                    min(w - 1, int(x1) + pad),
+                    min(h - 1, int(y1) + pad),
+                )
+                return roi, "OWL node bbox (%d,%d)-(%d,%d) score %.2f" % (
+                    *roi,
+                    score,
+                )
+            saw_alive = saw_alive or kind == "alive"
             _r.spin_once(node, timeout_sec=0.1)
-        # node absent or silent: the in-process model is the slow fallback
+        if saw_alive:
+            return None, "OWL node is live and sees no container top"
+        # node absent: the in-process model is the slow offline fallback
         return owl_box_roi(color_rgb, cfg_)
 
     return rung

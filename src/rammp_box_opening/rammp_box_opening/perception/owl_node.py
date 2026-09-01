@@ -105,12 +105,16 @@ class OwlDetector(Node):
             [b.tolist() for b in res["boxes"]],
             self.cfg.owl_min_score,
         )
-        if best is None:
-            return
-        score, (x0, y0, x1, y1) = best
         msg = Float32MultiArray()
         now = self.get_clock().now().nanoseconds * 1e-9
-        msg.data = [float(x0), float(y0), float(x1), float(y1), float(score), now]
+        if best is None:
+            # heartbeat: the mission can tell "node alive, keep waiting"
+            # from "node absent, fall back" (field 2026-09-01: without
+            # this, one missed window cost a cold in-process model load)
+            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, now]
+        else:
+            score, (x0, y0, x1, y1) = best
+            msg.data = [float(x0), float(y0), float(x1), float(y1), float(score), now]
         self.pub.publish(msg)
 
 

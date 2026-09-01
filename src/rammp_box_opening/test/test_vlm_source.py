@@ -138,3 +138,16 @@ def test_shipped_ladder_is_local_first(cfg):
     assert cfg.vlm_backends == ("owl", "claude")
     assert cfg.owl_min_score == pytest.approx(0.18)
     assert any("white" in q for q in cfg.owl_queries)
+
+
+def test_classify_bbox_msg_states():
+    from rammp_box_opening.perception.owl_source import classify_bbox_msg
+
+    now = 1000.0
+    bbox = [10, 20, 110, 120, 0.25, now - 1.0]
+    beat = [0, 0, 0, 0, -1.0, now - 1.0]
+    old = [10, 20, 110, 120, 0.25, now - 10.0]
+    assert classify_bbox_msg(bbox, now) == "bbox"
+    assert classify_bbox_msg(beat, now) == "alive"
+    assert classify_bbox_msg(old, now) == "stale"
+    assert classify_bbox_msg(None, now) == "stale"

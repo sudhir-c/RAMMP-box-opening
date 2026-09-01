@@ -690,7 +690,7 @@ def main():
 
         noun = "BOX" if cfg.detect_source in ("depth", "vlm") else "TAG"
         print(
-            "[press_demo] DETECT: waiting %.0f s for a stable fix (%s)"
+            "[press_demo] DETECT: up to %.0f s for a stable fix (%s)"
             % (
                 cfg.timeout_s,
                 "container top" if noun == "BOX" else "tag id %d" % cfg.tag_id,
