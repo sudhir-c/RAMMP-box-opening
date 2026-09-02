@@ -61,11 +61,9 @@ from rammp_box_opening.primitives.core import (
     _interaction_world,
     _plan_motion,
     band_verify,
+    press_stroke,
 )
-from rammp_box_opening.runtime.guards import (
-    GuardSpec,
-    time_fraction_at_path_fraction,
-)
+from rammp_box_opening.runtime.guards import GuardSpec
 from rammp_box_opening.runtime.warp import warp_trajectory
 from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.runtime.runner import Runner
@@ -242,69 +240,20 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     entirely on the fix taken at scan height (owner: no recalibrating mid
     flight). If presses start landing off-centre, that is the reason.
     """
-    m = ctx.model
-    button = from_container(ctx.cpose, m.button_offset)
-    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
-    world = _interaction_world(
-        ctx, button, button[2], cfg.travel_m, "button", ring=False
-    )
-    ctx.last_world = world
     st = _state(ctx.client.joints())
-    guard = GuardSpec(
-        touch_nm=m.touch_nm,
-        trip="press",
-        depth_window=(0.0, cfg.travel_m),
-        target_z=button[2],
-    )
-    # contact is expected once the tool has covered all but the last
-    # travel_m of the descent; converted to a TIME fraction below, after
-    # the warp, because progress is elapsed/duration
-    target = [button[0], button[1], button[2] - cfg.travel_m]
-    expect = {"frac": 1.0}
-
-    def verify(v):
-        expected = expect["frac"]
-        if v.outcome == "touch":
-            if v.progress is not None and v.progress < expected - 0.15:
-                return False, (
-                    "guard tripped EARLY at %.0f%% of the stroke (contact "
-                    "expected ~%.0f%%) — struck something above the button"
-                    % (v.progress * 100, expected * 100)
-                )
-            peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
-            return True, "guard stopped the stroke%s — pressed" % peak
-        if v.outcome == "arrived":
-            return True, "full travel %.1f mm, no trip — pressed" % (
-                cfg.travel_m * 1000
-            )
-        return False, "press %s" % v.outcome
-
-    # the final 60 mm are constrained VERTICAL: a diagonal descent
-    # touches the button before its lateral convergence finishes (10 mm
-    # off-centre at 20 mm height from a 199 mm start — the edge presses
-    # of 2026-09-01); the constrained plan measures 0.0-0.3 mm there
-    press, st = _plan_motion(
-        ctx,
-        st,
-        "press:down",
-        ("pose", target, quat, 0.06),
-        world,
-        cfg.press_speed,
-        guard=guard,
-        invalidates=True,
-        verify=verify,
-    )
+    # the one guarded stroke (core.press_stroke) with the merged caller's
+    # own contact expectation: once the tool has covered all but the last
+    # travel_m of the descent, re-timed AFTER the warp because warping
+    # changes the time base
+    press, st = press_stroke(ctx, st, cfg, "press:down", 0.06, 1.0)
     _apply_warp(press, cfg, cfg.press_speed)
-    # after the warp, because warping changes the time base
+    target_z = press.target[1][2]
     here = ctx.last_pose[0] if ctx.last_pose else None
-    total = abs((here[2] - target[2])) if here else cfg.staging_m + cfg.travel_m
-    dist_frac = max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9
-    expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
-    # a replan swaps the trajectory — the expected-contact fraction must
-    # follow the trajectory the arm will actually fly (review 2026-09-02)
-    press.retime = lambda traj, _d=dist_frac: expect.__setitem__(
-        "frac", time_fraction_at_path_fraction(traj, _d)
+    total = abs((here[2] - target_z)) if here else cfg.staging_m + cfg.travel_m
+    press.contact_path_frac = (
+        max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9
     )
+    press.retime(press.traj)
     # retreat height mirrors build_press_legs: the open-box tail re-descends
     # at once, so the hop suffices; press-only continues to HOME, planned in
     # the FULL world where the finger spheres need the staging clearance.

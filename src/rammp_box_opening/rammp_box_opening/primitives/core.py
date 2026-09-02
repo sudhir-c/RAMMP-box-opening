@@ -403,90 +403,109 @@ class Retreat:
         return [leg], state
 
 
+def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
+    """ONE guarded stroke to travel_m below the button: the press the
+    mission runs, whether it starts at staging (PressFixed) or merged
+    with the descent from the scan pose (press_demo). Returns (leg, state).
+
+    The guard arms in free air during the descent. A trip counts as
+    "pressed" only near where contact is EXPECTED — a trip well above the
+    button means the stroke struck something else, and reports as the
+    failure it is. Full travel with no trip also counts as pressed.
+
+    `contact_path_frac` is where along the stroke's PATH contact is
+    expected — but v.progress is a TIME fraction, and the two differ
+    because cuRobo's profile is not constant-speed (live trips landed at
+    0.826/0.835 against a 0.739 floor: 0.087 of margin, less than any
+    velocity-profile change would move it). The conversion needs the
+    trajectory, so it lives in leg.retime: called here on the planned
+    one, by the Runner on every replan, and by a caller that re-times the
+    stroke (a warp changes the time base) after setting
+    leg.contact_path_frac to its own expectation.
+
+    approach_offset_m constrains the final stretch VERTICAL: a diagonal
+    descent touches the button before its lateral convergence finishes
+    (10 mm off-centre at 20 mm height from a 199 mm start — the edge
+    presses of 2026-09-01); the constrained plan measures 0.0-0.3 mm
+    there, and contact happens travel_m above the goal, well inside it.
+    """
+    m = ctx.model
+    button = from_container(ctx.cpose, m.button_offset)
+    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
+    # ring=False: the aperture walls collide with the gripper body at
+    # these heights (live IK_FAIL, margin probe 2026-08-25); the descent
+    # comes from directly overhead
+    world = _interaction_world(ctx, button, button[2], cfg.travel_m, "button", ring=False)
+    ctx.last_world = world
+    guard = GuardSpec(
+        touch_nm=m.touch_nm,
+        trip="press",
+        depth_window=(0.0, cfg.travel_m),
+        target_z=button[2],
+    )
+    expect = {"frac": 1.0}  # TIME fraction; set by retime below
+
+    def verify(v):
+        expected = expect["frac"]
+        if v.outcome == "touch":
+            if v.progress is not None and v.progress < expected - 0.15:
+                return False, (
+                    "guard tripped EARLY at %.0f%% of the stroke (contact "
+                    "expected ~%.0f%%) — struck something above the button"
+                    % (v.progress * 100, expected * 100)
+                )
+            peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
+            return True, "guard stopped the stroke%s — pressed" % peak
+        if v.outcome == "arrived":
+            return True, "full travel %.1f mm, no trip — pressed" % (
+                cfg.travel_m * 1000
+            )
+        return False, "press %s" % v.outcome
+
+    target = [button[0], button[1], button[2] - cfg.travel_m]
+    press, state = _plan_motion(
+        ctx,
+        state,
+        name,
+        ("pose", target, quat, approach_offset_m),
+        world,
+        cfg.press_speed,
+        guard=guard,
+        invalidates=True,
+        verify=verify,
+    )
+
+    def retime(traj):
+        # a replan swaps the trajectory — the expected-contact fraction
+        # must follow the one actually flown (review 2026-09-02)
+        expect["frac"] = time_fraction_at_path_fraction(traj, press.contact_path_frac)
+
+    press.contact_path_frac = float(contact_path_frac)
+    press.retime = retime
+    retime(press.traj)
+    return press, state
+
+
 class PressFixed:
     """Owner-simplified press v2 (2026-08-25): ONE guarded stroke from the
-    staging pose straight to travel_m below the tag plane — the hover
+    staging pose straight to travel_m below the lid plane — the hover
     waypoint is gone (owner: fewer pauses; the gripper closes during the
-    approach instead).
-
-    The guard arms in free air during the long descent. A trip counts as
-    "pressed" only near the depth where contact is EXPECTED — a trip well
-    above the button means the stroke struck something else, and reports
-    as the failure it is. Full travel with no trip also counts as
-    pressed. check_standoff is deliberately not applied: the tag pose's z
-    is depth-refined to mm and the guard has the whole descent to arm."""
+    approach instead). Contact is expected after staging/(staging+travel)
+    of the stroke's path (see press_stroke)."""
 
     def __init__(self, cfg, name="press"):
         self.cfg = cfg
         self.name = name
 
     def plan(self, ctx, state):
-        m = ctx.model
         cfg = self.cfg
-        button = from_container(ctx.cpose, m.button_offset)
-        quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
-        # ring=False: the aperture walls collide with the gripper body at
-        # these heights (live IK_FAIL, margin probe 2026-08-25); the
-        # descent comes from directly overhead
-        world = _interaction_world(
-            ctx, button, button[2], cfg.travel_m, "button", ring=False
-        )
-        ctx.last_world = world
-        guard = GuardSpec(
-            touch_nm=m.touch_nm,
-            trip="press",
-            depth_window=(0.0, cfg.travel_m),
-            target_z=button[2],
-        )
-        # Contact is expected after staging/(staging+travel) of the stroke's
-        # DISTANCE — but v.progress is a TIME fraction. The two differ
-        # because cuRobo's profile is not constant-speed, and the live
-        # trips landed at 0.826/0.835 against a 0.739 floor: 0.087 of
-        # margin, less than any velocity-profile change would move it.
-        # The conversion needs the planned trajectory, which exists only
-        # after _plan_motion, so verify reads it from this holder at
-        # execution time.
-        dist_frac = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
-        expect = {"frac": dist_frac}
-
-        def verify(v):
-            expected = expect["frac"]
-            if v.outcome == "touch":
-                if v.progress is not None and v.progress < expected - 0.15:
-                    return False, (
-                        "guard tripped EARLY at %.0f%% of the stroke (contact "
-                        "expected ~%.0f%%) — struck something above the button"
-                        % (v.progress * 100, expected * 100)
-                    )
-                peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
-                return True, "guard stopped the stroke%s — pressed" % peak
-            if v.outcome == "arrived":
-                return True, "full travel %.1f mm, no trip — pressed" % (
-                    cfg.travel_m * 1000
-                )
-            return False, "press %s" % v.outcome
-
-        target = [button[0], button[1], button[2] - cfg.travel_m]
-        press, state = _plan_motion(
+        press, state = press_stroke(
             ctx,
             state,
+            cfg,
             self.name + ":down",
-            # vertical final 60 mm — the staged stroke arched into the
-            # button edge just like the merged press did before it got
-            # this constraint (field 2026-09-01); contact happens
-            # travel_m above the goal, well inside the vertical segment
-            ("pose", target, quat, 0.06),
-            world,
-            cfg.press_speed,
-            guard=guard,
-            invalidates=True,
-            verify=verify,
-        )
-        expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
-        # a replan swaps the trajectory — the expected-contact fraction
-        # must follow the one actually flown (review 2026-09-02)
-        press.retime = lambda traj, _d=dist_frac: expect.__setitem__(
-            "frac", time_fraction_at_path_fraction(traj, _d)
+            0.06,
+            cfg.staging_m / (cfg.staging_m + cfg.travel_m),
         )
         return [press], state
 
