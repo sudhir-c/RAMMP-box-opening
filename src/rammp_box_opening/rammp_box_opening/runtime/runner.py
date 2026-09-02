@@ -8,7 +8,7 @@ never auto-continues past a cancel.
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from rammp_curobo.geometry import ang_diff
@@ -20,6 +20,7 @@ from rammp_box_opening.constants import (
 )
 from rammp_box_opening.runtime import confirm
 from rammp_box_opening.runtime.guards import TorqueGuard, sanity_violations
+from rammp_box_opening.runtime.warp import warp_trajectory
 from rammp_box_opening.runtime.legs import (
     Kind,
     VerifyCtx,
@@ -39,6 +40,33 @@ class LegResult:
     torque_peak: float = None
     progress: float = None
     t_wall: float = None
+
+
+
+def _restore_execution_profile(leg):
+    """A replan swaps in a fresh planner-native trajectory; anything the
+    original had baked in must be re-applied or honestly downgraded.
+
+    Warped legs carry speed=1.0 as a do-not-dilate sentinel — executing
+    an UNWARPED replacement at that sentinel is a full-speed descent
+    into contact (review 2026-09-02). Re-warp the fresh trajectory; when
+    it cannot be warped, run the WHOLE leg at the slow contact speed —
+    never faster than intended. A leg with a retime hook (the press
+    expects contact at a time fraction of the trajectory it will
+    actually fly) gets it called on the final trajectory."""
+    w = getattr(leg, "warp", None)
+    if w is not None:
+        fast, slow_speed, slow_frac = w
+        warped, arm_frac = warp_trajectory(leg.traj, slow_frac, fast, slow_speed)
+        if arm_frac is None:
+            leg.speed = float(slow_speed)
+            leg.guard = replace(leg.guard, rebaseline_after=None)
+        else:
+            leg.traj = warped
+            leg.guard = replace(leg.guard, rebaseline_after=arm_frac)
+    retime = getattr(leg, "retime", None)
+    if retime is not None:
+        retime(leg.traj)
 
 
 class Runner:
@@ -173,6 +201,7 @@ class Runner:
 
         results = []
         pending = None  # (leg, handle, t0) of an overlapped gripper command
+        after_touch = False  # the previous motion stopped ON something
         next_chain = max((leg.chain for leg in legs), default=0) + 1
         for group in merge_groups(legs):
             lead = group[0]
@@ -222,14 +251,32 @@ class Runner:
                     # the failure is reported the same way as ever
                 res = self._run_gripper(lead)
             else:
-                # replan only on MEASURED drift (live vs planned start,
-                # 0.04 rad): a guard trip near full travel leaves the arm
-                # within tolerance and the pre-planned leg runs at once —
-                # forcing replans after every contact cost ~2 s pressed
-                # into the button (owner: fewer pauses, 2026-08-26). The
-                # server's own start gate (0.05 rad) still backstops.
-                if self._drifted(group):
-                    group, next_chain = self._replan_group(group, next_chain)
+                # Free-air drift replans on MEASURED drift only (0.04 rad;
+                # owner: fewer pauses, 2026-08-26). But after a TOUCH the
+                # predicted start is wrong BY DESIGN — the guard stopped
+                # the arm early — and a sub-gate joint delta is still a
+                # multi-mm Cartesian shove INTO the thing just touched:
+                # the pre-planned retreat re-pressed the button at full
+                # speed, guardless, and stalled the arm (field
+                # 2026-09-02). Post-touch, replan from live always; the
+                # arm stop-and-holds at contact for the ~0.6 s it costs.
+                if after_touch or self._drifted(group):
+                    # a later leg's plan failing from the fresh chain is
+                    # usually an unlucky cuRobo family draw (the
+                    # 2026-09-01 INVALID_START home was one) — fresh
+                    # draws are cheap, so try thrice before giving up;
+                    # deterministic refusals just fail three times
+                    for _attempt in range(3):
+                        regroup, next_chain = self._replan_group(
+                            group, next_chain
+                        )
+                        if regroup is not None:
+                            break
+                        print(
+                            "[runner] replan of %s failed (attempt %d/3)"
+                            % (group[0].name, _attempt + 1)
+                        )
+                    group = regroup
                     if group is None:
                         res = LegResult(
                             lead.name, "failed", False, "re-plan from live state failed"
@@ -238,7 +285,9 @@ class Runner:
                         results.append(res)
                         return results
                     lead = group[0]
+                after_touch = False
                 res = self._run_motion(group)
+                after_touch = res.outcome == "touch"
             for g in group:
                 self._log(res, g)
             results.append(res)
@@ -298,6 +347,7 @@ class Runner:
             leg.chain = next_chain
             leg.stale = False
             leg.goal_joints = list(plan.trajectory.points[-1].positions)
+            _restore_execution_profile(leg)
             # the pre-execution gates ran against the ORIGINAL trajectory;
             # a replan produces a new one and must clear them again
             why = self._refusal(leg)

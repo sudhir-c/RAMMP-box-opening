@@ -251,3 +251,48 @@ def test_button_circle_declines_honestly(model):
         )
         is None
     )
+
+
+def test_origin_z_is_pinned_to_the_calibrated_table(model):
+    """The plateau median wandered -3 mm one run (grip grazed the lid)
+    and +8 mm the next (field 2026-09-01/02); the box rests on the
+    surveyed table and its moulded height is constant, so the origin z
+    comes from table_z whenever one is known."""
+    from rammp_box_opening.perception.depth_source import container_pose_from_top
+
+    top = (0.38, -0.17, 0.088)  # measured 8 mm above nominal
+    pinned = container_pose_from_top(top, 0.0, model, table_z=-0.027)
+    assert pinned.xyz[2] == -0.027
+    legacy = container_pose_from_top(top, 0.0, model)
+    assert abs(legacy.xyz[2] - (0.088 - model.dims[2])) < 1e-9
+
+
+def test_watcher_wires_the_table_into_the_pose(model, capsys):
+    """The 2026-09-02 regression: a 6-frame plateau median 8 mm high
+    became origin z=-0.019 and shifted the press geometry. The wiring
+    under test is BoxTopWatcher.to_container_pose passing its calibrated
+    table_z through — dropping it must fail THIS test."""
+    from rammp_box_opening.perception.depth_source import BoxTopWatcher
+
+    w = BoxTopWatcher.__new__(BoxTopWatcher)  # wiring only, no node
+    w.model = model
+    w.table_z = TABLE_Z
+    top = (0.38, -0.17, TABLE_Z + model.dims[2] + 0.008)
+    cp = w.to_container_pose((top, 0.3))
+    assert cp.xyz[2] == TABLE_Z
+    assert "8.0 mm" in capsys.readouterr().out  # residual stays visible
+
+
+def test_far_from_nominal_top_is_refused_for_commit(model):
+    """With origin z pinned, a top far from table+dims means not-our-box
+    or a stale calibration; pressing nominal geometry would stroke air
+    (below) or leave real lid unmodelled (above). The gate is tighter
+    than travel_m so a committed fix always reaches material."""
+    from rammp_box_opening.perception.depth_source import top_residual_reject
+
+    nominal = TABLE_Z + model.dims[2]
+    assert top_residual_reject(nominal + 0.008, TABLE_Z, model) is None
+    assert top_residual_reject(nominal - 0.008, TABLE_Z, model) is None
+    for bad in (nominal + 0.020, nominal - 0.020):
+        why = top_residual_reject(bad, TABLE_Z, model)
+        assert why and "recalibrat" in why

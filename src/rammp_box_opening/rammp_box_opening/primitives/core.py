@@ -499,6 +499,11 @@ class PressFixed:
             verify=verify,
         )
         expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
+        # a replan swaps the trajectory — the expected-contact fraction
+        # must follow the one actually flown (review 2026-09-02)
+        press.retime = lambda traj, _d=dist_frac: expect.__setitem__(
+            "frac", time_fraction_at_path_fraction(traj, _d)
+        )
         return [press], state
 
 

@@ -299,6 +299,11 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     total = abs((here[2] - target[2])) if here else cfg.staging_m + cfg.travel_m
     dist_frac = max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9
     expect["frac"] = time_fraction_at_path_fraction(press.traj, dist_frac)
+    # a replan swaps the trajectory — the expected-contact fraction must
+    # follow the trajectory the arm will actually fly (review 2026-09-02)
+    press.retime = lambda traj, _d=dist_frac: expect.__setitem__(
+        "frac", time_fraction_at_path_fraction(traj, _d)
+    )
     # retreat height mirrors build_press_legs: the open-box tail re-descends
     # at once, so the hop suffices; press-only continues to HOME, planned in
     # the FULL world where the finger spheres need the staging clearance.
@@ -1001,8 +1006,8 @@ def main():
                         "[press_demo] pre-grip re-fix: box moved %.1f mm — "
                         "gripping where it is NOW" % (d3 * 1000)
                     )
-                ctx.cpose = cp3  # z re-measured too — grip height anchors
-                # to the CURRENT lid, not the scan-time estimate
+                ctx.cpose = cp3  # xy/yaw re-measured; z stays pinned to
+                # the calibrated table (the moulded height is constant)
         print("[press_demo] GRIP: open, descend to press depth, close, pull")
         res = runner.run(
             build_grip_legs(ctx, cfg), execute=args.execute, assume_yes=True

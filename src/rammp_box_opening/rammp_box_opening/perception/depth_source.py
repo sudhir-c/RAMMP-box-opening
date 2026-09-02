@@ -39,6 +39,14 @@ from rammp_box_opening.perception.tag_source import FixWindow, camera_pose_at
 # 20260901-130610); the physical box top only ever reads within ~2 cm of
 # expectation, so +/-0.035 keeps calibration slack without the noise.
 BAND_TOL_M = 0.035
+# COMMIT gate on the measured-vs-nominal top height. The band above only
+# SEARCHES; with origin z pinned to the calibrated table, a fix whose
+# measured top sits far from table+dims is either not our box resting on
+# our table or a stale calibration — pressing on nominal geometry would
+# then stroke air (below) or leave lid unmodelled (above). Tighter than
+# travel_m (15 mm) so a committed fix always reaches real material;
+# field residuals to date: -3 mm, +8 mm.
+TOP_RESIDUAL_MAX_M = 0.012
 # a real surface is locally SMOOTH; passive-stereo speckle on the blank
 # table is locally wild. Local z-std above this is not a surface.
 SURFACE_STD_M = 0.006
@@ -290,13 +298,33 @@ def button_circle_refine(color_rgb, depth, k, rot_cam, trans_cam, center, button
     return (float(out[0]), float(out[1]))
 
 
-def container_pose_from_top(center, yaw, model):
-    """Top-face fix -> ContainerPose (bottom-center origin + yaw), the
-    same contract container_pose_from_tag honours: origin z = measured
-    top minus nominal height, so button_offset lands back on the
-    MEASURED lid top."""
+def top_residual_reject(z_top, table_z, model):
+    """None when the measured top is commit-close to nominal, else the
+    honest refusal reason. Pure, unit-testable."""
+    residual = float(z_top) - (float(table_z) + model.dims[2])
+    if abs(residual) <= TOP_RESIDUAL_MAX_M:
+        return None
+    return (
+        "top %.0f mm from nominal (limit %.0f) — not a table-resting box "
+        "here, or table_z needs recalibrating"
+        % (residual * 1000, TOP_RESIDUAL_MAX_M * 1000)
+    )
+
+
+def container_pose_from_top(center, yaw, model, table_z=None):
+    """Top-face fix -> ContainerPose (bottom-center origin + yaw).
+
+    Origin z comes from the CALIBRATED table when one is known: the box
+    rests on the table, its moulded height is constant, and the bench
+    yaml's table_z is surveyed — while the 6-frame passive-stereo
+    plateau median wandered -3 mm one run (grip grazed the lid) and
+    +8 mm the next (press geometry shifted a stroke-end delta under the
+    drift gate) (field 2026-09-01/02). The measured top still gates
+    detection (plateau band) and its residual vs nominal is reported by
+    the watcher so calibration drift stays visible."""
+    z = float(center[2]) - model.dims[2] if table_z is None else float(table_z)
     return ContainerPose(
-        xyz=(float(center[0]), float(center[1]), float(center[2]) - model.dims[2]),
+        xyz=(float(center[0]), float(center[1]), z),
         yaw=float(yaw),
     )
 
@@ -362,6 +390,10 @@ class BoxTopWatcher:
         if fix is None:
             self.last_reject = why
             return
+        bad = top_residual_reject(fix.center[2], self.table_z, self.model)
+        if bad is not None:
+            self.last_reject = bad
+            return
         self.hits += 1
         self.refined_hits += 1
         circle = button_circle_refine(
@@ -395,7 +427,12 @@ class BoxTopWatcher:
 
     def to_container_pose(self, got):
         pos, yaw = got
-        return container_pose_from_top(pos, float(yaw), self.model)
+        top_residual_mm = (pos[2] - (self.table_z + self.model.dims[2])) * 1000
+        print(
+            "[depth] measured top %.1f mm from nominal — origin z pinned "
+            "to the table" % top_residual_mm
+        )
+        return container_pose_from_top(pos, float(yaw), self.model, self.table_z)
 
     def status(self):
         missing = self.grab.missing()

@@ -473,3 +473,105 @@ def test_a_release_is_never_deferred(tmp_path):
     legs = [leg("place:lid:open", kind=Kind.GRIPPER, cmd=0.0), leg("retreat", Q0, Q1)]
     runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
     assert c.events[:2] == ["send", "join"], "release settles before the arm moves"
+
+
+def test_touch_forces_replan_even_under_the_drift_gate(tmp_path):
+    """After a guard trip the predicted start is wrong BY DESIGN, and a
+    sub-gate joint delta is still a multi-mm Cartesian shove into the
+    thing just touched: the pre-planned retreat re-pressed the button at
+    full speed, guardless (field 2026-09-02). Post-touch, the next
+    motion replans from live unconditionally."""
+    class TouchStopsShort(FakeClient):
+        # a real trip halts the arm shy of the endpoint; the plain fake
+        # teleports to it, which would hide exactly the hazard under test
+        def execute(self, traj, speed, guard=None):
+            outcome, info = super().execute(traj, speed, guard)
+            if outcome == "touch":
+                self.live = [self.live[0] + 0.01] + self.live[1:]
+            return outcome, info
+
+    c = TouchStopsShort()
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0)
+    c.exec_script = [
+        ("touch", {"message": "contact", "progress": 0.9, "torque_peak": 4.0})
+    ]
+    legs = [
+        leg("descend", guard=g, world="interaction_x", invalidates=True, chain=0),
+        leg("retreat", Q1, Q2, chain=1),
+    ]
+    res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert res[0].outcome == "touch" and res[1].ok
+    # the trip left the arm 0.01 rad from the predicted end — well under
+    # the 0.04 free-air drift gate, which must NOT matter after a touch
+    assert c.exec_starts[1][0] == 0.11  # replanned from live, not Q1
+
+
+def test_arrived_leg_still_uses_the_drift_gate(tmp_path):
+    """Free-air chaining keeps the owner's fewer-pauses rule: no touch,
+    sub-gate drift, the pre-planned leg runs as planned. (The drift must
+    appear AFTER leg a runs — the fake teleports live to each executed
+    endpoint, so a pre-set offset only ever tests leg a's own gate.)"""
+
+    class DriftsAfterArrive(FakeClient):
+        def execute(self, traj, speed, guard=None):
+            outcome, info = super().execute(traj, speed, guard)
+            if outcome == "arrived" and len(self.executed) == 1:
+                self.live = [self.live[0] + 0.01] + self.live[1:]
+            return outcome, info
+
+    c = DriftsAfterArrive()
+    legs = [leg("a", Q0, Q1, chain=0), leg("b", Q1, Q2, chain=1)]
+    res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert all(r.ok for r in res)
+    # 0.01 under the 0.04 gate, no touch: pre-planned start kept — an
+    # always-replan mutation would execute from live (0.11) instead
+    assert c.exec_starts[1][0] == 0.1
+
+
+def test_replanned_warped_leg_keeps_its_execution_profile(tmp_path):
+    """_apply_warp bakes fast-then-slow into the trajectory and sets
+    speed=1.0 as a do-not-dilate sentinel. A replan swaps in a fresh
+    UNWARPED trajectory — inheriting the sentinel would descend into
+    contact at full speed (review 2026-09-02). The profile is re-warped,
+    or the leg honestly downgrades to the slow contact speed."""
+    from rammp_box_opening.runtime.runner import _restore_execution_profile
+
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0, rebaseline_after=0.7)
+
+    # a trajectory long enough to warp: profile re-applied, sentinel kept
+    many = [[0.0 + 0.01 * i] * 7 for i in range(40)]
+    t = _traj(many[0], many[-1])
+    t.points = []
+    from trajectory_msgs.msg import JointTrajectoryPoint
+
+    for i, row in enumerate(many):
+        pt = JointTrajectoryPoint()
+        pt.positions = [float(v) for v in row]
+        pt.velocities = [0.0] * 7
+        pt.accelerations = [0.0] * 7
+        pt.time_from_start.sec = i
+        t.points.append(pt)
+    lg = leg("down", guard=g, world="interaction_x", invalidates=True)
+    lg.speed = 1.0
+    lg.warp = (0.5, 0.35, 0.3)
+    lg.traj = t
+    _restore_execution_profile(lg)
+    assert lg.speed == 1.0  # profile baked in again
+    assert lg.guard.rebaseline_after is not None
+    end = lg.traj.points[-1].time_from_start
+    assert end.sec + end.nanosec * 1e-9 > 39.0  # slower than the raw plan
+
+    # a degenerate trajectory that cannot be warped: honest downgrade
+    lg2 = leg("down2", guard=g, world="interaction_x", invalidates=True)
+    lg2.speed = 1.0
+    lg2.warp = (0.35, 0.35, 0.3)  # fast==slow -> warp declines
+    _restore_execution_profile(lg2)
+    assert lg2.speed == 0.35  # the slow contact speed, never the sentinel
+    assert lg2.guard.rebaseline_after is None
+
+    # the retime hook follows the trajectory actually flown
+    seen = {}
+    lg3 = leg("press", guard=g, world="interaction_x", invalidates=True)
+    lg3.retime = lambda traj: seen.__setitem__("traj", traj)
+    _restore_execution_profile(lg3)
+    assert seen["traj"] is lg3.traj
