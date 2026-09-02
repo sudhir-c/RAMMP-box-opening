@@ -3,30 +3,33 @@
 
     python3 scripts/press_demo_e2e.py           # isolates on ROS_DOMAIN_ID=77
 
-Three scenarios, each with a stub planner (scripts/stub_planner.py) and
-a synthetic D405 (scripts/stub_d405.py) publishing REAL rendered ArUco
-frames + mount-consistent TF, so the CLI's whole perception path
-(detect -> PnP -> TF -> depth refinement -> container pose) runs for
-real. Depth is spatially structured (tag range only at the tag's
-pixels) and the tag carries a 30 deg yaw plus a nonzero tag->button
-offset, so wrong-pixel depth sampling and wrong rotation composition
-both move the recovered origin and FAIL the 5 mm / 3 deg checks.
+Three scenarios, each with a stub planner (scripts/stub_planner.py) and a
+synthetic D405 + OWL stub (scripts/stub_d405.py) publishing a RAY-CAST
+depth scene — a box-shaped plateau at table + dims.z with the
+container's footprint, a button disc in colour, a mount-consistent TF
+and the owl node's bbox topic — so the CLI's whole SHIPPED perception
+path (owl rung -> depth plateau -> TF lift -> button circle -> container
+pose) runs for real under the shipped ladder (detect.source: vlm; only
+the cloud rung is dropped, so nothing leaves the machine). The box sits
+off the camera axis at a 30 deg yaw, so wrong deprojection or rotation
+composition moves the recovered origin and FAILS the 5 mm / 3 deg
+checks (yaw mod 90: the box is square and the depth path says so).
 
-  tag:    full flow — exit 0, 8 exec goals, 4 gripper goals, one cancel
+  box:    full flow — exit 0, 8 exec goals, 4 gripper goals, one cancel
           (the guarded set-down trips by design), origin within 5 mm and
-          yaw within 3 deg of the
-          geometry the synthetic camera encoded.
+          yaw within 3 deg of the geometry the synthetic camera encoded,
+          origin z pinned to the calibrated table.
   trip:   efforts spike late in the press (STUB_TRIP_EXEC_N=2) — the guard
           cancels the stroke, the CLI reports pressed-via-trip, retreat
-          and home replan from the stop, exit 0. Exactly one cancel.
-  no-tag: tagless frames — scan, a detect wait that provably lasts
-          timeout_s, home, exit 2, exactly 2 exec goals.
+          and home replan from the stop, exit 0. Exactly two cancels.
+  no-box: an empty table — scan, the owl rung is consulted (the stub
+          heartbeats), a detect wait that provably lasts timeout_s, home,
+          exit 2, exactly 2 exec goals.
 
 Goal counts are audited (lesson 6); the harness refuses to run beside a
 real controller_manager or planner.
 """
 
-import math
 import os
 import re
 import signal
@@ -37,6 +40,10 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "src" / "rammp_box_opening"))
+
+from rammp_box_opening.worlds import WorldStore  # noqa: E402
+
 DOMAIN = os.environ.get("ABORT_E2E_DOMAIN", "77")
 
 CHAIN = (
@@ -47,29 +54,16 @@ CHAIN = (
     "source %s/install/setup.zsh; " % (DOMAIN, REPO)
 )
 
-TAG_XYZ = (0.42, 0.0, 0.133)  # on the scan camera's axis: servo is a no-op
-TAG_YAW_DEG = 30.0
-TAG_OFFSET = (0.01, 0.0, 0.0)  # container-frame tag->button, in the cfg
-TAG_SIZE_M = 0.05  # harness-internal: cfg and synthetic camera BOTH get
-#                    this, whatever edge the real printed tag measures
+BOX_XY = (0.46, -0.05)  # off the scan camera's axis: deprojection errors show
+BOX_YAW_DEG = 30.0  # the depth path reports yaw mod 90 (square box)
 DETECT_TIMEOUT_S = 10.0  # oxo_pop.yaml detect.timeout_s
+BENCH_YAML = REPO / "src/rammp_box_opening/config/world_bench.yaml"
 
 
-def button_z(cfg_text):
-    """button_offset z from the yaml itself — never a stale constant."""
-    m = re.search(r"button_offset: \[[^,]+, [^,]+, ([\d.]+)\]", cfg_text)
-    return float(m.group(1))
-
-
-def expected_origin(btn_z):
-    yaw = math.radians(TAG_YAW_DEG)
-    c, s = math.cos(yaw), math.sin(yaw)
-    ox, oy, _ = TAG_OFFSET
-    return [
-        TAG_XYZ[0] + c * ox - s * oy,
-        TAG_XYZ[1] + s * ox + c * oy,
-        TAG_XYZ[2] - btn_z,
-    ]
+def yaw_err_deg(got, want):
+    """Yaw error for a square box: the depth path reports yaw mod 90."""
+    d = abs((got - want) % 90.0)
+    return min(d, 90.0 - d)
 
 
 def sh(cmd, **kw):
@@ -113,13 +107,17 @@ def spawn(cmd, log, extra_env=""):
     )
 
 
-def run_scenario(tmp, cfg, mode):
+def run_scenario(tmp, cfg, table_z, mode):
     stub_log = tmp / ("stub_%s.log" % mode)
     cam_log = tmp / ("cam_%s.log" % mode)
     cli_log = tmp / ("cli_%s.log" % mode)
-    cam_args = " --size %g --tag-x %g --tag-y %g --tag-z %g" % (
-        (TAG_SIZE_M,) + TAG_XYZ
-    ) + (" --no-marker" if mode == "no-tag" else (" --tag-yaw-deg %g" % TAG_YAW_DEG))
+    # the stub renders the container the CLI is configured for, on the
+    # table the CLI's bench world says it stands on
+    cam_args = " --container %s --table-z %g" % (cfg, table_z)
+    if mode == "no-box":
+        cam_args += " --no-box"
+    else:
+        cam_args += " --box-x %g --box-y %g --box-yaw-deg %g" % (BOX_XY + (BOX_YAW_DEG,))
     # the guarded set-down (place:lid:down) must always trip; the trip
     # scenario also trips the press stroke
     stub_env = (
@@ -179,13 +177,20 @@ def run_scenario(tmp, cfg, mode):
     if "Traceback" in cli_said:
         fails.append("CLI traceback")
 
-    if mode == "no-tag":
+    if mode == "no-box":
         if code != 2:
             fails.append("exit %s != 2" % code)
         if execs != 2:
             fails.append("exec goals %d != 2 (scan + home)" % execs)
-        if "NO TAG" not in cli_said:
-            fails.append("no NO TAG line")
+        if "NO BOX" not in cli_said:
+            fails.append("no NO BOX line")
+        # depth found nothing in its first beat, so the ladder ran and the
+        # owl rung was consulted — the stub answers with heartbeats. (Its
+        # verdict is not asserted: the node stamps its messages as
+        # float32 seconds, which quantizes wall time to 128 s and makes
+        # the rung's freshness classification a coin flip.)
+        if "VLM owl:" not in cli_said:
+            fails.append("the owl rung was never consulted")
         # the detect wait must actually last the configured window:
         # scan + wait (10 s) + home; legs are ~1.6 s each at 0.75 — a
         # shortened wait would finish well under timeout_s + leg time
@@ -195,12 +200,12 @@ def run_scenario(tmp, cfg, mode):
             )
         return fails
 
-    # tag and trip scenarios share the flow assertions
+    # box and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
     if execs != 8:
-        # scan, approach, press, retreat, grip:down, lift, place transit,
-        # place:down, place-retreat+home (merged)
+        # scan, press, retreat, grip:down, lift, place transit, place:down,
+        # place-retreat+home (merged)
         fails.append("exec goals %d != 8" % execs)
     if said.count("GRIPPER GOAL") != 4:
         fails.append("gripper goals %d != 4" % said.count("GRIPPER GOAL"))
@@ -208,10 +213,19 @@ def run_scenario(tmp, cfg, mode):
         fails.append("no LID PULLED line")
     if "DONE — box open" not in cli_said:
         fails.append("no final DONE line")
-    if "depth-refined" not in cli_said:
-        fails.append("depth refinement never engaged")
-    if "CENTERED" not in cli_said:
-        fails.append("servo never reported CENTERED")
+    for needle, what in (
+        ("[depth] measured top", "the depth watcher never reported the top residual"),
+        ("origin z pinned to the table", "origin z was not pinned to the table"),
+        ("[press_demo] BOX at", "no BOX line"),
+        ("found a container top", "the depth status never reported a container top"),
+    ):
+        if needle not in cli_said:
+            fails.append(what)
+    m = re.search(
+        r"(\d+)/(\d+) frames found a container top, (\d+) button-circle", cli_said
+    )
+    if m and int(m.group(3)) == 0:
+        fails.append("the button circle never refined a sighting")
     m = re.search(
         r"PRESS target origin \[([-\d.]+), ([-\d.]+), ([-\d.]+)\] yaw ([-\d.]+) deg",
         cli_said,
@@ -221,18 +235,19 @@ def run_scenario(tmp, cfg, mode):
     else:
         got = [float(v) for v in m.groups()[:3]]
         yaw = float(m.group(4))
-        want = expected_origin(button_z(Path(cfg).read_text()))
+        want = [BOX_XY[0], BOX_XY[1], table_z]
         err = max(abs(a - b) for a, b in zip(got, want))
+        yerr = yaw_err_deg(yaw, BOX_YAW_DEG)
         print(
-            "--- recovered origin %s yaw %.1f vs true %s yaw %.1f (err %.4f m)"
-            % (got, yaw, [round(v, 4) for v in want], TAG_YAW_DEG, err)
+            "--- recovered origin %s yaw %.1f vs true %s yaw %.1f (err %.4f m, %.1f deg)"
+            % (got, yaw, [round(v, 4) for v in want], BOX_YAW_DEG, err, yerr)
         )
         if err > 0.005:
             fails.append("origin error %.4f m > 5 mm" % err)
-        if abs(yaw - TAG_YAW_DEG) > 3.0:
-            fails.append("yaw error %.1f deg > 3" % abs(yaw - TAG_YAW_DEG))
+        if yerr > 3.0:
+            fails.append("yaw error %.1f deg > 3" % yerr)
 
-    if mode == "tag":
+    if mode == "box":
         if cancels != 1:  # the guarded set-down trips (by design)
             fails.append("cancels %d != 1 (set-down trip)" % cancels)
         if "full travel" not in cli_said:
@@ -263,31 +278,29 @@ def main():
     src_cfg = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
     cfg.write_text(
         re.sub(
-            r"size_m: [\d.]+",
-            "size_m: %g" % TAG_SIZE_M,  # stay in sync with the synthetic
-            src_cfg.read_text()
-            .replace("measure_me: true", "measure_me: false")
-            # the synthetic camera renders TAGS; its flat depth plane
-            # would (rightly) never pass the depth source's footprint
-            # gate, so the harness pins the tag path explicitly
-            .replace("source: vlm", "source: tag")
-            .replace(
-                "offset_xyz: [0.0, 0.0, 0.0]",
-                "offset_xyz: [%g, %g, %g]" % TAG_OFFSET,
-            ),
+            # the shipped ladder minus its cloud rung: the harness runs
+            # offline and must never make a network call
+            r"backends: \[[^\]]*\]",
+            "backends: [owl]",
+            src_cfg.read_text().replace("measure_me: true", "measure_me: false"),
             count=1,
         )
     )
+    # the table the CLI bands container candidates above — and pins the
+    # container origin to — is the bench world's; the stub renders it
+    table_z = WorldStore(str(BENCH_YAML), out_dir=tmp).table_top_z
 
     all_fails = []
-    for mode in ("tag", "trip", "no-tag"):
-        all_fails += ["%s: %s" % (mode, f) for f in run_scenario(tmp, cfg, mode)]
+    for mode in ("box", "trip", "no-box"):
+        all_fails += [
+            "%s: %s" % (mode, f) for f in run_scenario(tmp, cfg, table_z, mode)
+        ]
 
     print()
     if not all_fails:
         print(
-            "PASS — tag flow (yaw+offset recovered), guard-trip press, and "
-            "no-tag exit all behave; goal audits clean"
+            "PASS — depth flow (origin+yaw recovered, z pinned), guard-trip "
+            "press, and no-box exit all behave; goal audits clean"
         )
         sys.exit(0)
     for f in all_fails:
