@@ -8,7 +8,7 @@ never auto-continues past a cancel.
 
 import json
 import time
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from rammp_curobo.geometry import ang_diff
@@ -40,6 +40,7 @@ class LegResult:
     torque_peak: float = None
     progress: float = None
     t_wall: float = None
+    lookahead: object = field(default=None, compare=False, repr=False)
 
 
 
@@ -187,7 +188,15 @@ class Runner:
         return None
 
     # -- run ----------------------------------------------------------------
-    def run(self, legs, execute, assume_yes=False):
+    def run(self, legs, execute, assume_yes=False, lookahead=None):
+        """Execute legs in merge groups.
+
+        `lookahead(end_joints)` — builds the NEXT phase's legs while this
+        run's last unguarded motion flies (planned from that motion's
+        predicted end joints). Its return value lands in
+        self.lookahead_result; a failure leaves None and the caller builds
+        after the run as before. Never hosted on a guarded stroke."""
+        self.lookahead_result = None
         print(self.preview(legs))
         if not execute:
             print("dry-run complete — nothing moved (add --execute)")
@@ -209,7 +218,14 @@ class Runner:
         results = []
         after_touch = False  # the previous motion stopped ON something
         next_chain = max((leg.chain for leg in legs), default=0) + 1
-        for group in merge_groups(legs):
+        groups = merge_groups(legs)
+        host = None  # the last unguarded MOTION group hosts the lookahead
+        if lookahead is not None:
+            for g in reversed(groups):
+                if g[0].kind is Kind.MOTION and all(x.guard is None for x in g):
+                    host = g
+                    break
+        for group in groups:
             lead = group[0]
             # Worlds are pushed at PLAN time (core._plan_motion) and by the
             # replan path per leg; execution itself never consults the
@@ -289,7 +305,16 @@ class Runner:
                         )
                         return results
                 after_touch = False
-                res = self._run_motion(group)
+                hook = None
+                if group is host:
+                    end = list(group[-1].goal_joints)
+
+                    def hook(_end=end):
+                        return lookahead(_end)
+
+                res = self._run_motion(group, while_running=hook)
+                if group is host and res.lookahead is not None:
+                    self.lookahead_result = res.lookahead
                 after_touch = res.outcome == "touch"
             for g in group:
                 self._log(res, g)
@@ -407,7 +432,7 @@ class Runner:
             live = leg.goal_joints
         return group, next_chain + 1
 
-    def _run_motion(self, group):
+    def _run_motion(self, group, while_running=None):
         # The member that OWNS this execution's contact semantics. Today
         # can_merge forbids guarded legs in a group, so this is group[0];
         # the lookup exists so that relaxing can_merge cannot silently run
@@ -442,11 +467,15 @@ class Runner:
             else None
         )
         t0 = time.monotonic()
-        outcome, info = self.client.execute(traj, lead.speed, guard=guard)
+        outcome, info = self.client.execute(
+            traj, lead.speed, guard=guard, while_running=while_running
+        )
         if outcome == "failed" and NO_MOTION_SIGNATURE in info.get("message", ""):
             print("  no-motion fault at start — one retry from standstill")
             time.sleep(self.no_motion_retry_delay_s)
             outcome, info = self.client.execute(traj, lead.speed, guard=guard)
+        if info.get("while_running_error"):
+            print("  lookahead plan failed (%s) — planning after the leg" % info["while_running_error"])
         depth = None
         if outcome == "touch" and lead.guard and lead.guard.needs_depth:
             # gated on needs_depth: the lookup blocks for its full timeout
@@ -476,6 +505,7 @@ class Runner:
             torque_peak=info.get("torque_peak"),
             progress=info.get("progress"),
             t_wall=time.monotonic() - t0,
+            lookahead=info.get("while_running"),
         )
 
     @staticmethod
@@ -523,5 +553,6 @@ class Runner:
             **asdict(res),
         }
         row.pop("leg_name", None)
+        row.pop("lookahead", None)
         with open(self._log_path, "a") as f:
             f.write(json.dumps(row) + "\n")

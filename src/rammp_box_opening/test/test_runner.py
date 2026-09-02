@@ -67,9 +67,15 @@ class FakeClient:
             return self.plans.pop(0)
         return self._plan(list(q7), start_joints)
 
-    def execute(self, traj, speed, guard=None):
+    def execute(self, traj, speed, guard=None, while_running=None):
         self.executed.append((len(traj.points), speed))
         self.exec_starts.append(list(traj.points[0].positions))
+        info_extra = {}
+        if while_running is not None and guard is None:
+            try:
+                info_extra["while_running"] = while_running()
+            except Exception as exc:
+                info_extra["while_running_error"] = str(exc)
         if self.exec_script:
             outcome, info = self.exec_script.pop(0)
         else:
@@ -83,6 +89,8 @@ class FakeClient:
             )
         if outcome != "failed":
             self.live = list(traj.points[-1].positions)
+        info = dict(info)
+        info.update(info_extra)
         return outcome, info
 
     def set_world(self, path_or_name):
@@ -462,9 +470,9 @@ class _AsyncGripClient(FakeClient):
             return super().gripper_cmd(position)
         return self.gripper_join(self.gripper_send(position))
 
-    def execute(self, traj, speed, guard=None):
+    def execute(self, traj, speed, guard=None, while_running=None):
         self.events.append("execute")
-        return super().execute(traj, speed, guard=guard)
+        return super().execute(traj, speed, guard=guard, while_running=while_running)
 
 
 def test_deferred_gripper_close_overlaps_the_next_transit(tmp_path):
@@ -513,8 +521,8 @@ def test_touch_forces_replan_even_under_the_drift_gate(tmp_path):
     class TouchStopsShort(FakeClient):
         # a real trip halts the arm shy of the endpoint; the plain fake
         # teleports to it, which would hide exactly the hazard under test
-        def execute(self, traj, speed, guard=None):
-            outcome, info = super().execute(traj, speed, guard)
+        def execute(self, traj, speed, guard=None, while_running=None):
+            outcome, info = super().execute(traj, speed, guard, while_running=while_running)
             if outcome == "touch":
                 self.live = [self.live[0] + 0.01] + self.live[1:]
             return outcome, info
@@ -542,8 +550,8 @@ def test_arrived_leg_still_uses_the_drift_gate(tmp_path):
     endpoint, so a pre-set offset only ever tests leg a's own gate.)"""
 
     class DriftsAfterArrive(FakeClient):
-        def execute(self, traj, speed, guard=None):
-            outcome, info = super().execute(traj, speed, guard)
+        def execute(self, traj, speed, guard=None, while_running=None):
+            outcome, info = super().execute(traj, speed, guard, while_running=while_running)
             if outcome == "arrived" and len(self.executed) == 1:
                 self.live = [self.live[0] + 0.01] + self.live[1:]
             return outcome, info
@@ -679,3 +687,35 @@ def test_release_overlaps_the_replan_but_never_the_motion(tmp_path):
     res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
     assert all(r.ok for r in res)
     assert c.events == ["execute", "send", "plan", "join", "execute"]
+
+
+def test_lookahead_runs_during_the_last_unguarded_motion(tmp_path):
+    """The next phase is planned while this run's last unguarded motion
+    flies, from that motion's predicted end joints; a guarded stroke never
+    hosts it (audit 2026-09-02)."""
+    c = FakeClient()
+    r = runner(c, tmp_path)
+    seen = []
+    res = r.run(
+        [leg("a", Q0, Q1, chain=0), leg("b", Q1, Q2, chain=1)],
+        execute=True,
+        assume_yes=True,
+        lookahead=lambda q: seen.append(list(q)) or ["next-legs"],
+    )
+    assert all(x.ok for x in res)
+    assert seen == [Q2]  # hosted on b, from b's predicted end
+    assert r.lookahead_result == ["next-legs"]
+
+    # a failing lookahead is not a failed leg: the caller builds afterwards
+    def boom(q):
+        raise RuntimeError("planner said no")
+
+    res = r.run([leg("c", Q2, Q1, chain=0)], execute=True, assume_yes=True, lookahead=boom)
+    assert res[0].ok and r.lookahead_result is None
+
+    # guarded strokes never host it
+    g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    seen.clear()
+    r.run([leg("p", Q1, Q2, guard=g, world="interaction_b")], execute=True, assume_yes=True, lookahead=lambda q: seen.append(q))
+    assert seen == [] and r.lookahead_result is None

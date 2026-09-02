@@ -30,10 +30,14 @@ from rammp_box_opening.constants import GRIPPER_ACTION, JOINTS, NODE_NAMESPACE
 _GRIPPER_JOINT_HINTS = ("robotiq", "knuckle", "finger")
 
 
-def spin_until_done(node, future, timeout_s):
-    """Spin `node` until `future` resolves; None on timeout."""
+def spin_until_done(node, future, timeout_s, abort=None):
+    """Spin `node` until `future` resolves; None on timeout — or at once
+    when `abort` has been requested, so a plan hosted inside an execution
+    (see PlannerClient.execute while_running) cannot delay the cancel."""
     t0 = time.monotonic()
     while not future.done():
+        if abort is not None and abort.requested:
+            return None
         rclpy.spin_once(node, timeout_sec=0.1)
         if time.monotonic() - t0 > timeout_s:
             return None
@@ -151,10 +155,14 @@ class PlannerClient:
     def _call(self, client, goal, timeout_s=120.0):
         if not client.wait_for_server(timeout_sec=5.0):
             sys.exit("planner node not running")
-        send = spin_until_done(self.node, client.send_goal_async(goal), 10.0)
+        send = spin_until_done(
+            self.node, client.send_goal_async(goal), 10.0, abort=self._abort
+        )
         if send is None or not send.accepted:
             return None
-        wrapped = spin_until_done(self.node, send.get_result_async(), timeout_s)
+        wrapped = spin_until_done(
+            self.node, send.get_result_async(), timeout_s, abort=self._abort
+        )
         return None if wrapped is None else wrapped.result
 
     def plan_to_pose(self, xyz, quat_xyzw, start_joints, approach_offset_m=0.0):
@@ -195,11 +203,19 @@ class PlannerClient:
                 "check the arm"
             )
 
-    def execute(self, traj, speed, guard=None):
+    def execute(self, traj, speed, guard=None, while_running=None):
         """Run one trajectory; outcome 'arrived' | 'touch' | 'failed'.
 
         With a guard: feedback progress arms it, /joint_states efforts
-        feed it; a trip cancels the goal (controller stops and holds)."""
+        feed it; a trip cancels the goal (controller stops and holds).
+
+        `while_running` (UNGUARDED legs only): a callable run once right
+        after the goal is accepted — the next phase's planning, hidden
+        under this motion instead of after it (the planner service plans
+        and executes under separate locks). Its blocking plans spin this
+        same node, so feedback keeps flowing; its result lands in
+        info["while_running"], an exception in info["while_running_error"]
+        — never past the cancel path."""
         info = {"message": "", "progress": 0.0, "torque_peak": None}
         goal = ExecuteTrajectory.Goal(trajectory=traj, speed_scale=float(speed))
         if self._abort is not None and self._abort.requested:
@@ -231,6 +247,13 @@ class PlannerClient:
             aborted = False
             t0 = time.monotonic()
             efforts_ok_at = time.monotonic()
+            if while_running is not None and guard is None:
+                try:
+                    info["while_running"] = while_running()
+                except KeyboardInterrupt:
+                    raise
+                except Exception as exc:  # a failed lookahead is not a failed leg
+                    info["while_running_error"] = str(exc)
             try:
                 while not result_future.done():
                     if self._abort is not None and self._abort.requested:

@@ -323,7 +323,7 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     return legs
 
 
-def build_grip_legs(ctx, cfg):
+def build_grip_legs(ctx, cfg, start_joints=None):
     """Step 2: open the fingers, descend to just ABOVE the tag plane —
     around the now-popped button, grabbing it at its BASE — close on it
     (band-verified: 0.8 means closed on air), and slowly pull the lid.
@@ -339,7 +339,9 @@ def build_grip_legs(ctx, cfg):
         ctx, button, button[2], cfg.travel_m, "button", ring=False
     )
     ctx.last_world = world
-    st = _state(ctx.client.joints())
+    # start_joints: the post-press retreat's end, when built as a lookahead
+    # while that retreat flies (audit 2026-09-02)
+    st = _state(ctx.client.joints() if start_joints is None else start_joints)
     # the fingers were opened on arrival at the hop (press phase); the
     # Runner joins that before the guarded descent below
     target = [
@@ -413,9 +415,11 @@ def resolve_lid_drop(m, cpose, lid_xyz):
     return None, False
 
 
-def build_place_legs(ctx, cfg):
+def build_place_legs(ctx, cfg, start_joints=None):
     """Carry the lid to the configured side spot, guarded set-down,
-    release, retreat, home — the placed lid joins the collision world."""
+    release, retreat, home — the placed lid joins the collision world.
+    start_joints: the lift's predicted end, when built as a lookahead
+    while the lift flies (audit 2026-09-02)."""
     m = ctx.model
     lid = ctx.lid_drop or load_lid_place(ctx.config_path)
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(lid.xyz[1], lid.xyz[0]))
@@ -429,7 +433,7 @@ def build_place_legs(ctx, cfg):
         lid.xyz[1],
         lid.xyz[2] + m.lid_dims[2] + cfg.grip_clear_m,
     ]
-    st = _state(ctx.client.joints())
+    st = _state(ctx.client.joints() if start_joints is None else start_joints)
     hover = Place.hover_for(ctx, target)
     legs, st = Place(
         target,
@@ -926,6 +930,10 @@ def main():
                 merged_legs,
                 execute=args.execute,
                 assume_yes=True,
+                # the grip phase is planned while the retreat flies
+                lookahead=None
+                if args.press_only
+                else (lambda q: build_grip_legs(ctx, cfg, start_joints=q)),
             )
             bad = [r for r in res if not r.ok]
             if bad:
@@ -1011,6 +1019,9 @@ def main():
                 build_press_legs(ctx, cfg, include_home=args.press_only),
                 execute=args.execute,
                 assume_yes=True,
+                lookahead=None
+                if args.press_only
+                else (lambda q: build_grip_legs(ctx, cfg, start_joints=q)),
             )
             bad = [r for r in res if not r.ok]
             if bad:
@@ -1031,8 +1042,13 @@ def main():
         # grip:down (an obstruction trip) and the band verify (closed on
         # air), both honest failures.
         print("[press_demo] GRIP: descend to press depth, close, pull")
+        grip_legs = runner.lookahead_result or build_grip_legs(ctx, cfg)
         res = runner.run(
-            build_grip_legs(ctx, cfg), execute=args.execute, assume_yes=True
+            grip_legs,
+            execute=args.execute,
+            assume_yes=True,
+            # the place phase is planned while the lift flies
+            lookahead=lambda q: build_place_legs(ctx, cfg, start_joints=q),
         )
         if any(not r.ok for r in res):
             sys.exit(1)  # grip failed (band miss / strike) — arm holds
@@ -1040,9 +1056,8 @@ def main():
         print("[press_demo] LID PULLED — %s" % (grip[-1].detail if grip else "dry-run"))
 
         print("[press_demo] PLACE: carrying the lid to the side spot")
-        res = runner.run(
-            build_place_legs(ctx, cfg), execute=args.execute, assume_yes=True
-        )
+        place_legs = runner.lookahead_result or build_place_legs(ctx, cfg)
+        res = runner.run(place_legs, execute=args.execute, assume_yes=True)
         if any(not r.ok for r in res):
             sys.exit(1)
         runner.finish()
