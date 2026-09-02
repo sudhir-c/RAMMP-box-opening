@@ -696,3 +696,29 @@ def test_setdown_verify_rejects_early_trips_and_no_touch():
     assert ok
     ok, why = v("arrived", 1.0)
     assert not ok and "never felt the surface" in why
+
+
+def test_park_tool_down_rests_at_the_scan_pose():
+    """open_box.park_tool_down: the mission ends at PARK (tool-down at the
+    scan pose) instead of the factory HOME, saving the 2.4-2.9 rad wrist
+    flip twice per run; off by default because the arm then rests over
+    the bench (audit 2026-09-02)."""
+    import math
+
+    from rammp_box_opening.constants import HOME, PARK, REST_TOL_RAD
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    assert cfg.park_tool_down is False
+    assert press_demo.rest_joints(cfg) == list(HOME)
+    on = replace(cfg, park_tool_down=True)
+    assert press_demo.rest_joints(on) == list(PARK)
+    legs = press_demo.build_place_legs(c, on)
+    assert legs[-1].name == "home" and legs[-1].target == ("joints", list(PARK))
+    # "already parked" is judged against the server's own start gate
+    assert press_demo.rest_distance(PARK, PARK) == 0.0
+    nudged = list(PARK)
+    nudged[3] += REST_TOL_RAD * 2
+    assert press_demo.rest_distance(nudged, PARK) > REST_TOL_RAD
+    assert press_demo.rest_distance([math.pi] + PARK[1:], PARK) > 1.0

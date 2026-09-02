@@ -33,3 +33,13 @@ BASELINE_TRAVEL_M = 0.01  # descent distance budget while the guard baselines
 
 GRIPPER_CMD_CLOSED = 0.8  # GripperCommand position at full close
 GRIPPER_CMD_OPEN = 0.0  # ~85 mm aperture
+
+# Tool-down rest pose at the scan pose [0.42, 0, 0.45] (open_box.park_tool_down).
+# HOME is the wrist-flat factory pose and every mission pose is tool-down —
+# a different IK family — so each run paid a 2.4-2.9 rad wrist/elbow flip
+# twice (scan flight 3.7-4.7 s, final home 3.5-5.5 s). Parked here, the
+# scan leg vanishes and the mission ends with a same-family move. Planned
+# from HOME with the real planner 2026-09-02: FK lands on the scan pose to
+# the mm, valid in the bench world, and PARK -> HOME plans clean.
+PARK = [0.608, 0.8905, 1.1224, -1.1386, -2.1213, 2.1767, 2.2738]
+REST_TOL_RAD = 0.05  # "already there": the server's own start gate

@@ -165,6 +165,7 @@ class PressDemoCfg:
     grip_hop_m: float  # retreat height above the plane between press and grip
     setdown_speed: float  # guarded set-down; the trip IS the success
     setdown_touch_nm: float  # set-down trip threshold (gentler than the press)
+    park_tool_down: bool  # rest at the scan pose between runs, not factory HOME
     merge_press: bool  # one continuous motion instead of approach+stop+press
     merge_press_max_lateral_m: float  # xy limit for allowing the merge
     warp_fast_speed: float  # free-air scale of a warped descent
@@ -211,6 +212,7 @@ def load_press_demo(path):
         grip_hop_m=float(raw["open_box"].get("grip_hop_m", 0.12)),
         setdown_speed=float(raw["open_box"].get("setdown_speed", 0.15)),
         setdown_touch_nm=float(raw["open_box"].get("setdown_touch_nm", 4.0)),
+        park_tool_down=bool(raw["open_box"].get("park_tool_down", False)),
         merge_press=bool(raw["open_box"].get("merge_press", False)),
         merge_press_max_lateral_m=float(
             raw["open_box"].get("merge_press_max_lateral_m", 0.05)

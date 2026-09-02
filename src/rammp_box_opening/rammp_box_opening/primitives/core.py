@@ -593,12 +593,16 @@ class PressFixed:
 
 
 class Home:
-    """Return to HOME joints via plan_to_joints (spec §5). Lazy when it
-    follows a lazy retreat (its start is unknown until then)."""
+    """Return to the rest joints (factory HOME, or PARK when the mission
+    rests tool-down) via plan_to_joints (spec §5). Lazy when it follows a
+    lazy retreat (its start is unknown until then)."""
+
+    def __init__(self, joints=None):
+        self.joints = list(HOME if joints is None else joints)
 
     def plan(self, ctx, state):
         world = _full_world(ctx)
         leg, state = _plan_motion(
-            ctx, state, "home", ("joints", list(HOME)), world, TRANSIT_SPEED
+            ctx, state, "home", ("joints", list(self.joints)), world, TRANSIT_SPEED
         )
         return [leg], state

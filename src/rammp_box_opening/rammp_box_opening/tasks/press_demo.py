@@ -30,6 +30,8 @@ import rclpy
 
 
 from rammp_box_opening.constants import (
+    PARK,
+    REST_TOL_RAD,
     GRIPPER_CMD_CLOSED,
     GRIPPER_CMD_OPEN,
     HOME,
@@ -90,6 +92,17 @@ def _state(joints):
     return PlanState(joints=list(joints), chain=0, contact_broke_chain=False)
 
 
+def rest_joints(cfg):
+    """Where a run starts and ends: factory HOME, or PARK (tool-down at
+    the scan pose) when open_box.park_tool_down is set."""
+    return list(PARK if cfg.park_tool_down else HOME)
+
+
+def rest_distance(live, joints):
+    """Worst per-joint distance (wrap-aware) from a rest pose."""
+    return max(abs(ang_diff(a, b)) for a, b in zip(live, joints))
+
+
 def build_scan_leg(ctx, cfg, start_joints):
     """Tool-down look pose over the bench. The bench world carries the
     unseen-container keep-out band: a container is somewhere, its pose
@@ -108,14 +121,14 @@ def build_scan_leg(ctx, cfg, start_joints):
     return leg
 
 
-def build_home_leg(ctx, start_joints):
+def build_home_leg(ctx, start_joints, joints=None):
     """No-tag exit: back to HOME above the unseen-container band."""
     world = ctx.worlds.push_name("bench", model=ctx.model)
     leg, _ = _plan_motion(
         ctx,
         _state(start_joints),
         "home",
-        ("joints", list(HOME)),
+        ("joints", list(HOME if joints is None else joints)),
         world,
         TRANSIT_SPEED,
     )
@@ -171,7 +184,7 @@ def build_press_legs(ctx, cfg, include_home=True):
     ).plan(ctx, st)
     legs = [*press_legs, *retreat_legs]
     if include_home:
-        home_legs, st = Home().plan(ctx, st)
+        home_legs, st = Home(rest_joints(cfg)).plan(ctx, st)
         legs += home_legs
     else:
         legs.append(_grip_open_after_retreat(ctx, st))
@@ -316,7 +329,7 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     ).plan(ctx, st)
     legs = [press, *retreat_legs]
     if include_home:
-        home_legs, st = Home().plan(ctx, st)
+        home_legs, st = Home(rest_joints(cfg)).plan(ctx, st)
         legs += home_legs
     else:
         legs.append(_grip_open_after_retreat(ctx, st))
@@ -466,7 +479,7 @@ def build_place_legs(ctx, cfg, start_joints=None):
     retreat_legs, st = Retreat(hover[2] - down_z, speed=TRANSIT_SPEED, lazy=True).plan(
         ctx, st
     )
-    home_legs, st = Home().plan(ctx, st)
+    home_legs, st = Home(rest_joints(cfg)).plan(ctx, st)
     return [*legs, *retreat_legs, *home_legs]
 
 
@@ -609,10 +622,14 @@ def center_on_tag(node, watcher, ctx, cfg, runner, execute, wait=None):
 
 def try_home(ctx, runner, execute, why):
     """Recovery home that cannot crash the exit path: a refused home plan
-    leaves the arm holding with an honest line (2026-08-25 review)."""
+    leaves the arm holding with an honest line (2026-08-25 review). Goes
+    to the mission's rest pose (ctx.press_cfg, when main set it)."""
     print("[press_demo] %s — returning home" % why)
+    cfg = getattr(ctx, "press_cfg", None)
     try:
-        leg = build_home_leg(ctx, ctx.client.joints())
+        leg = build_home_leg(
+            ctx, ctx.client.joints(), None if cfg is None else rest_joints(cfg)
+        )
     except RuntimeError as e:
         print("[press_demo] home plan refused (%s) — arm holds" % e)
         return
@@ -740,31 +757,41 @@ def main():
         config_path=cfg_path,
     )
 
+    ctx.press_cfg = cfg  # recovery homes go to the mission's rest pose
     try:
         print("[press_demo] SCAN: tool-down look pose %s" % (list(cfg.scan_xyz),))
         live = client.joints()
-        worst = max(abs(ang_diff(a, b)) for a, b in zip(live, HOME))
+        rests = [HOME] + ([PARK] if cfg.park_tool_down else [])
+        worst = min(rest_distance(live, r) for r in rests)
         if worst > HOME_START_TOL_RAD:
-            # every legitimate run starts near HOME; a distant start means
-            # the previous run ended badly. Planning anything from wreckage
-            # produced a half-inverted swing in the field (2026-09-01) —
-            # refuse BEFORE any motion and name the recovery.
+            # every legitimate run starts near a rest pose; a distant start
+            # means the previous run ended badly. Planning anything from
+            # wreckage produced a half-inverted swing in the field
+            # (2026-09-01) — refuse BEFORE any motion and name the recovery.
             print(
-                "[press_demo] arm starts %.2f rad from HOME (tol %.1f) — "
-                "refusing to plan from a failure pose. Recover first:\n"
-                "    python3 ~/RAMMP-CuRobo/scripts/go_home.py --execute"
+                "[press_demo] arm starts %.2f rad from any rest pose (tol %.1f) "
+                "— refusing to plan from a failure pose. Recover first:\n"
+                "    ros2 run rammp_box_opening home_arm --execute"
                 % (worst, HOME_START_TOL_RAD)
             )
             sys.exit(3)
         if owl is not None:
             owl.enable()  # the node infers only while a detect window is open
-        res = runner.run(
-            [build_scan_leg(ctx, cfg, live)],
-            execute=args.execute,
-            assume_yes=True,  # --execute alone arms the run (owner 2026-08-24)
-        )
-        if any(not r.ok for r in res):
-            sys.exit(1)
+        if cfg.park_tool_down and rest_distance(live, PARK) <= REST_TOL_RAD:
+            # already parked tool-down at the scan pose: no scan flight.
+            # The merged press needs the last COMMANDED pose to judge its
+            # lateral rail — seed it with the pose PARK was planned to.
+            bearing = math.atan2(cfg.scan_xyz[1], cfg.scan_xyz[0])
+            ctx.last_pose = (list(cfg.scan_xyz), list(attitude_quat([180.0, 0.0, 0.0], bearing)))
+            print("[press_demo] parked at the scan pose — no scan flight")
+        else:
+            res = runner.run(
+                [build_scan_leg(ctx, cfg, live)],
+                execute=args.execute,
+                assume_yes=True,  # --execute alone arms the run (owner 2026-08-24)
+            )
+            if any(not r.ok for r in res):
+                sys.exit(1)
 
         if args.detect_only:
             detect_only_report(node, watcher, ctx, cfg, runner, args.execute)
