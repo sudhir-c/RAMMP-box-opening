@@ -1,23 +1,19 @@
 """Shared CLI plumbing: args, node/client/runner wiring, safety refusals.
 
 Dry-run is the default for every CLI. --execute additionally requires the
-typed 'yes' inside Runner.run, the planner's own execute:=true for MOTION
-legs, and a measured container config (measure_me: false).
+typed 'yes' inside Runner.run (press_demo opts out: --execute alone arms
+it), the planner's own execute:=true for MOTION legs, and a measured
+container config (measure_me: false).
 """
 
 import argparse
-import math
 import sys
 from pathlib import Path
 
 import rclpy
 from rclpy.signals import SignalHandlerOptions
 
-from rammp_box_opening.models.container import (
-    ConfigPoseSource,
-    ContainerModel,
-    ContainerPose,
-)
+from rammp_box_opening.models.container import ContainerModel
 from rammp_box_opening.primitives.core import Ctx
 from rammp_box_opening.runtime.abort import AbortFlag, install_sigint
 from rammp_box_opening.runtime.client import PlannerClient
@@ -61,21 +57,7 @@ def make_parser(desc):
         default=None,
         help="bench world YAML (default: installed world_bench.yaml)",
     )
-    ap.add_argument(
-        "--lid-place",
-        type=float,
-        nargs=3,
-        metavar=("X", "Y", "Z"),
-        default=None,
-        help="override the lid set-down spot (base_link, m)",
-    )
     return ap
-
-
-def lid_place_of(args):
-    if args.lid_place is None:
-        return None
-    return ContainerPose(xyz=tuple(args.lid_place), yaw=0.0)
 
 
 def refuse_unmeasured(model, execute):
@@ -101,6 +83,8 @@ def init_runtime():
 
 
 def build_ctx(args):
+    """Ctx + Runner for a CLI that has not detected a container (cpose
+    None): only pre-detection (bench-world) legs can be planned from it."""
     cfg = args.container or default_container_yaml()
     bench = args.bench_world or default_bench_yaml()
     model = ContainerModel.load(cfg)
@@ -108,7 +92,7 @@ def build_ctx(args):
     node, client = init_runtime()
     ctx = Ctx(
         model=model,
-        cpose=ConfigPoseSource(cfg).container_pose(),
+        cpose=None,
         client=client,
         worlds=WorldStore(bench),
         config_path=cfg,
@@ -117,9 +101,9 @@ def build_ctx(args):
     return ctx, runner
 
 
-def run_task(args, build_legs, **kwargs):
+def run_task(args, build_legs):
     ctx, runner = build_ctx(args)
-    legs = build_legs(ctx, **{k: v for k, v in kwargs.items() if v is not None})
+    legs = build_legs(ctx)
     try:
         results = runner.run(legs, execute=args.execute)
     except KeyboardInterrupt:
@@ -127,7 +111,3 @@ def run_task(args, build_legs, **kwargs):
     bad = [r for r in results if not r.ok]
     if bad:
         sys.exit(1)
-
-
-def yaw_deg_to_rad(deg):
-    return math.radians(float(deg))

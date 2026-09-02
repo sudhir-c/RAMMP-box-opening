@@ -3,10 +3,8 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from rammp_box_opening.runtime.guards import (
     TorqueGuard,
-    check_standoff,
     classify_press,
     in_band,
-    min_standoff,
     press_outcome,
     reverse_retrace,
     sanity_violations,
@@ -58,13 +56,6 @@ def test_sanity_gate_wrap_aware():
     # joint crossing the pi boundary: 3.10 -> -3.10 is a 0.08 rad move
     t = _traj([[3.10], [3.14], [-3.10]])
     assert sanity_violations(t, margin_rad=0.35) == []
-
-
-def test_standoff_floor():
-    assert min_standoff() == pytest.approx(0.051)
-    check_standoff(hover_z=0.10, contact_z=0.0)  # 0.10 > 0.051: ok
-    with pytest.raises(ValueError):
-        check_standoff(hover_z=0.04, contact_z=0.0)
 
 
 def test_press_classification():

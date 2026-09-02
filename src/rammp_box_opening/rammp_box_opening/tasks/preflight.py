@@ -1,18 +1,20 @@
-"""Every-session preflight (spec §4): checks + idempotent world push.
+"""Every-session preflight (spec §4): the checks a mission needs to pass.
 
 FAIL (nonzero exit): /joint_states missing or without effort fields;
-planner actions unreachable; world push rejected.
+planner actions unreachable.
 Report-only: planner execute param value, controller states.
+
+No world is pushed here: worlds are a plan-time concern — every mission
+leg pushes the world it is planned against (core._plan_motion), so a
+preflight push would only be overwritten by the first plan.
 """
 
 import time
 
 import rclpy
 
-from rammp_box_opening.models.container import ConfigPoseSource, ContainerModel
 from rammp_box_opening.runtime.client import PlannerClient
 from rammp_box_opening.tasks import cli_common
-from rammp_box_opening.worlds import WorldStore
 
 
 def _controllers(node):
@@ -36,9 +38,7 @@ def _controllers(node):
 
 def main():
     ap = cli_common.make_parser(__doc__)
-    args = ap.parse_args()
-    cfg = args.container or cli_common.default_container_yaml()
-    bench = args.bench_world or cli_common.default_bench_yaml()
+    ap.parse_args()
 
     rclpy.init()
     node = rclpy.create_node("rammp_box_opening_preflight")
@@ -79,15 +79,5 @@ def main():
     else:
         for name, state in ctrls:
             print("INFO  controller %s: %s" % (name, state))
-
-    # 5. idempotent full-world push (SetWorld is write-only: preflight
-    #    ESTABLISHES the world rather than querying it)
-    model = ContainerModel.load(cfg)
-    cpose = ConfigPoseSource(cfg).container_pose()
-    name, path = WorldStore(bench).push_name("full", model=model, cpose=cpose)
-    ok, msg = client.set_world(str(path))
-    print("%s  set_world(%s): %s" % ("PASS" if ok else "FAIL", name, msg))
-    if not ok:
-        failures += 1
 
     raise SystemExit(1 if failures else 0)

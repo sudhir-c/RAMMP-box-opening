@@ -7,7 +7,6 @@ from test_runner import FakeClient, FakeStore
 from rammp_box_opening.models.container import ContainerModel, ContainerPose
 from rammp_box_opening.primitives.core import Ctx
 from rammp_box_opening.runtime.legs import Kind
-from rammp_box_opening.tasks import open_container, pickup_container
 
 CFG = "src/rammp_box_opening/config/containers/oxo_pop.yaml"
 
@@ -26,59 +25,24 @@ def names(legs):
     return [leg.name for leg in legs]
 
 
-def test_open_container_sequence():
-    legs = open_container.build_legs(ctx())
-    seq = names(legs)
-    assert seq[0].startswith("approach:button")
-    for prefix in [
-        "press",
-        "retreat",
-        "approach:lid",
-        "grasp:lid",
-        "lift",
-        "place:lid",
-        "home",
-    ]:
-        assert any(n.startswith(prefix) for n in seq), prefix
-    # ordering: press before grasp, grasp before lift, lift before place
-    idx = {
-        p: min(i for i, n in enumerate(seq) if n.startswith(p))
-        for p in ["press", "grasp:lid", "lift", "place:lid"]
-    }
-    assert idx["press"] < idx["grasp:lid"] < idx["lift"] < idx["place:lid"]
-    assert seq[-1] == "home"
-
-
-def test_open_container_worlds_carry_lid_after_place():
-    legs = open_container.build_legs(ctx())
-    place_i = max(i for i, leg in enumerate(legs) if leg.name.startswith("place:lid"))
-    after = [leg for leg in legs[place_i + 1 :] if leg.kind is Kind.MOTION]
-    assert after, "home leg expected after place"
-    assert all(
-        "lid" in leg.world for leg in after
-    ), "post-place worlds must include the placed-lid cuboid"
-
-
-def test_pickup_places_back_by_default_and_holds_on_request():
-    default = names(pickup_container.build_legs(ctx()))
-    assert any(n.startswith("place:container") for n in default)
-    held = names(pickup_container.build_legs(ctx(), hold=True))
-    assert not any(n.startswith("place:") for n in held)
-    assert held[-1] == "home"
-
-
 def test_entry_points_registered():
     setup = Path("src/rammp_box_opening/setup.py").read_text()
-    for ep in [
-        "open_container",
-        "pickup_container",
-        "smoke_plan",
-        "preflight",
-        "press",
-        "grasp",
-        "home_arm",
-    ]:
+    for ep in ["press_demo", "home_arm", "preflight", "owl_detector", "joint_state_relay"]:
         assert ep + " = " in setup
+
+
+def test_home_arm_plans_home_in_the_bench_world():
+    """The isolated recovery home knows no container pose: it plans above
+    the unseen-container band, like the mission's own recovery home."""
+    from rammp_box_opening.constants import HOME, TRANSIT_SPEED
+    from rammp_box_opening.tasks import home_arm
+
+    c = ctx()
+    c.cpose = None
+    legs = home_arm.build_legs(c)
+    assert names(legs) == ["home"]
+    assert legs[0].world == "bench" and legs[0].speed == TRANSIT_SPEED
+    assert legs[0].target == ("joints", list(HOME))
 
 
 def _demo_cfg():

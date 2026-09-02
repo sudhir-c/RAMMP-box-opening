@@ -3,7 +3,6 @@ import math
 import pytest
 
 from rammp_box_opening.models.container import (
-    ConfigPoseSource,
     ContainerModel,
     ContainerPose,
     attitude_quat,
@@ -18,17 +17,9 @@ CFG = "src/rammp_box_opening/config/containers/oxo_pop.yaml"
 def test_load_and_validate():
     m = ContainerModel.load(CFG)
     assert m.measure_me is False  # owner accepted values 2026-08-25
-    assert m.press_depth_window[0] < m.press_depth_window[1]
-    assert m.lid_grasp.width_m <= m.aperture_at_0  # graspable
-    assert m.body_grasp.width_m <= m.aperture_at_0
-
-
-def test_width_to_command_endpoints_and_refusal():
-    m = ContainerModel.load(CFG)
-    assert m.width_to_command(m.aperture_at_0) == pytest.approx(0.0)
-    assert m.width_to_command(m.aperture_at_08) == pytest.approx(0.8)
-    with pytest.raises(ValueError):
-        m.width_to_command(m.aperture_at_0 + 0.01)
+    assert len(m.dims) == 3 and len(m.lid_dims) == 3
+    assert m.button_offset[2] == pytest.approx(m.dims[2])  # button = top
+    assert m.touch_nm > 0 and m.hover_standoff > 0
 
 
 def test_from_container_rotates_by_yaw():
@@ -53,11 +44,10 @@ def test_attitude_quat_top_down_points_tool_down():
     assert ax[2] == pytest.approx(-1.0, abs=1e-6)  # tool z straight down
 
 
-def test_pose_source_and_lid_place():
-    cp = ConfigPoseSource(CFG).container_pose()
-    assert len(cp.xyz) == 3
+def test_lid_place_is_a_table_height_pose():
     lid = load_lid_place(CFG)
-    assert lid.xyz != cp.xyz  # set-down spot is elsewhere
+    assert len(lid.xyz) == 3
+    assert lid.xyz[2] == pytest.approx(-0.027)  # the measured table top
 
 
 def test_load_press_demo_cfg():

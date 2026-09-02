@@ -17,7 +17,6 @@ from dataclasses import dataclass
 
 from rammp_box_opening.constants import (
     CONTACT_SPEED,
-    GRIPPER_CMD_CLOSED,
     GRIPPER_CMD_OPEN,
     HOME,
     TRANSIT_SPEED,
@@ -26,9 +25,7 @@ from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.models.container import wrist_flat_quat
 from rammp_box_opening.runtime.guards import (
     GuardSpec,
-    check_standoff,
     in_band,
-    press_outcome,
     time_fraction_at_path_fraction,
 )
 from rammp_box_opening.runtime.legs import Kind, Leg
@@ -219,104 +216,6 @@ def _gripper_leg(
         defer_join=defer_join,
         join_before_motion=join_before_motion,
     )
-
-
-class Approach:
-    """Transit to a hover/staging pose — never to contact depth (spec §5)."""
-
-    def __init__(self, target_xyz, quat, name="approach"):
-        self.target_xyz = list(target_xyz)
-        self.quat = list(quat)
-        self.name = name
-
-    def plan(self, ctx, state):
-        world = _full_world(ctx)
-        leg, state = _plan_motion(
-            ctx,
-            state,
-            self.name,
-            ("pose", self.target_xyz, self.quat),
-            world,
-            TRANSIT_SPEED,
-        )
-        return [leg], state
-
-
-class Press:
-    """Close the gripper, then a guarded descent onto the button (spec §5).
-
-    Trip inside depth_window = pressed; before it = rim; untripped at
-    depth_window.max = no click. All three classified by the leg verify."""
-
-    def plan(self, ctx, state):
-        m = ctx.model
-        button = from_container(ctx.cpose, m.button_offset)
-        quat = attitude_quat(m.press_attitude_rpy_deg, ctx.cpose.yaw)
-        window = m.press_depth_window
-        check_standoff(button[2] + m.hover_standoff, button[2])
-        world = _interaction_world(ctx, button, button[2], window[1], "button")
-        ctx.last_world = world
-        close = _gripper_leg(ctx, state, "press:close", GRIPPER_CMD_CLOSED, world)
-        target = [button[0], button[1], button[2] - window[1]]
-        guard = GuardSpec(
-            touch_nm=m.touch_nm,
-            trip="press",
-            depth_window=window,
-            target_z=button[2],
-            needs_depth=True,  # press_outcome below reads v.depth_m
-        )
-
-        def verify(v):
-            return press_outcome(v.outcome, v.depth_m, window)
-
-        descend, state = _plan_motion(
-            ctx,
-            state,
-            "press:down",
-            ("pose", target, quat, 0.06),  # vertical final (see PressFixed)
-            world,
-            CONTACT_SPEED,
-            guard=guard,
-            invalidates=True,
-            verify=verify,
-        )
-        return [close, descend], state
-
-
-class Grasp:
-    """Guarded descent (a trip = mispositioned strike = FAILURE), then a
-    graded close verified against the expected grip band (spec §5)."""
-
-    def __init__(self, spec, name="grasp"):
-        self.spec = spec
-        self.name = name
-
-    def plan(self, ctx, state):
-        m = ctx.model
-        point = from_container(ctx.cpose, self.spec.offset)
-        quat = attitude_quat(self.spec.attitude_rpy_deg, ctx.cpose.yaw)
-        check_standoff(point[2] + m.hover_standoff, point[2])
-        world = _interaction_world(ctx, point, point[2], 0.0, self.name)
-        ctx.last_world = world
-        guard = GuardSpec(touch_nm=m.touch_nm, trip="obstruction", target_z=point[2])
-        descend, state = _plan_motion(
-            ctx,
-            state,
-            self.name + ":down",
-            ("pose", point, quat),
-            world,
-            CONTACT_SPEED,
-            guard=guard,
-        )
-        close = _gripper_leg(
-            ctx,
-            state,
-            self.name + ":close",
-            m.width_to_command(self.spec.width_m),
-            world,
-            verify=band_verify(self.spec.expect_band),
-        )
-        return [descend, close], state
 
 
 class Lift:

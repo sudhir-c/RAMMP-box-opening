@@ -17,8 +17,8 @@ radius, and the TOOL-DOWN band is different and previously unmeasured —
 this map is what defines where the container may sit (field lesson 1).
 
 Writes docs/reach_map.json (deterministic path, meant to be committed)
-and prints per-height ASCII maps. Also probes the exact configured
-bench_pose / lid_place mission poses at their own yaw.
+and prints per-height ASCII maps. Also probes the two configured mission
+poses: the scan pose and the lid_place carry hover, at their own yaw.
 
 Caveats recorded in the JSON meta: bare-bench world (the container adds
 obstacles that can only shrink the map), start = HOME for every plan
@@ -41,11 +41,10 @@ import yaml  # noqa: E402
 
 from rammp_box_opening.constants import HOME  # noqa: E402
 from rammp_box_opening.models.container import (  # noqa: E402
-    ConfigPoseSource,
     ContainerModel,
     attitude_quat,
-    from_container,
     load_lid_place,
+    load_press_demo,
 )
 
 CONTAINER_YAML = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
@@ -95,17 +94,12 @@ def ascii_map(rows, xs, ys):
     return "\n".join(lines)
 
 
-def probe_mission_poses(planner, model, cpose, lid):
-    """The exact poses the Phase-1 task will command, at their own yaw."""
-    button = from_container(cpose, model.button_offset)
+def probe_mission_poses(planner, model, scan_xyz, lid):
+    """The configured (not detected) poses the mission commands, at their
+    own yaw: the scan pose and the lid set-down's carry hover."""
     out = []
     for name, xyz, yaw in [
-        (
-            "bench:hover",
-            [button[0], button[1], button[2] + model.hover_standoff],
-            cpose.yaw,
-        ),
-        ("bench:contact", button, cpose.yaw),
+        ("scan", list(scan_xyz), math.atan2(scan_xyz[1], scan_xyz[0])),
         (
             "lid_place:hover",
             [
@@ -146,7 +140,7 @@ def main():
     from rammp_curobo import CuRoboPlanner
 
     model = ContainerModel.load(str(CONTAINER_YAML))
-    cpose = ConfigPoseSource(str(CONTAINER_YAML)).container_pose()
+    scan_xyz = load_press_demo(str(CONTAINER_YAML)).scan_xyz
     lid = load_lid_place(str(CONTAINER_YAML))
     top = table_top_z(BENCH_YAML)
     z_contact = top + model.button_offset[2]
@@ -173,7 +167,7 @@ def main():
     levels = {}
     for label, z in [("contact", z_contact), ("hover", z_hover)]:
         levels[label] = probe_grid(planner, xs, ys, z, label)
-    mission = probe_mission_poses(planner, model, cpose, lid)
+    mission = probe_mission_poses(planner, model, scan_xyz, lid)
 
     for label in levels:
         n_ok = sum(1 for r in levels[label] if r["success"])

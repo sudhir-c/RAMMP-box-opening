@@ -14,12 +14,6 @@ from trajectory_msgs.msg import JointTrajectory
 
 from rammp_curobo.geometry import ang_diff
 
-from rammp_box_opening.constants import (
-    BASELINE_TRAVEL_M,
-    POSE_UNCERTAINTY_M,
-    TIP_BIAS_M,
-)
-
 
 class TorqueGuard:
     def __init__(self, touch_nm, rebaseline_after=None, arm_after=None):
@@ -75,12 +69,12 @@ class GuardSpec:
     trip: str  # "press" | "obstruction" | "setdown"
     depth_window: tuple = None  # "press" only, m below nominal contact z
     target_z: float = None  # nominal contact z (base_link) for depth calc
-    # Whether this leg's verify actually CONSUMES the measured depth.
-    # Only Descend's press_outcome does. Reading it costs a tool_frame TF
-    # lookup, and this TF tree has no tool_frame at all — the lookup spins
-    # its full timeout and returns None (field 2026-08-25). PressFixed
-    # judges by progress + torque instead, so it leaves this False and the
-    # Runner skips the lookup entirely.
+    # Whether this leg's verify actually CONSUMES the measured depth (a
+    # press_outcome-style depth-window verdict). Reading it costs a
+    # tool_frame TF lookup, and this TF tree has no tool_frame at all —
+    # the lookup spins its full timeout and returns None (field
+    # 2026-08-25). The mission's press judges by progress + torque
+    # instead, so it leaves this False and the Runner skips the lookup.
     needs_depth: bool = False
     # time fraction at which a warped descent enters its slow zone;
     # the Runner hands it to TorqueGuard so the baseline is re-taken
@@ -110,20 +104,6 @@ def sanity_violations(traj, margin_rad):
                 "%s excursion %.3f rad > |Δ| + margin %.3f" % (name, excursion, allowed)
             )
     return out
-
-
-def min_standoff():
-    """Below this the guard baseline could be captured already in contact."""
-    return POSE_UNCERTAINTY_M + TIP_BIAS_M + BASELINE_TRAVEL_M
-
-
-def check_standoff(hover_z, contact_z):
-    gap = hover_z - contact_z
-    if gap < min_standoff():
-        raise ValueError(
-            "hover standoff %.3f m < required %.3f m — the guard baseline "
-            "could be captured in contact (spec §6)" % (gap, min_standoff())
-        )
 
 
 def classify_press(depth_m, window):
