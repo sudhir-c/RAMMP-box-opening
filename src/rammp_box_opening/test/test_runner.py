@@ -630,3 +630,87 @@ def test_no_motion_retry_keeps_the_hosted_lookahead(tmp_path):
     res = r.run([leg("a", Q0, Q1)], execute=True, assume_yes=True, lookahead=lambda q: ["next"])
     assert res[0].ok and len(c.executed) == 2
     assert r.lookahead_result == ["next"]
+
+
+def test_ctrl_c_during_a_hosted_lookahead_still_cancels_the_goal():
+    """The hosted plan runs INSIDE execute's cancel backstop: a Ctrl+C
+    raised from it (second press) reaches cancel_goal_async, and a first
+    press that only set the abort flag while the motion finished under
+    the plan is delivered as a confirmed cancel, not swallowed (review
+    2026-09-02)."""
+    import pytest
+
+    from rammp_box_opening.runtime import client as client_mod
+
+    class Fut:
+        def __init__(self, result=None, done=True):
+            self._r, self._d = result, done
+
+        def done(self):
+            return self._d
+
+        def result(self):
+            return self._r
+
+    class Send:
+        accepted = True
+
+        def __init__(self, events):
+            self.events = events
+
+        def get_result_async(self):
+            return Fut(done=False)  # the motion is flying
+
+        def cancel_goal_async(self):
+            self.events.append("cancel")
+            return Fut(result=object())
+
+    class Exec:
+        def __init__(self, events):
+            self.events = events
+
+        def wait_for_server(self, timeout_sec=None):
+            return True
+
+        def send_goal_async(self, goal, feedback_callback=None):
+            return Fut(result=Send(self.events))
+
+    class Abort:
+        requested = False
+        goal_in_flight = False
+
+    class Node:
+        pass
+
+    events = []
+    c = client_mod.PlannerClient.__new__(client_mod.PlannerClient)
+    c.node = Node()
+    c._execute = Exec(events)
+    c._abort = Abort()
+    c._eff, c._eff_at, c._q = None, 0.0, None
+    c.wrist_efforts = lambda: None
+    c._cancel_confirm = lambda send, fut: events.append("cancel-confirm")
+    orig_spin = client_mod.rclpy.spin_once
+    client_mod.rclpy.spin_once = lambda node, timeout_sec=0.0: None
+    try:
+        # second Ctrl+C: raised from inside the hosted plan
+        def boom():
+            raise KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            c.execute(traj(Q0, Q1), 0.5, guard=None, while_running=boom)
+        assert "cancel" in events  # the backstop cancel was sent
+        events.clear()
+
+        # first Ctrl+C: the flag is set while the plan runs; the motion may
+        # even have finished meanwhile — it must still be delivered
+        def flag():
+            c._abort.requested = True
+            return "legs"
+
+        with pytest.raises(KeyboardInterrupt):
+            c.execute(traj(Q0, Q1), 0.5, guard=None, while_running=flag)
+        assert events == ["cancel-confirm"]
+        assert c._abort.goal_in_flight is False
+    finally:
+        client_mod.rclpy.spin_once = orig_spin
