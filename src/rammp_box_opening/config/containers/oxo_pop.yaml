@@ -147,14 +147,7 @@ open_box:
                                   # a 75 mm box there is only 5 mm of
                                   # side clearance — this trim matters
 
-# --- press_demo (tag-driven press flow, owner design 2026-08-24) ---------
-tag:                              # printed marker on the button top
-  id: 0                           # DICT_4X4_50 (docs/tag0_50mm.png)
-  size_m: 0.03                    # 30 mm file (docs/tag0_30mm.png) — the
-                                  # printer rescales: MEASURE the print and
-                                  # correct this (last print came out 1.2x)
-  offset_xyz: [0.0, 0.0, 0.0]     # tag center -> button top center, container
-                                  # frame (0 = tag stuck ON the button)
+# --- press_demo (camera-driven press flow, owner design 2026-08-24) ------
 press_demo:
   travel_m: 0.015                 # owner 2026-08-26 (third bump; the guard
                                   # at 6 Nm remains the force ceiling)
@@ -186,21 +179,17 @@ vlm:                              # detect.source: vlm — the semantic gate
                                   # back to plain depth, never stalls
   pad_px: 20                      # bbox padding before it gates the depth
 detect:
-  source: vlm                     # vlm | depth | tag. vlm = ONE Claude call
+  source: vlm                     # vlm | depth. vlm = ONE Claude call
                                   # picks WHICH surface is the container
                                   # (bbox), then the depth plateau inside it
                                   # supplies the mm geometry; every depth
                                   # honesty gate still stands, and any VLM
                                   # failure falls back to depth. depth = the
-                                  # geometry alone (refuses when ambiguous).
-                                  # tag = the retired ArUco path (A/B only).
-                                  # Old comment for depth/tag context:
-                                  # geometry (lid plateau above the measured
-                                  # table) — no print to wear out; the press
-                                  # knuckles destroyed two tag prints in a
-                                  # week (field 2026-09-01). tag = the ArUco
-                                  # path, kept for A/B and for containers
-                                  # too flat for the height band.
+                                  # geometry alone (lid plateau above the
+                                  # measured table; refuses when ambiguous).
+                                  # No print to wear out: the press knuckles
+                                  # destroyed two ArUco prints in a week
+                                  # (field 2026-09-01) and that path is gone.
   timeout_s: 10.0                 # scan-pose wait for a stable fix
   min_hits: 3                     # agreeing frames before the fix commits
   tol_m: 0.015                    # pairwise agreement (stable_fix). 0.03
@@ -220,18 +209,3 @@ detect:
                                   # single-threaded spin that polls the torque
                                   # guard, so 20 Hz buys most of the win
                                   # without tripling the load during contact.
-servo:                            # center-the-tag loop (owner 2026-08-25):
-  tol_px: 40.0                    # ~1.8 cm at scan range: one servo move
-                                  # usually suffices; the close-range re-fix
-                                  # absorbs the residual (owner: fewer pauses)
-  max_iters: 0                    # lateral looks before pressing on anyway.
-                                  # 0 = detect once and press on that fix.
-                                  # Measured over the live runs: iteration 0
-                                  # committed 5/5, iteration 1 only 1/4 — the
-                                  # re-acquisition after the servo move was
-                                  # the demo's single biggest failure source
-                                  # (three 10 s no-tag aborts). The
-                                  # close-range re-fix at staging already
-                                  # absorbs the lateral residual.
-  min_step_m: 0.01                # skip micro-moves (kortex small-goal lore)
-  max_step_m: 0.25                # clamp one servo translation

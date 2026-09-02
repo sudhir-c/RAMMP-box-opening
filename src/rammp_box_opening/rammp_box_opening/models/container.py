@@ -140,24 +140,17 @@ def load_lid_place(path):
 
 @dataclass(frozen=True)
 class PressDemoCfg:
-    """Knobs of the tag-driven press flow (owner design 2026-08-24)."""
+    """Knobs of the camera-driven press flow (owner design 2026-08-24)."""
 
-    tag_id: int
-    tag_size_m: float
-    tag_offset: tuple  # tag center -> button top center, container frame
-    travel_m: float  # press depth below the tag plane
+    travel_m: float  # press depth below the lid plane
     press_speed: float
-    staging_m: float  # full-world approach height above the tag
+    staging_m: float  # full-world approach height above the button
     scan_xyz: tuple
     timeout_s: float
     min_hits: int
     tol_m: float
     window_s: float
     fresh_s: float
-    servo_tol_px: float
-    servo_max_iters: int
-    servo_min_step_m: float
-    servo_max_step_m: float
     grip_band: tuple  # gripper feedback band = holding the popped button
     lift_m: float
     lift_speed: float
@@ -170,10 +163,10 @@ class PressDemoCfg:
     merge_press_max_lateral_m: float  # xy limit for allowing the merge
     warp_fast_speed: float  # free-air scale of a warped descent
     warp_slow_frac: float  # final path fraction at contact speed
-    grip_clear_m: float  # fingertip stop height above the tag/lid plane
+    grip_clear_m: float  # fingertip stop height above the lid plane
     grip_offset_xy: tuple  # base-frame grasp trim (bench-measured bias)
     detect_period_s: float  # detector tick; min_hits * this = commit floor
-    detect_source: str  # 'vlm' | 'depth' | 'tag'
+    detect_source: str  # 'vlm' | 'depth'
     vlm_backends: tuple  # ladder order, e.g. ('owl', 'claude')
     vlm_model: str
     owl_model: str
@@ -187,11 +180,8 @@ class PressDemoCfg:
 def load_press_demo(path):
     with open(path) as f:
         raw = yaml.safe_load(f)
-    tag, pd = raw["tag"], raw["press_demo"]
+    pd = raw["press_demo"]
     cfg = PressDemoCfg(
-        tag_id=int(tag["id"]),
-        tag_size_m=float(tag["size_m"]),
-        tag_offset=tuple(tag.get("offset_xyz", (0.0, 0.0, 0.0))),
         travel_m=float(pd["travel_m"]),
         press_speed=float(pd["speed"]),
         staging_m=float(pd["staging_m"]),
@@ -201,10 +191,6 @@ def load_press_demo(path):
         tol_m=float(raw["detect"]["tol_m"]),
         window_s=float(raw["detect"]["window_s"]),
         fresh_s=float(raw["detect"]["fresh_s"]),
-        servo_tol_px=float(raw["servo"]["tol_px"]),
-        servo_max_iters=int(raw["servo"]["max_iters"]),
-        servo_min_step_m=float(raw["servo"]["min_step_m"]),
-        servo_max_step_m=float(raw["servo"]["max_step_m"]),
         grip_band=tuple(raw["open_box"]["grip_band"]),
         lift_m=float(raw["open_box"]["lift_m"]),
         lift_speed=float(raw["open_box"]["lift_speed"]),
@@ -222,7 +208,7 @@ def load_press_demo(path):
         grip_clear_m=float(raw["open_box"]["grip_clear_m"]),
         grip_offset_xy=tuple(raw["open_box"]["grip_offset_xy"]),
         detect_period_s=float(raw["detect"].get("period_s", 0.15)),
-        detect_source=str(raw["detect"].get("source", "tag")),
+        detect_source=str(raw["detect"].get("source", "depth")),
         vlm_backends=tuple(raw.get("vlm", {}).get("backends", ("claude",))),
         vlm_model=str(raw.get("vlm", {}).get("model", "claude-opus-5")),
         owl_model=str(
@@ -249,12 +235,8 @@ def load_press_demo(path):
     if any(abs(v) > 0.02 for v in cfg.grip_offset_xy):
         raise ValueError(
             "open_box.grip_offset_xy is a mm-scale bias trim, not an offset "
-            "— |each| must be <= 0.02 m (re-measure the tag/mount instead)"
+            "— |each| must be <= 0.02 m (re-measure the mount instead)"
         )
-    if cfg.servo_tol_px <= 0 or cfg.servo_max_iters < 0:
-        raise ValueError("servo.tol_px must be positive, max_iters >= 0")
-    if not 0 < cfg.servo_min_step_m < cfg.servo_max_step_m:
-        raise ValueError("servo step bounds must satisfy 0 < min < max")
     if cfg.travel_m <= 0:
         raise ValueError("press_demo.travel_m must be positive")
     if not 0.0 < cfg.press_speed <= 1.0:
@@ -279,13 +261,13 @@ def load_press_demo(path):
     if not 0.0 < cfg.merge_press_max_lateral_m <= 0.35:
         raise ValueError(
             "open_box.merge_press_max_lateral_m must be in (0, 0.35] — past "
-            "the camera's own scan footprint the tag could not have been "
+            "the camera's own scan footprint the box could not have been "
             "seen, and the merged solve plans in the reduced world"
         )
     if not 0.0 < cfg.warp_slow_frac < 1.0:
         raise ValueError("open_box.warp_slow_frac must be in (0, 1)")
-    if cfg.detect_source not in ("tag", "depth", "vlm"):
-        raise ValueError("detect.source must be 'tag', 'depth' or 'vlm'")
+    if cfg.detect_source not in ("depth", "vlm"):
+        raise ValueError("detect.source must be 'depth' or 'vlm'")
     bad = set(cfg.vlm_backends) - {"owl", "claude"}
     if bad or (cfg.detect_source == "vlm" and not cfg.vlm_backends):
         raise ValueError("vlm.backends must be a non-empty subset of ['owl', 'claude']")

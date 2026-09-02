@@ -47,12 +47,6 @@ from rammp_box_opening.models.container import (
 )
 from rammp_box_opening.perception.depth_source import BoxTopWatcher
 from rammp_box_opening.perception.vlm_source import resolve_roi
-from rammp_box_opening.perception.tag_source import (
-    TagWatcher,
-    container_pose_from_tag,
-    servo_step,
-    to_camera,
-)
 from rammp_box_opening.primitives.core import (
     SETDOWN_OVERDRIVE_M,
     Ctx,
@@ -77,15 +71,6 @@ from rammp_box_opening.models.container import attitude_quat, from_container
 from rammp_box_opening.runtime.runner import Runner
 from rammp_box_opening.tasks import cli_common
 from rammp_box_opening.worlds import WorldStore
-
-
-def fix_to_cpose(watcher, got, model, cfg):
-    """Fix -> ContainerPose, whichever source produced it. The depth
-    watcher owns its conversion; the tag path keeps the existing free
-    function (TagWatcher predates the model being available to it)."""
-    if hasattr(watcher, "to_container_pose"):
-        return watcher.to_container_pose(got)
-    return container_pose_from_tag(got[0], got[1], model, cfg.tag_offset)
 
 
 def _state(joints):
@@ -495,30 +480,6 @@ def build_demo_legs(ctx, cfg):
     ]
 
 
-def build_servo_leg(ctx, cfg, disp, i):
-    """One lateral centering translation at the current height.
-
-    Anchored on the last COMMANDED pose (arrival-enforced by the runner),
-    not live TF: this bringup's TF tree has no `tool_frame`, and the
-    commanded pose is the more deterministic anchor anyway — each step
-    re-observes, so small arrival error self-corrects (field 2026-08-25)."""
-    if ctx.last_pose is None:
-        return None
-    tool = ctx.last_pose[0]
-    target = [tool[0] + disp[0], tool[1] + disp[1], tool[2]]
-    quat = attitude_quat([180.0, 0.0, 0.0], math.atan2(target[1], target[0]))
-    world = ctx.worlds.push_name("bench", model=ctx.model)
-    leg, _ = _plan_motion(
-        ctx,
-        _state(ctx.client.joints()),
-        "servo:%d" % i,
-        ("pose", target, quat),
-        world,
-        TRANSIT_SPEED,
-    )
-    return leg
-
-
 def _spin_detect(node):
     try:
         rclpy.spin_once(node, timeout_sec=0.1)
@@ -531,16 +492,13 @@ def _spin_detect(node):
 def wait_for_fix(node, watcher, cfg, timeout_s=None):
     """Spin (the watcher ticks on its timer) until a fresh stable fix.
 
-    Whether the window is purged first is the SOURCE's policy
-    (PURGE_ON_WAIT). The tag path purges: PnP orientation is fragile in
-    motion. The depth path keeps its in-flight samples — geometry is
-    lifted with frame-stamp TF, the freshness window (1 s) means only
-    the scan's DECELERATION tail can support a commit anyway, and the
+    The window is never purged here: the watcher keeps its in-flight
+    samples — geometry is lifted with frame-stamp TF, the still-camera
+    filter drops moving frames, the freshness window (1 s) means only
+    the scan's parked tail can support a commit anyway, and the
     3-agreeing gate still stands — so a fix is often ready the moment
     the arm parks instead of half a second later (owner: detect during
     the flip, 2026-09-01)."""
-    if getattr(watcher, "PURGE_ON_WAIT", True):
-        watcher.reset()
     limit = cfg.timeout_s if timeout_s is None else timeout_s
     t0 = time.monotonic()
     watcher.active = True  # the detector only works inside a detect window
@@ -553,71 +511,6 @@ def wait_for_fix(node, watcher, cfg, timeout_s=None):
         return None
     finally:
         watcher.active = False
-
-
-def center_on_tag(node, watcher, ctx, cfg, runner, execute, wait=None):
-    """Owner design 2026-08-25: translate at scan height until the tag is
-    at the image center, then press from what the CENTERED camera sees.
-
-    Returns (fix, why): why is "ok" (centered, or unconverged-but-honest),
-    "no_tag" (benign detect timeout -> caller homes, exit 2), or
-    "servo_failed" (plan/exec/TF failure -> caller does NOT command more
-    motion; the arm holds, like every other leg failure)."""
-    wait = wait_for_fix if wait is None else wait
-    prev_px = None
-    for i in range(cfg.servo_max_iters + 1):
-        got = wait(node, watcher, cfg)
-        if got is None:
-            return None, "no_tag"
-        if watcher.last_debug is None:
-            return None, "servo_failed"
-        # judge centering on the MEDIAN fix the press will use, not the
-        # last single sighting (2026-08-25 review)
-        _p_last, rot_cam, trans_cam = watcher.last_debug
-        p_med = to_camera(got[0], rot_cam, trans_cam)
-        disp, px = servo_step(
-            p_med,
-            rot_cam,
-            watcher.grab.k,
-            cfg.servo_tol_px,
-            cfg.servo_min_step_m,
-            cfg.servo_max_step_m,
-        )
-        if disp is None:
-            print("[press_demo] CENTERED — tag %.0f px off the optical axis" % px)
-            return got, "ok"
-        if prev_px is not None and px > prev_px + 20.0:
-            # a correct servo shrinks the error every step; growth means
-            # the camera frame is wrong (e.g. a flipped mount mirrors the
-            # correction) — stop instead of walking away (field 2026-08-25)
-            print(
-                "[press_demo] servo DIVERGING (%.0f -> %.0f px) — camera "
-                "frame is wrong, stopping" % (prev_px, px)
-            )
-            return None, "servo_failed"
-        prev_px = px
-        if i == cfg.servo_max_iters:
-            print(
-                "[press_demo] centering unconverged (%.0f px after %d moves) "
-                "— pressing on the freshest fix" % (px, i)
-            )
-            return got, "ok"
-        print(
-            "[press_demo] SERVO %d: tag %.0f px off — shifting [%.3f, %.3f]"
-            % (i + 1, px, disp[0], disp[1])
-        )
-        try:
-            leg = build_servo_leg(ctx, cfg, disp, i + 1)
-        except RuntimeError as e:
-            print("[press_demo] servo plan refused: %s" % e)
-            return None, "servo_failed"
-        if leg is None:
-            print("[press_demo] no commanded pose to anchor the servo move")
-            return None, "servo_failed"
-        res = runner.run([leg], execute=execute, assume_yes=True)
-        if any(not r.ok for r in res):
-            return None, "servo_failed"
-    return None, "servo_failed"
 
 
 def try_home(ctx, runner, execute, why):
@@ -638,7 +531,7 @@ def try_home(ctx, runner, execute, why):
 
 def detect_only_report(node, watcher, ctx, cfg, runner, execute):
     """Mount-calibration observation: hold at the scan pose reporting every
-    fresh fix with its raw camera-frame ingredients, then park home.
+    fresh fix (top-face centre, yaw, footprint), then park home.
 
     Place the container at a TAPE-MEASURED spot first; the printed base
     pose vs truth solves the wrist-mount error."""
@@ -652,48 +545,23 @@ def detect_only_report(node, watcher, ctx, cfg, runner, execute):
         got = watcher.fix()
         if got is None:
             continue
-        pos, rot = got
+        pos, yaw = got
         key = tuple(round(float(v), 4) for v in pos)
         if key == last:
             continue
         last = key
-        if isinstance(watcher, BoxTopWatcher):
-            f = watcher.last_debug
-            print(
-                "fix: top [%.3f, %.3f, %.3f] yaw %.1f | footprint "
-                "%.3fx%.3f m | %d px"
-                % (
-                    pos[0],
-                    pos[1],
-                    pos[2],
-                    math.degrees(float(rot)),
-                    f.footprint[0],
-                    f.footprint[1],
-                    f.n_px,
-                )
-            )
-            continue
-        yaw = math.degrees(math.atan2(rot[1][0], rot[0][0]))
-        p_cam, rot_cam, t_cam = watcher.last_debug
+        f = watcher.last_debug
         print(
-            "fix: base [%.3f, %.3f, %.3f] yaw %.1f | p_cam [%.3f, %.3f, %.3f]"
-            " | cam_t [%.3f, %.3f, %.3f]"
+            "fix: top [%.3f, %.3f, %.3f] yaw %.1f | footprint %.3fx%.3f m | %d px"
             % (
                 pos[0],
                 pos[1],
                 pos[2],
-                yaw,
-                p_cam[0],
-                p_cam[1],
-                p_cam[2],
-                t_cam[0],
-                t_cam[1],
-                t_cam[2],
+                math.degrees(float(yaw)),
+                f.footprint[0],
+                f.footprint[1],
+                f.n_px,
             )
-        )
-        print(
-            "     cam_R rows [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]"
-            % tuple(float(v) for row in rot_cam for v in row)
         )
     print("[press_demo] detect-only done (%s) — homing" % watcher.status())
     runner.run(
@@ -739,15 +607,12 @@ def main():
         # fix is usually ready within a few still frames of arrival
         owl = make_topic_rung(node, cfg, watcher_holder := {})
         impls = {"owl": owl, "claude": fetch_box_roi}
-    if cfg.detect_source in ("depth", "vlm"):
-        # the box found by geometry: lid plateau above the measured table.
-        # No print to wear out — the press knuckles destroyed two tag
-        # prints in a week (field 2026-09-01).
-        watcher = BoxTopWatcher(node, cfg, model, worlds.table_top_z)
-        if impls is not None:
-            watcher_holder["watcher"] = watcher
-    else:
-        watcher = TagWatcher(node, cfg)
+    # the box found by geometry: lid plateau above the measured table.
+    # No print to wear out — the press knuckles destroyed two tag prints
+    # in a week (field 2026-09-01).
+    watcher = BoxTopWatcher(node, cfg, model, worlds.table_top_z)
+    if impls is not None:
+        watcher_holder["watcher"] = watcher
     # camera on from here to exit
     ctx = Ctx(
         model=model,
@@ -797,65 +662,52 @@ def main():
             detect_only_report(node, watcher, ctx, cfg, runner, args.execute)
             sys.exit(0)
 
-        noun = "BOX" if cfg.detect_source in ("depth", "vlm") else "TAG"
-        if cfg.detect_source in ("depth", "vlm"):
-            # DEPTH FIRST, INSTANTLY. One box-sized plateau on the bench
-            # is unambiguous geometry — with in-flight samples the fix is
-            # often committed the moment the arm parks, and blocking on a
-            # semantic model first cost 13 s in the field (2026-09-01:
-            # OWL score dipped under threshold -> 5 s rung timeout ->
-            # 3.3 s Claude network call -> commit). The ladder now runs
-            # ONLY when depth cannot answer alone (ambiguity, or nothing
-            # found in the first beat) — semantics on demand.
-            t_detect = time.monotonic()
-            got = wait_for_fix(node, watcher, cfg, timeout_s=2.0)
-            if got is None and cfg.detect_source == "vlm":
-                while watcher.grab.color is None:
-                    _spin_detect(node)
-                # the cloud rung is bounded to the detect time LEFT: on the
-                # no-internet target an unbounded call stalled far past
-                # the budget (review 2026-09-02)
-                budget = cfg.timeout_s - (time.monotonic() - t_detect)
-                bound = dict(impls)
-                if "claude" in bound:
-                    bound["claude"] = lambda img, c, _b=budget: fetch_box_roi(
-                        img, c, budget_s=_b
-                    )
-                roi, lines = resolve_roi(watcher.grab.color, cfg, impls=bound)
-                for ln in lines:
-                    print("[press_demo] VLM %s" % ln)
-                watcher.roi = roi  # None = ungated, honest refusals stand
-                remaining = cfg.timeout_s - (time.monotonic() - t_detect)
-                if remaining > 0:
-                    got = wait_for_fix(node, watcher, cfg, timeout_s=remaining)
-            elif got is None:
-                remaining = cfg.timeout_s - (time.monotonic() - t_detect)
-                if remaining > 0:
-                    got = wait_for_fix(node, watcher, cfg, timeout_s=remaining)
-            why = "ok" if got is not None else "no_tag"
-        else:
-            got, why = center_on_tag(node, watcher, ctx, cfg, runner, args.execute)
+        # DEPTH FIRST, INSTANTLY. One box-sized plateau on the bench is
+        # unambiguous geometry — with in-flight samples the fix is often
+        # committed the moment the arm parks, and blocking on a semantic
+        # model first cost 13 s in the field (2026-09-01: OWL score
+        # dipped under threshold -> 5 s rung timeout -> 3.3 s Claude
+        # network call -> commit). The ladder runs ONLY when depth
+        # cannot answer alone (ambiguity, or nothing found in the first
+        # beat) — semantics on demand.
+        t_detect = time.monotonic()
+        got = wait_for_fix(node, watcher, cfg, timeout_s=2.0)
+        if got is None and cfg.detect_source == "vlm":
+            while watcher.grab.color is None:
+                _spin_detect(node)
+            # the cloud rung is bounded to the detect time LEFT: on the
+            # no-internet target an unbounded call stalled far past the
+            # budget (review 2026-09-02)
+            budget = cfg.timeout_s - (time.monotonic() - t_detect)
+            bound = dict(impls)
+            if "claude" in bound:
+                bound["claude"] = lambda img, c, _b=budget: fetch_box_roi(
+                    img, c, budget_s=_b
+                )
+            roi, lines = resolve_roi(watcher.grab.color, cfg, impls=bound)
+            for ln in lines:
+                print("[press_demo] VLM %s" % ln)
+            watcher.roi = roi  # None = ungated, honest refusals stand
+            remaining = cfg.timeout_s - (time.monotonic() - t_detect)
+            if remaining > 0:
+                got = wait_for_fix(node, watcher, cfg, timeout_s=remaining)
+        elif got is None:
+            remaining = cfg.timeout_s - (time.monotonic() - t_detect)
+            if remaining > 0:
+                got = wait_for_fix(node, watcher, cfg, timeout_s=remaining)
         if owl is not None:
             owl.disable()  # detect window closed: give the GPU back
         if got is None:
-            if why == "no_tag":
-                try_home(
-                    ctx,
-                    runner,
-                    args.execute,
-                    "NO %s — %s" % (noun, watcher.status()),
-                )
-                sys.exit(2)
-            print("[press_demo] SERVO failed — arm holds (no blind homing)")
-            sys.exit(1)
+            # benign detect timeout: park home, exit 2
+            try_home(ctx, runner, args.execute, "NO BOX — %s" % watcher.status())
+            sys.exit(2)
 
-        pos, _rot = got
-        ctx.cpose = fix_to_cpose(watcher, got, model, cfg)
+        pos, _yaw = got
+        ctx.cpose = watcher.to_container_pose(got)
         print(
-            "[press_demo] %s at [%.3f, %.3f, %.3f] (%s) -> container origin "
+            "[press_demo] BOX at [%.3f, %.3f, %.3f] (%s) -> container origin "
             "[%.3f, %.3f, %.3f] yaw %.1f deg"
             % (
-                noun,
                 pos[0],
                 pos[1],
                 pos[2],
@@ -986,12 +838,11 @@ def main():
 
             # close-range re-fix: from staging (~20 cm range) any residual
             # mount error shrinks proportionally. Opportunistic — the closed
-            # gripper may occlude the tag; the centered fix then stands.
-            if hasattr(watcher, "roi"):
-                watcher.roi = None  # the scan-pose bbox is stale from here
+            # gripper may occlude the lid; the scan fix then stands.
+            watcher.roi = None  # the scan-pose bbox is stale from here
             got2 = wait_for_fix(node, watcher, cfg, timeout_s=1.5)
             if got2 is not None:
-                cp2 = fix_to_cpose(watcher, got2, model, cfg)
+                cp2 = watcher.to_container_pose(got2)
                 d = math.dist(cp2.xyz, ctx.cpose.xyz)
                 if d > 0.05:
                     try_home(

@@ -298,6 +298,31 @@ def test_far_from_nominal_top_is_refused_for_commit(model):
         assert why and "recalibrat" in why
 
 
+def test_fix_window_commits_median_then_goes_stale():
+    from rammp_box_opening.perception.depth_source import FixWindow
+
+    fw = FixWindow(min_hits=3, tol_m=0.03, window_s=2.0, fresh_s=1.0)
+    assert fw.fix(now=0.0) is None
+    for i, t in enumerate([0.0, 0.2, 0.4]):
+        fw.add(np.array([0.5, 0.0, 0.130 + 0.001 * i]), 0.3, t)
+    got = fw.fix(now=0.5)
+    assert got is not None
+    pos, yaw = got
+    assert pos[2] == pytest.approx(0.131)
+    assert float(yaw) == pytest.approx(0.3)
+    assert fw.fix(now=2.0) is None  # nothing seen for > fresh_s
+
+
+def test_fix_window_rejects_disagreeing_frames():
+    from rammp_box_opening.perception.depth_source import FixWindow
+
+    fw = FixWindow(min_hits=3, tol_m=0.03, window_s=2.0, fresh_s=1.0)
+    fw.add(np.array([0.50, 0.0, 0.13]), 0.0, 0.0)
+    fw.add(np.array([0.60, 0.0, 0.13]), 0.0, 0.2)  # 10 cm jump
+    fw.add(np.array([0.50, 0.0, 0.13]), 0.0, 0.4)
+    assert fw.fix(now=0.5) is None
+
+
 def test_watcher_reset_zeroes_the_window_counters(model):
     """The re-look line printed scan-pose totals and hid its own reject
     reason (2026-09-02): reset() now zeroes the per-window counters and

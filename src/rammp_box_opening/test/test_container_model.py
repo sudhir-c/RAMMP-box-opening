@@ -58,3 +58,45 @@ def test_pose_source_and_lid_place():
     assert len(cp.xyz) == 3
     lid = load_lid_place(CFG)
     assert lid.xyz != cp.xyz  # set-down spot is elsewhere
+
+
+def test_load_press_demo_cfg():
+    from rammp_box_opening.models.container import load_press_demo
+
+    cfg = load_press_demo(CFG)
+    assert cfg.detect_source in ("depth", "vlm")
+    assert cfg.grip_band[0] < cfg.grip_band[1] < 0.8
+    assert 0.0 <= cfg.grip_clear_m <= 0.02
+    assert all(abs(v) <= 0.02 for v in cfg.grip_offset_xy)
+    assert cfg.lift_m > 0 and 0 < cfg.lift_speed <= 1.0
+    assert cfg.press_speed == pytest.approx(0.35)  # owner decision 2026-08-25
+    assert cfg.travel_m > 0
+    assert cfg.min_hits >= 2 and cfg.timeout_s > 0
+
+
+def _cfg_variant(tmp_path, old, new):
+    p = tmp_path / "variant.yaml"
+    p.write_text(open(CFG).read().replace(old, new))
+    return str(p)
+
+
+def test_loader_validates_staging_against_real_container_geometry(tmp_path):
+    from rammp_box_opening.models.container import load_press_demo
+
+    # recessed button: dims.z 0.107, button_offset.z 0.05 -> staging
+    # must clear 0.107 - 0.05 + 0.10 = 0.157; the shipped 0.12 fails
+    with pytest.raises(ValueError, match="staging_m"):
+        load_press_demo(
+            _cfg_variant(
+                tmp_path,
+                "button_offset: [0.0, 0.0, 0.107]",
+                "button_offset: [0.0, 0.0, 0.05]",
+            )
+        )
+
+
+def test_loader_refuses_the_retired_tag_source(tmp_path):
+    from rammp_box_opening.models.container import load_press_demo
+
+    with pytest.raises(ValueError, match="detect.source"):
+        load_press_demo(_cfg_variant(tmp_path, "source: vlm", "source: tag"))

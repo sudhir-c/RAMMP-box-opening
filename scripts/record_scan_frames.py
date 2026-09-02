@@ -34,7 +34,7 @@ def record(seconds, period):
     import rclpy
     from rclpy.node import Node
 
-    from rammp_box_opening.perception.tag_source import camera_pose_at
+    from rammp_box_opening.perception.depth_source import camera_pose_at
 
     rclpy.init()
     node = Node("scan_recorder")

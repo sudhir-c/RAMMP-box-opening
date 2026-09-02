@@ -1,27 +1,27 @@
-"""Tag-free container pose: the box found by GEOMETRY, not by a print.
+"""Container pose from depth: the box found by GEOMETRY, not by a print.
 
-The fiducial path died twice at the bench in one week — the gripper
-knuckles strike the printed tag on every press, and a 30 mm print at
-scan height has almost no detection margin. This source needs no print
-at all: from the scan pose the lid top is the only plateau at container
-height above the MEASURED table. Aligned-depth pixels are deprojected,
-lifted to base_link with the same frame-stamp TF the tag path used
-(camera_pose_at), banded by height, and the largest in-band blob whose
-footprint matches the model becomes the sighting:
+The fiducial path this replaced died twice at the bench in one week —
+the gripper knuckles strike a printed tag on every press, and a 30 mm
+print at scan height has almost no detection margin. This source needs
+no print at all: from the scan pose the lid top is the only plateau at
+container height above the MEASURED table. Aligned-depth pixels are
+deprojected, lifted to base_link with frame-stamp TF (camera_pose_at),
+banded by height, and the most box-like in-band blob whose footprint
+matches the model becomes the sighting:
 
-    plateau median z  = the lid top, MEASURED (the tag path only ever
-                        derived it from nominal dims)
-    plateau centroid  = the button center (the button is centered)
+    plateau median z  = the lid top, MEASURED
+    plateau centroid  = the button center (the button is centered),
+                        refined to the button's CIRCLE when one is seen
     min-area-rect     = yaw, mod 90 deg — the box is square, and every
                         consumer is yaw-mod-90 invariant: button_offset
                         is purely vertical, press attitude is steered by
                         BEARING, and both collision cuboids are square
 
-BoxTopWatcher mirrors TagWatcher's whole surface (tick on a node timer,
-FixWindow commit rules, status/reset/fix), so the mission swaps sources
-without touching its detect flow. What this source cannot do: tell one
-box from another, or see a box whose lid is off — both fine here, the
-mission starts lid-on with one container on the bench by definition.
+BoxTopWatcher ticks on a node timer (detection proceeds during every
+spin the CLI does), commits through FixWindow's n-agreeing-fresh-frames
+rule, and exposes fix()/status()/reset() to the mission. What this
+source cannot do: tell one box from another (the VLM/OWL roi does that),
+or see a box whose lid is off — fine here, the mission starts lid-on.
 """
 
 import math
@@ -31,7 +31,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from rammp_box_opening.models.container import ContainerPose
-from rammp_box_opening.perception.tag_source import FixWindow, camera_pose_at
 
 # Height band around the EXPECTED container top (table + dims.z, which
 # is itself derived from live tag fixes 2026-08-25). Generous banding let
@@ -73,6 +72,69 @@ STRIDE = 4
 # early on STILL frames, not from letting moving ones vote.
 STILL_TRANS_M = 0.004
 STILL_ROT_RAD = 0.02
+
+
+def camera_pose_at(g):
+    """base_link <- camera AT THE FRAME'S STAMP (mount composition as in
+    D405Grabber.shot(), which cannot be used here: it spins).
+
+    No latest-TF fallback: upstream documents that fallback as safe only
+    while parked, and the watcher runs during motion — at continuous frame
+    rates a dropped frame costs nothing, a wrong-pose frame poisons the fix
+    (2026-08-24 review)."""
+    import rclpy.time as rt
+
+    from rammp_curobo.perception import quat_to_mat
+
+    try:
+        tr = g.tf_buffer.lookup_transform(
+            "base_link", g.parent, rt.Time.from_msg(g.color_stamp)
+        )
+    except Exception:
+        return None
+    q, t = tr.transform.rotation, tr.transform.translation
+    r_p = quat_to_mat(q.x, q.y, q.z, q.w)
+    qx, qy, qz, qw = g.mount_quat
+    rot = r_p @ quat_to_mat(qx, qy, qz, qw)
+    trans = r_p @ np.asarray(g.mount_xyz, dtype=float) + np.array([t.x, t.y, t.z])
+    return rot, trans
+
+
+class FixWindow:
+    """Rolling sightings -> a fresh, stable (position, yaw) fix.
+
+    Position stability goes through the consumed `stable_fix` (median of
+    the last min_hits when they agree pairwise within tol_m); the yaw is
+    the latest sighting's (joint-7-absorbed, spec'd second-order). A fix
+    older than fresh_s never commits — the arm only acts on what the
+    camera is seeing NOW."""
+
+    def __init__(self, min_hits, tol_m, window_s, fresh_s):
+        self.min_hits = int(min_hits)
+        self.tol_m = float(tol_m)
+        self.window_s = float(window_s)
+        self.fresh_s = float(fresh_s)
+        self.samples = []  # [(pos ndarray, t)]
+        self.rot = None
+        self.last_seen = None
+
+    def add(self, pos, rot, t):
+        t = float(t)
+        self.samples = [(p, ts) for p, ts in self.samples if t - ts < self.window_s]
+        self.samples.append((np.asarray(pos, dtype=float), t))
+        self.rot = np.asarray(rot, dtype=float)
+        self.last_seen = t
+
+    def fix(self, now):
+        from rammp_curobo_ros.seek_core import stable_fix
+
+        if self.last_seen is None or now - self.last_seen > self.fresh_s:
+            return None
+        self.samples = [(p, ts) for p, ts in self.samples if now - ts < self.window_s]
+        pos = stable_fix(self.samples, tol=self.tol_m, n=self.min_hits)
+        if pos is None:
+            return None
+        return pos, self.rot
 
 
 def camera_is_still(prev, cur, trans_tol=STILL_TRANS_M, rot_tol=STILL_ROT_RAD):
@@ -333,17 +395,15 @@ def container_pose_from_top(center, yaw, model, table_z=None):
 
 
 class BoxTopWatcher:
-    """TagWatcher's twin for the depth source: continuous detection on a
-    node timer, same FixWindow commit rules, same fix()/status()/reset()
-    surface — the mission cannot tell which source produced its pose."""
+    """Continuous detection on a node timer, FixWindow commit rules, and
+    the fix()/status()/reset() surface the mission's detect flow uses.
 
-    # In-flight samples are KEPT across wait_for_fix: geometry is lifted
-    # with frame-stamp TF, the 1 s freshness window means only the scan's
-    # deceleration tail can support a commit, and the 3-agreeing gate
-    # stands — so the fix is often ready the moment the arm parks
-    # (owner: detect during the flip, 2026-09-01). The tag path purges
-    # (True default): in-motion PnP orientation is genuinely fragile.
-    PURGE_ON_WAIT = False
+    In-flight samples are KEPT across a detect wait (wait_for_fix never
+    purges): geometry is lifted with frame-stamp TF, the still-camera
+    filter drops moving frames, the 1 s freshness window means only the
+    scan's parked tail can support a commit, and the 3-agreeing gate
+    stands — so the fix is often ready the moment the arm parks (owner:
+    detect during the flip, 2026-09-01)."""
 
     def __init__(self, node, cfg, model, table_z, period_s=None):
         from rammp_curobo_ros.seek_core import D405Grabber
