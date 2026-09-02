@@ -88,14 +88,11 @@ def record(seconds, period):
 def analyze(cap_dir):
     from rammp_box_opening.models.container import ContainerModel
     from rammp_box_opening.perception.depth_source import top_face_from_depth
-    from rammp_box_opening.worlds import _table_top_z
-
-    import yaml
+    from rammp_box_opening.worlds import WorldStore
 
     repo = Path(__file__).resolve().parents[1] / "src" / "rammp_box_opening"
     model = ContainerModel.load(str(repo / "config/containers/oxo_pop.yaml"))
-    with open(repo / "config/world_bench.yaml") as f:
-        table_z = _table_top_z(yaml.safe_load(f))
+    table_z = WorldStore(str(repo / "config/world_bench.yaml")).table_top_z
     frames = sorted(Path(cap_dir).glob("frame_*.npz"))
     print("%d frames | table_z %.3f" % (len(frames), table_z))
     hits = 0

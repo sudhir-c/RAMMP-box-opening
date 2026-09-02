@@ -2,23 +2,12 @@ import math
 from dataclasses import replace
 from pathlib import Path
 
-from test_runner import FakeClient, FakeStore
+from conftest import FakeClient
 
-from rammp_box_opening.models.container import ContainerModel, ContainerPose
-from rammp_box_opening.primitives.core import Ctx
+from rammp_box_opening.models.container import ContainerPose
 from rammp_box_opening.runtime.legs import Kind
 
 CFG = "src/rammp_box_opening/config/containers/oxo_pop.yaml"
-
-
-def ctx():
-    return Ctx(
-        model=ContainerModel.load(CFG),
-        cpose=ContainerPose(xyz=(0.45, 0.0, -0.07), yaw=0.0),
-        client=FakeClient(),
-        worlds=FakeStore(),
-        config_path=CFG,
-    )
 
 
 def names(legs):
@@ -31,13 +20,13 @@ def test_entry_points_registered():
         assert ep + " = " in setup
 
 
-def test_home_arm_plans_home_in_the_bench_world():
+def test_home_arm_plans_home_in_the_bench_world(ctx):
     """The isolated recovery home knows no container pose: it plans above
     the unseen-container band, like the mission's own recovery home."""
     from rammp_box_opening.constants import HOME, TRANSIT_SPEED
     from rammp_box_opening.tasks import home_arm
 
-    c = ctx()
+    c = ctx
     c.cpose = None
     legs = home_arm.build_legs(c)
     assert names(legs) == ["home"]
@@ -51,19 +40,29 @@ def _demo_cfg():
     return load_press_demo(CFG)
 
 
-def test_press_demo_legs_compose_close_staging_press_retreat_home():
+def test_press_demo_full_composition(ctx):
+    """The one-shot composition: staged press, grip, place — and the
+    press phase's retreat geometry."""
     import pytest
 
     from rammp_box_opening.constants import TRANSIT_SPEED
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     legs = press_demo.build_demo_legs(c, cfg)
     seq = names(legs)
     # press:close is no longer a leg: main() dispatches it at fix commit
     assert seq[:4] == ["approach:staging", "press:down", "retreat", "grip:open"]
+    assert seq[4:7] == ["grip:down", "grip:close", "lift"]
+    assert seq[7:] == [
+        "place:lid:transit",
+        "place:lid:down",
+        "place:lid:open",
+        "retreat",
+        "home",
+    ]
     button = from_container(c.cpose, c.model.button_offset)
     staging = legs[0]
     assert staging.world.startswith("full") and staging.speed == TRANSIT_SPEED
@@ -80,10 +79,10 @@ def test_press_demo_legs_compose_close_staging_press_retreat_home():
     assert cfg.grip_hop_m < cfg.staging_m
 
 
-def test_press_demo_scan_and_no_tag_home_use_bench_world():
+def test_press_demo_scan_and_no_tag_home_use_bench_world(ctx):
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     scan = press_demo.build_scan_leg(c, cfg, [0.0] * 7)
     assert scan.name == "scan" and scan.world == "bench"
@@ -96,7 +95,7 @@ def test_press_demo_scan_and_no_tag_home_use_bench_world():
     assert home.target[0] == "joints"
 
 
-def test_open_box_grip_and_place_legs():
+def test_open_box_grip_and_place_legs(ctx):
     import pytest
 
     from rammp_box_opening.constants import TRANSIT_SPEED
@@ -104,7 +103,7 @@ def test_open_box_grip_and_place_legs():
     from rammp_box_opening.runtime.legs import VerifyCtx
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     legs = press_demo.build_grip_legs(c, cfg)
     assert names(legs) == ["grip:down", "grip:close", "lift"]
@@ -157,29 +156,12 @@ def test_open_box_grip_and_place_legs():
     assert place_legs[3].target[1][2] == pytest.approx(place_legs[0].target[1][2])
 
 
-def test_press_demo_full_composition():
-    from rammp_box_opening.tasks import press_demo
-
-    c = ctx()
-    legs = press_demo.build_demo_legs(c, _demo_cfg())
-    seq = names(legs)
-    assert seq[:4] == ["approach:staging", "press:down", "retreat", "grip:open"]
-    assert seq[4:7] == ["grip:down", "grip:close", "lift"]
-    assert seq[7:] == [
-        "place:lid:transit",
-        "place:lid:down",
-        "place:lid:open",
-        "retreat",
-        "home",
-    ]
-
-
-def test_lid_place_clearance_gate_threshold():
+def test_lid_place_clearance_gate_threshold(ctx):
     import pytest
 
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     need = press_demo.lid_place_min_clear(c.model)
     # both footprint half-diagonals + gripper-body room; the field runs
     # bracket it: IK_FAIL at 0.073 m separation, clean plan at 0.162 m
@@ -191,11 +173,10 @@ def test_lid_place_clearance_gate_threshold():
     )
 
 
-def test_resolve_lid_drop_adapts_to_the_box():
-    from rammp_box_opening.models.container import ContainerPose
+def test_resolve_lid_drop_adapts_to_the_box(ctx):
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     m = c.model
     need = press_demo.lid_place_min_clear(m)
     lid = [0.45, -0.25, -0.027]
@@ -216,13 +197,12 @@ def test_resolve_lid_drop_adapts_to_the_box():
     assert shifted and math.hypot(xyz[0] - 0.45, xyz[1] + 0.25) >= need - 1e-9
 
 
-def test_place_legs_use_the_resolved_drop_spot():
+def test_place_legs_use_the_resolved_drop_spot(ctx):
     import pytest
 
-    from rammp_box_opening.models.container import ContainerPose
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     c.lid_drop = ContainerPose(xyz=(0.30, 0.30, -0.027), yaw=0.0)
     legs = press_demo.build_place_legs(c, _demo_cfg())
     transit = legs[0]
@@ -231,7 +211,7 @@ def test_place_legs_use_the_resolved_drop_spot():
     assert c.lid_at is c.lid_drop  # the placed-lid world follows the shift
 
 
-def test_contact_leg_speeds_come_from_config():
+def test_contact_leg_speeds_come_from_config(ctx):
     """grip:down, lift and the set-down each read their own config knob.
 
     They were three hardcoded 0.15s; the set-down and lift now run at
@@ -240,7 +220,7 @@ def test_contact_leg_speeds_come_from_config():
 
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     grip = press_demo.build_grip_legs(c, cfg)
     down = next(x for x in grip if x.name == "grip:down")
@@ -274,14 +254,14 @@ def test_shipped_config_speeds_are_guard_safe():
         assert 0.0 < v <= 0.5
 
 
-def test_guarded_descents_are_time_warped_and_rebaseline_the_guard():
+def test_guarded_descents_are_time_warped_and_rebaseline_the_guard(ctx):
     """grip:down and the set-down run fast through free air and slow into
     contact, and the guard re-baselines where the speed changes."""
     import pytest
 
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     grip = press_demo.build_grip_legs(c, cfg)
     down = next(x for x in grip if x.name == "grip:down")
@@ -306,12 +286,12 @@ def test_guarded_descents_are_time_warped_and_rebaseline_the_guard():
     assert probe.guard.trip == "setdown" and probe.guard.rebaseline_after is not None
 
 
-def test_warping_is_off_when_the_config_disables_it():
+def test_warping_is_off_when_the_config_disables_it(ctx):
     from dataclasses import replace as _replace
 
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _replace(_demo_cfg(), warp_fast_speed=0.0)
     down = next(x for x in press_demo.build_grip_legs(c, cfg) if x.name == "grip:down")
     assert down.warp is None
@@ -319,14 +299,14 @@ def test_warping_is_off_when_the_config_disables_it():
     assert down.guard.rebaseline_after is None
 
 
-def test_merged_press_is_one_continuous_motion_with_no_staging_stop():
+def test_merged_press_is_one_continuous_motion_with_no_staging_stop(ctx):
     """[transit to staging] STOP [press] becomes close + ONE descent."""
     import pytest
 
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     button = from_container(c.cpose, c.model.button_offset)
     # the servo leaves the arm above the tag: directly over the button
@@ -347,13 +327,13 @@ def test_merged_press_is_one_continuous_motion_with_no_staging_stop():
     assert retreat.target[1][2] == pytest.approx(button[2] + cfg.grip_hop_m)
 
 
-def test_merged_press_is_declined_when_the_arm_is_off_axis():
+def test_merged_press_is_declined_when_the_arm_is_off_axis(ctx):
     """The merged solve plans in the REDUCED world, so a long lateral run
     through it — where the container is invisible — must not happen."""
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = (
@@ -367,20 +347,20 @@ def test_merged_press_is_declined_when_the_arm_is_off_axis():
     assert press_demo.merged_press_ok(c, cfg) == (False, None)
 
 
-def test_merged_press_off_by_config_uses_the_staged_path():
+def test_merged_press_off_by_config_uses_the_staged_path(ctx):
     from dataclasses import replace as _replace
 
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _replace(_demo_cfg(), merge_press=False)
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
     assert press_demo.merged_press_ok(c, cfg) == (False, None)
 
 
-def test_merged_press_press_only_keeps_full_retreat_and_home():
+def test_merged_press_press_only_keeps_full_retreat_and_home(ctx):
     """press-only may merge too — but its retreat must climb back to
     staging height (home is planned in the FULL world) and home follows."""
     import pytest
@@ -388,7 +368,7 @@ def test_merged_press_press_only_keeps_full_retreat_and_home():
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
@@ -400,14 +380,14 @@ def test_merged_press_press_only_keeps_full_retreat_and_home():
     assert legs[2].traj is None  # lazy, chained after the lazy retreat
 
 
-def test_merged_press_accepts_a_realistic_off_axis_box():
+def test_merged_press_accepts_a_realistic_off_axis_box(ctx):
     """Field 2026-09-01: a real box sat 152 mm from the scan axis and the
     old 50 mm rail declined the merge — the pause the owner asked to
     remove. 0.20 admits it; the descent converges over the button."""
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     assert cfg.merge_press_max_lateral_m >= 0.20
     button = from_container(c.cpose, c.model.button_offset)
@@ -420,7 +400,7 @@ def test_merged_press_accepts_a_realistic_off_axis_box():
     assert ok and 0.14 < lateral < 0.16
 
 
-def test_merged_press_constrains_the_final_approach_vertical():
+def test_merged_press_constrains_the_final_approach_vertical(ctx):
     """A diagonal descent touches the button before lateral convergence
     finishes (edge presses, 2026-09-01) — the merged press target carries
     a 60 mm vertical-final constraint, and replans preserve it."""
@@ -429,7 +409,7 @@ def test_merged_press_constrains_the_final_approach_vertical():
     from rammp_box_opening.models.container import from_container
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
@@ -439,7 +419,7 @@ def test_merged_press_constrains_the_final_approach_vertical():
     assert press.target[3] == pytest.approx(0.06)
 
 
-def test_every_descent_carries_a_vertical_final_constraint():
+def test_every_descent_carries_a_vertical_final_constraint(ctx):
     """The staged press arched into the button edge exactly like the
     merged press did before it got the grasp-approach constraint (field
     2026-09-01) — and a bowed grip or set-down misses the same way. Every
@@ -449,7 +429,7 @@ def test_every_descent_carries_a_vertical_final_constraint():
 
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     legs = press_demo.build_demo_legs(c, cfg)
     want = {"press:down": 0.06, "grip:down": 0.04, "place:lid:down": 0.05}
@@ -459,7 +439,7 @@ def test_every_descent_carries_a_vertical_final_constraint():
         assert leg.target[3] == pytest.approx(off), name
 
 
-def test_post_touch_legs_are_lazy_and_home_needs_no_fallback():
+def test_post_touch_legs_are_lazy_and_home_needs_no_fallback(ctx):
     """Legs after an expected touch used to be pre-planned and then thrown
     away by the post-touch replan every run; home was even planned twice
     (retreat-end refused, transit-end fallback) and then failed live
@@ -476,7 +456,7 @@ def test_post_touch_legs_are_lazy_and_home_needs_no_fallback():
             self.joint_plans += 1
             return super().plan_to_joints(q7, start_joints)
 
-    c = ctx()
+    c = ctx
     c.client = CountingClient()
     legs = press_demo.build_place_legs(c, _demo_cfg())
     assert names(legs)[-2:] == ["retreat", "home"]
@@ -486,7 +466,7 @@ def test_post_touch_legs_are_lazy_and_home_needs_no_fallback():
     assert len(c.client.approach_offsets) == 2
 
 
-def test_place_accounts_for_grip_height_and_gentle_touch():
+def test_place_accounts_for_grip_height_and_gentle_touch(ctx):
     """The fingers hold the knob grip_clear_m above the lid plane, so lid
     contact happens with the TOOL that much above lid-top height — the
     uncompensated target over-travelled by grip_clear_m and crunched the
@@ -496,7 +476,7 @@ def test_place_accounts_for_grip_height_and_gentle_touch():
 
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     legs = press_demo.build_place_legs(c, cfg)
     down = next(x for x in legs if x.name == "place:lid:down")
@@ -510,7 +490,7 @@ def test_place_accounts_for_grip_height_and_gentle_touch():
     assert cfg.setdown_touch_nm < c.model.touch_nm  # gentler than the press
 
 
-def test_setdown_verify_rejects_early_trips_and_no_touch():
+def test_setdown_verify_rejects_early_trips_and_no_touch(ctx):
     """A trip in the first half of the stroke is a strike, not a set-down
     (the lid was dropped from 110 mm when a fast-segment trip counted as
     touch, field 2026-09-02); arriving without ever feeling the surface
@@ -518,7 +498,7 @@ def test_setdown_verify_rejects_early_trips_and_no_touch():
     from rammp_box_opening.runtime.legs import VerifyCtx
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     legs = press_demo.build_place_legs(c, cfg)
     down = next(x for x in legs if x.name == "place:lid:down")
@@ -537,7 +517,7 @@ def test_setdown_verify_rejects_early_trips_and_no_touch():
     assert not ok and "never felt the surface" in why
 
 
-def test_park_tool_down_rests_at_the_scan_pose():
+def test_park_tool_down_rests_at_the_scan_pose(ctx):
     """open_box.park_tool_down: the mission ends at PARK (tool-down at the
     scan pose) instead of the factory HOME, saving the 2.4-2.9 rad wrist
     flip twice per run; off by default because the arm then rests over
@@ -547,7 +527,7 @@ def test_park_tool_down_rests_at_the_scan_pose():
     from rammp_box_opening.constants import HOME, PARK, REST_TOL_RAD
     from rammp_box_opening.tasks import press_demo
 
-    c = ctx()
+    c = ctx
     cfg = _demo_cfg()
     assert cfg.park_tool_down is False
     assert press_demo.rest_joints(cfg) == list(HOME)

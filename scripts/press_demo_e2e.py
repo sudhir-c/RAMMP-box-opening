@@ -30,29 +30,17 @@ Goal counts are audited (lesson 6); the harness refuses to run beside a
 real controller_manager or planner.
 """
 
-import os
 import re
-import signal
-import subprocess
 import sys
-import tempfile
 import time
-from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+from e2e_common import REPO, Shell, kill, measured_config, wait_for, workdir
+
 sys.path.insert(0, str(REPO / "src" / "rammp_box_opening"))
 
 from rammp_box_opening.worlds import WorldStore  # noqa: E402
 
-DOMAIN = os.environ.get("ABORT_E2E_DOMAIN", "77")
-
-CHAIN = (
-    "export ROS_DOMAIN_ID=%s; export ROS_LOCALHOST_ONLY=1; "
-    "export STUB_PLAN_S=1.2; export STUB_GRIP_POS=0.45; "
-    "source /opt/ros/humble/setup.zsh; "
-    "source ~/RAMMP-CuRobo/install/setup.zsh; "
-    "source %s/install/setup.zsh; " % (DOMAIN, REPO)
-)
+SH = Shell("export STUB_PLAN_S=1.2; export STUB_GRIP_POS=0.45; ")
 
 BOX_XY = (0.46, -0.05)  # off the scan camera's axis: deprojection errors show
 BOX_YAW_DEG = 30.0  # the depth path reports yaw mod 90 (square box)
@@ -64,47 +52,6 @@ def yaw_err_deg(got, want):
     """Yaw error for a square box: the depth path reports yaw mod 90."""
     d = abs((got - want) % 90.0)
     return min(d, 90.0 - d)
-
-
-def sh(cmd, **kw):
-    return subprocess.run(
-        ["zsh", "-c", CHAIN + cmd], capture_output=True, text=True, **kw
-    )
-
-
-def kill(proc):
-    if proc is None:
-        return
-    for sig in (signal.SIGINT, signal.SIGKILL):
-        try:
-            os.killpg(os.getpgid(proc.pid), sig)
-            proc.wait(timeout=5)
-            return
-        except (ProcessLookupError, subprocess.TimeoutExpired):
-            continue
-
-
-def wait_for(path, needle, timeout, proc=None, what=""):
-    t0 = time.monotonic()
-    while time.monotonic() - t0 < timeout:
-        if needle in Path(path).read_text():
-            return True
-        if proc is not None and proc.poll() is not None:
-            sys.exit(
-                "%s died before %r:\n%s"
-                % (what, needle, Path(path).read_text()[-2500:])
-            )
-        time.sleep(0.2)
-    return False
-
-
-def spawn(cmd, log, extra_env=""):
-    return subprocess.Popen(
-        ["zsh", "-c", CHAIN + extra_env + cmd],
-        stdout=open(log, "w"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
 
 
 def run_scenario(tmp, cfg, table_z, mode):
@@ -127,10 +74,10 @@ def run_scenario(tmp, cfg, table_z, mode):
     )
     stub = cam = cli = None
     try:
-        stub = spawn(
+        stub = SH.spawn(
             "exec python3 %s" % (REPO / "scripts/stub_planner.py"), stub_log, stub_env
         )
-        cam = spawn(
+        cam = SH.spawn(
             "exec python3 %s%s" % (REPO / "scripts/stub_d405.py", cam_args), cam_log
         )
         if not wait_for(stub_log, "STUB READY", 30, stub, "stub planner"):
@@ -139,7 +86,7 @@ def run_scenario(tmp, cfg, table_z, mode):
             sys.exit("stub d405 never ready")
 
         t_cli = time.monotonic()
-        cli = spawn(
+        cli = SH.spawn(
             "exec ros2 run rammp_box_opening press_demo --execute --container %s" % cfg,
             cli_log,
         )
@@ -263,28 +210,16 @@ def run_scenario(tmp, cfg, table_z, mode):
 
 
 def main():
-    tmp = Path(tempfile.mkdtemp(prefix="press_demo_e2e_"))
-    print("workdir %s (domain %s)" % (tmp, DOMAIN))
+    tmp = workdir("press_demo_e2e_")
+    SH.refuse_real_stack()
 
-    sh("ros2 daemon stop", timeout=30)
-    probe = sh("timeout 20 ros2 node list", timeout=30)
-    if "/controller_manager" in probe.stdout or "/rammp_curobo" in probe.stdout:
-        sys.exit(
-            "REAL arm stack or planner visible on ROS_DOMAIN_ID=%s:\n%s\nrefusing."
-            % (DOMAIN, probe.stdout)
-        )
-
-    cfg = tmp / "oxo_measured.yaml"
-    src_cfg = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
-    cfg.write_text(
-        re.sub(
-            # the shipped ladder minus its cloud rung: the harness runs
-            # offline and must never make a network call
-            r"backends: \[[^\]]*\]",
-            "backends: [owl]",
-            src_cfg.read_text().replace("measure_me: true", "measure_me: false"),
-            count=1,
-        )
+    # the shipped ladder minus its cloud rung: the harness runs offline
+    # and must never make a network call
+    cfg = measured_config(
+        tmp,
+        edit=lambda text: re.sub(
+            r"backends: \[[^\]]*\]", "backends: [owl]", text, count=1
+        ),
     )
     # the table the CLI bands container candidates above — and pins the
     # container origin to — is the bench world's; the stub renders it
@@ -312,7 +247,4 @@ if __name__ == "__main__":
     try:
         main()
     finally:
-        # the probe above rebinds the ros2 CLI daemon to the isolated
-        # domain; leaving it there makes `ros2 node list` in normal shells
-        # come up empty (field lesson 8) — put it back down on the way out
-        sh("ros2 daemon stop", timeout=30)
+        SH.daemon_reset()

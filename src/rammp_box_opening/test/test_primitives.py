@@ -1,38 +1,16 @@
-from test_runner import FakeClient, FakeStore
-
-from rammp_box_opening.models.container import (
-    ContainerModel,
-    ContainerPose,
-    from_container,
-)
-from rammp_box_opening.primitives.core import (
-    Ctx,
-    Home,
-    Lift,
-    Place,
-    PlanState,
-)
+from rammp_box_opening.models.container import from_container
+from rammp_box_opening.primitives.core import Home, Lift, Place, PlanState
 from rammp_box_opening.runtime.legs import Kind, VerifyCtx
 
 CFG = "src/rammp_box_opening/config/containers/oxo_pop.yaml"
-
-
-def ctx():
-    m = ContainerModel.load(CFG)
-    return Ctx(
-        model=m,
-        cpose=ContainerPose(xyz=(0.45, 0.0, -0.07), yaw=0.0),
-        client=FakeClient(),
-        worlds=FakeStore(),
-    )
 
 
 def state():
     return PlanState(joints=[0.0] * 7, chain=0)
 
 
-def test_chaining_start_joints_flow():
-    c = ctx()
+def test_chaining_start_joints_flow(ctx):
+    c = ctx
     st = state()
     legs_a, st = Lift(0.10).plan(c, st)
     legs_b, st = Home().plan(c, st)
@@ -41,7 +19,7 @@ def test_chaining_start_joints_flow():
     assert list(legs_b[0].traj.points[0].positions) == list(legs_a[0].goal_joints)
 
 
-def test_place_sequence_and_release():
+def test_place_sequence_and_release(ctx):
     import pytest
 
     from rammp_box_opening.primitives.core import (
@@ -49,7 +27,7 @@ def test_place_sequence_and_release():
         SETDOWN_OVERDRIVE_M,
     )
 
-    c = ctx()
+    c = ctx
     target_z = -0.07 + c.model.lid_dims[2]
     legs, _ = Place([0.45, -0.25, target_z], [0.5, 0.5, 0.5, 0.5]).plan(c, state())
     kinds = [leg.kind for leg in legs]
@@ -73,8 +51,8 @@ def test_place_sequence_and_release():
     assert descend.guard.target_z == pytest.approx(target_z)
 
 
-def test_lift_reverifies_band():
-    c = ctx()
+def test_lift_reverifies_band(ctx):
+    c = ctx
     legs, _ = Lift(0.10, band=(0.55, 0.75)).plan(c, state())
     assert len(legs) == 1 and legs[0].verify is not None
     ok, _ = legs[0].verify(VerifyCtx(outcome="arrived", gripper_pos=0.6))
@@ -85,13 +63,13 @@ def test_lift_reverifies_band():
     assert ok and "unchecked" in detail  # honest fallback, logged
 
 
-def test_press_fixed_single_stroke_from_staging():
+def test_press_fixed_single_stroke_from_staging(ctx):
     import pytest
 
     from rammp_box_opening.models.container import load_press_demo
     from rammp_box_opening.primitives.core import PressFixed
 
-    c = ctx()
+    c = ctx
     cfg = load_press_demo(CFG)
     legs, st = PressFixed(cfg).plan(c, state())
     assert len(legs) == 1  # v2: no hover, no close (close rides the approach)
@@ -104,12 +82,12 @@ def test_press_fixed_single_stroke_from_staging():
     assert st.chain == press.chain + 1  # contact breaks the chain
 
 
-def test_press_fixed_verify_expected_depth_semantics():
+def test_press_fixed_verify_expected_depth_semantics(ctx):
     from rammp_box_opening.models.container import load_press_demo
     from rammp_box_opening.primitives.core import PressFixed
 
     cfg = load_press_demo(CFG)
-    legs, _ = PressFixed(cfg).plan(ctx(), state())
+    legs, _ = PressFixed(cfg).plan(ctx, state())
     press = legs[0]
     expected = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
     # trip near the expected contact depth = pressed
@@ -125,21 +103,21 @@ def test_press_fixed_verify_expected_depth_semantics():
     assert not ok
 
 
-def test_worlds_are_pushed_at_plan_time():
+def test_worlds_are_pushed_at_plan_time(ctx):
     # spec §6: the planner must hold the leg's world BEFORE the plan is
     # requested — execution-time pushes alone mean every trajectory was
     # planned against the previous world (2026-08-24 review, critical)
     from rammp_box_opening.models.container import load_press_demo
     from rammp_box_opening.primitives.core import PressFixed
 
-    c = ctx()
+    c = ctx
     Home().plan(c, state())
     assert c.client.worlds_pushed == ["full.yaml"]
     PressFixed(load_press_demo(CFG)).plan(c, state())
     assert c.client.worlds_pushed == ["full.yaml", "interaction_button.yaml"]
 
 
-def test_contact_sets_the_container_pad_for_later_full_worlds():
+def test_contact_sets_the_container_pad_for_later_full_worlds(ctx):
     """Any guarded plan marks the mission contact-tainted: every later
     FULL world allows for a scooted container."""
     from rammp_box_opening.primitives.core import (
@@ -148,7 +126,7 @@ def test_contact_sets_the_container_pad_for_later_full_worlds():
         _full_world,
     )
 
-    c, st = ctx(), state()
+    c, st = ctx, state()
     assert c.contact_pad == 0.0
     _full_world(c)
     assert c.worlds.pushes[-1][1].get("container_pad_xy", 0.0) == 0.0

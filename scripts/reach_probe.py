@@ -37,8 +37,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src" / "rammp_box_opening"))
 
-import yaml  # noqa: E402
-
 from rammp_box_opening.constants import HOME  # noqa: E402
 from rammp_box_opening.models.container import (  # noqa: E402
     ContainerModel,
@@ -46,17 +44,11 @@ from rammp_box_opening.models.container import (  # noqa: E402
     load_lid_place,
     load_press_demo,
 )
+from rammp_box_opening.worlds import WorldStore  # noqa: E402
 
 CONTAINER_YAML = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
 BENCH_YAML = REPO / "src/rammp_box_opening/config/world_bench.yaml"
 OUT_JSON = REPO / "docs/reach_map.json"
-
-
-def table_top_z(bench_path):
-    with open(bench_path) as f:
-        bench = yaml.safe_load(f)
-    table = next(o for o in bench["obstacles"] if o["name"] == "table")
-    return table["position"][2] + table["dims"][2] / 2
 
 
 def probe_grid(planner, xs, ys, z, label):
@@ -142,7 +134,7 @@ def main():
     model = ContainerModel.load(str(CONTAINER_YAML))
     scan_xyz = load_press_demo(str(CONTAINER_YAML)).scan_xyz
     lid = load_lid_place(str(CONTAINER_YAML))
-    top = table_top_z(BENCH_YAML)
+    top = WorldStore(str(BENCH_YAML)).table_top_z
     z_contact = top + model.button_offset[2]
     z_hover = z_contact + model.hover_standoff
 

@@ -13,112 +13,41 @@ the CLI stops WATCHING the arm while the trajectory runs to its end
 (verified on this stack by abort_checks; field lesson 7).
 
 No arm, no GPU, no real planner. The harness refuses to run on a graph
-with a real controller_manager or planner (the stub serves the real
-/rammp_curobo names — on a shared graph, discovery binding is a coin
-flip), and audits goal counts (CLI-sent == stub-received) per lesson 6.
+with a real controller_manager or planner (e2e_common), and audits goal
+counts (CLI-sent == stub-received) per lesson 6.
 """
 
 import os
 import signal
 import subprocess
 import sys
-import tempfile
 import time
-from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
-DOMAIN = os.environ.get("ABORT_E2E_DOMAIN", "77")
+from e2e_common import REPO, Shell, kill, measured_config, wait_for, workdir
 
-CHAIN = (
-    "export ROS_DOMAIN_ID=%s; export ROS_LOCALHOST_ONLY=1; "
-    # pin the stub stroke: the mid-stroke SIGINT premise (~24 s at 0.25)
-    # must not bend to an inherited STUB_PLAN_S from the environment
-    "export STUB_PLAN_S=6.0; unset STUB_TRIP_EXEC_N STUB_GRIP_POS; "
-    "source /opt/ros/humble/setup.zsh; "
-    "source ~/RAMMP-CuRobo/install/setup.zsh; "
-    "source %s/install/setup.zsh; " % (DOMAIN, REPO)
-)
-
-
-def sh(cmd, **kw):
-    return subprocess.run(
-        ["zsh", "-c", CHAIN + cmd], capture_output=True, text=True, **kw
-    )
-
-
-def kill(proc):
-    if proc is None:
-        return
-    for sig in (signal.SIGINT, signal.SIGKILL):
-        try:
-            os.killpg(os.getpgid(proc.pid), sig)
-            proc.wait(timeout=5)
-            return
-        except (ProcessLookupError, subprocess.TimeoutExpired):
-            continue
-
-
-def wait_for(path, needle, timeout, proc=None, what="", also_dump=()):
-    t0 = time.monotonic()
-    while time.monotonic() - t0 < timeout:
-        if needle in Path(path).read_text():
-            return True
-        if proc is not None and proc.poll() is not None:
-            dumps = "".join(
-                "\n--- %s ---\n%s" % (p.name, Path(p).read_text()[-2000:])
-                for p in (path, *also_dump)
-            )
-            sys.exit("%s died before %r:%s" % (what, needle, dumps))
-        time.sleep(0.2)
-    return False
+# pin the stub stroke: the mid-stroke SIGINT premise (~24 s at 0.25) must
+# not bend to an inherited STUB_PLAN_S from the environment
+SH = Shell("export STUB_PLAN_S=6.0; unset STUB_TRIP_EXEC_N STUB_GRIP_POS; ")
 
 
 def main():
-    tmp = Path(tempfile.mkdtemp(prefix="abort_e2e_"))
-    print("workdir %s (domain %s)" % (tmp, DOMAIN))
+    tmp = workdir("abort_e2e_")
+    SH.refuse_real_stack()
 
-    sh("ros2 daemon stop", timeout=30)  # a daemon bound to another domain lies
-    probe = sh("timeout 20 ros2 node list", timeout=30)
-    nodes = probe.stdout
-    if "/controller_manager" in nodes or "/rammp_curobo" in nodes:
-        sys.exit(
-            "REAL arm stack or planner visible on ROS_DOMAIN_ID=%s:\n%s\n"
-            "This harness serves fake /rammp_curobo names — refusing "
-            "(discovery binding on a shared graph is a coin flip)." % (DOMAIN, nodes)
-        )
-
-    stub_py = REPO / "scripts" / "stub_planner.py"
     stub_log = tmp / "stub.log"
     cli_log = tmp / "cli.log"
-
-    # measured-config copy: --execute refuses while measure_me is true
-    cfg = tmp / "oxo_measured.yaml"
-    src_cfg = REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"
-    cfg.write_text(src_cfg.read_text().replace("measure_me: true", "measure_me: false"))
+    cfg = measured_config(tmp)  # --execute refuses while measure_me is true
 
     stub = cli = None
     try:
-        stub = subprocess.Popen(
-            ["zsh", "-c", CHAIN + "exec python3 %s" % stub_py],
-            stdout=open(stub_log, "w"),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        stub = SH.spawn("exec python3 %s" % (REPO / "scripts/stub_planner.py"), stub_log)
         if not wait_for(stub_log, "STUB READY", 30, stub, "stub"):
             sys.exit("stub never became ready:\n" + stub_log.read_text()[-2000:])
 
-        cli = subprocess.Popen(
-            [
-                "zsh",
-                "-c",
-                CHAIN
-                + "exec ros2 run rammp_box_opening home_arm --execute --container %s"
-                % cfg,
-            ],
+        cli = SH.spawn(
+            "exec ros2 run rammp_box_opening home_arm --execute --container %s" % cfg,
+            cli_log,
             stdin=subprocess.PIPE,
-            stdout=open(cli_log, "w"),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
             text=True,
         )
         cli.stdin.write("yes\n")
@@ -185,7 +114,7 @@ def main():
         (not confirmed, "CLI never confirmed the cancel round-trip"),
         (
             double_spoke,
-            "owned path AND backstop both spoke — contradictory " "abort report",
+            "owned path AND backstop both spoke — contradictory abort report",
         ),
         (hung, "CLI did not exit after SIGINT"),
         (not audit_ok, "goal-count audit failed (%d exec goals seen)" % execs),
@@ -199,7 +128,4 @@ if __name__ == "__main__":
     try:
         main()
     finally:
-        # the probe above rebinds the ros2 CLI daemon to the isolated
-        # domain; leaving it there makes `ros2 node list` in normal shells
-        # come up empty (field lesson 8) — put it back down on the way out
-        sh("ros2 daemon stop", timeout=30)
+        SH.daemon_reset()

@@ -1,151 +1,9 @@
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from trajectory_msgs.msg import JointTrajectoryPoint
+
+from conftest import Q0, Q1, Q2, FakeClient, leg, runner, traj
 
 from rammp_box_opening.runtime.guards import GuardSpec
-from rammp_box_opening.runtime.legs import Kind, Leg
-from rammp_box_opening.runtime.runner import Runner
-
-
-def _traj(start, end, dt=1.0):
-    t = JointTrajectory()
-    t.joint_names = ["joint_%d" % i for i in range(1, 8)]
-    for i, row in enumerate([start, end]):
-        p = JointTrajectoryPoint()
-        p.positions = [float(v) for v in row]
-        p.velocities = [0.0] * 7
-        p.accelerations = [0.0] * 7
-        p.time_from_start.sec = int(i * dt)
-        t.points.append(p)
-    return t
-
-
-Q0 = [0.0] * 7
-Q1 = [0.1] * 7
-Q2 = [0.2] * 7
-
-
-class FakeClient:
-    def __init__(self):
-        self.live = list(Q0)
-        self.efforts = True
-        self.exec_enabled = True
-        self.executed = []  # (n_points, speed)
-        self.exec_starts = []  # first waypoint of each executed trajectory
-        self.worlds_pushed = []
-        self.plans = []  # scripted plan_to_* responses (FIFO), else auto
-        self.exec_script = []  # scripted execute outcomes (FIFO)
-        self.tool_z = 0.08
-        self.approach_offsets = []  # per plan_to_pose call
-
-    def joints(self):
-        return list(self.live)
-
-    def wrist_efforts(self):
-        return [0.0] * 4 if self.efforts else None
-
-    def efforts_present(self):
-        return self.efforts
-
-    def tool_xyz(self, timeout_s=1.5):
-        return [0.45, 0.0, self.tool_z]
-
-    def _plan(self, end, start):
-        class R:
-            success = True
-            message = "ok"
-
-        R.trajectory = _traj(start if start else self.live, end)
-        return R
-
-    def plan_to_pose(self, xyz, quat_xyzw, start_joints, approach_offset_m=0.0):
-        self.approach_offsets.append(float(approach_offset_m))
-        if self.plans:
-            return self.plans.pop(0)
-        return self._plan(Q1, start_joints)
-
-    def plan_to_joints(self, q7, start_joints):
-        if self.plans:
-            return self.plans.pop(0)
-        return self._plan(list(q7), start_joints)
-
-    def execute(self, traj, speed, guard=None, while_running=None):
-        self.executed.append((len(traj.points), speed))
-        self.exec_starts.append(list(traj.points[0].positions))
-        info_extra = {}
-        if while_running is not None and guard is None:
-            try:
-                info_extra["while_running"] = while_running()
-            except Exception as exc:
-                info_extra["while_running_error"] = str(exc)
-        if self.exec_script:
-            outcome, info = self.exec_script.pop(0)
-        else:
-            outcome, info = (
-                "arrived",
-                {
-                    "message": "ok",
-                    "progress": 1.0,
-                    "torque_peak": 0.0,
-                },
-            )
-        if outcome != "failed":
-            self.live = list(traj.points[-1].positions)
-        info = dict(info)
-        info.update(info_extra)
-        return outcome, info
-
-    def set_world(self, path_or_name):
-        self.worlds_pushed.append(str(path_or_name))
-        return True, "ok"
-
-    def planner_execute_enabled(self):
-        return self.exec_enabled
-
-    def gripper_cmd(self, position):
-        return True, float(position if position is not None else 0.0), False
-
-
-class FakeStore:
-    def __init__(self):
-        self.pushes = []  # (kind, kwargs) — world-shape assertions
-
-    def push_name(self, kind, **kw):
-        self.pushes.append((kind, kw))
-        tag = kw.get("tag", "")
-        name = kind + (("_" + tag) if tag else "")
-        return name, name + ".yaml"
-
-
-def leg(
-    name,
-    start=Q0,
-    end=Q1,
-    chain=0,
-    speed=0.25,
-    world="full",
-    guard=None,
-    kind=Kind.MOTION,
-    verify=None,
-    cmd=None,
-):
-    return Leg(
-        name=name,
-        kind=kind,
-        traj=_traj(start, end) if kind is Kind.MOTION else None,
-        speed=speed,
-        guard=guard,
-        world=world,
-        chain=chain,
-        target=("joints", end) if kind is Kind.MOTION else None,
-        goal_joints=end if kind is Kind.MOTION else None,
-        verify=verify,
-        gripper_cmd=cmd,
-    )
-
-
-def runner(client, tmp_path):
-    r = Runner(client, FakeStore(), log_dir=tmp_path)
-    r.no_motion_retry_delay_s = 0.0  # production waits 3 s; tests must not
-    return r
+from rammp_box_opening.runtime.legs import Kind
 
 
 def test_dry_run_executes_nothing(tmp_path):
@@ -298,7 +156,7 @@ def test_transit_gate_accepts_bench_world_pre_detection(tmp_path):
 def test_replanned_trajectories_pass_the_sanity_gate(tmp_path):
     c = FakeClient()
     r = runner(c, tmp_path)
-    wandering = _traj(Q0, Q1)
+    wandering = traj(Q0, Q1)
     mid = JointTrajectoryPoint()
     mid.positions = [1.5] + [0.05] * 6  # joint_1 wanders way out and back
     mid.time_from_start.sec = 1
@@ -575,7 +433,7 @@ def test_replanned_warped_leg_keeps_its_execution_profile(tmp_path):
 
     # a trajectory long enough to warp: profile re-applied, sentinel kept
     many = [[0.0 + 0.01 * i] * 7 for i in range(40)]
-    t = _traj(many[0], many[-1])
+    t = traj(many[0], many[-1])
     t.points = []
     from trajectory_msgs.msg import JointTrajectoryPoint
 
