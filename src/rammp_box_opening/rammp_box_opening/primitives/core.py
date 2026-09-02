@@ -370,7 +370,28 @@ class Place:
             touch_nm=m.touch_nm if self.touch_nm is None else float(self.touch_nm),
             trip="setdown",
             target_z=self.target_xyz[2],
+            # contact is only possible at the stroke's very end — the
+            # fast segment's dynamics must not trip the gentler set-down
+            # threshold (lid released 110 mm up, field 2026-09-02)
+            arm_after=0.5,
         )
+
+        def verify(v):
+            if v.outcome == "touch":
+                if v.progress is not None and v.progress < 0.5:
+                    return False, (
+                        "guard tripped at %.0f%% of the descent — struck "
+                        "something on the way down, set-down NOT confirmed"
+                        % (v.progress * 100)
+                    )
+                peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
+                return True, "surface felt%s — set down" % peak
+            if v.outcome == "arrived":
+                return False, (
+                    "full stroke with no trip — never felt the surface, "
+                    "set-down NOT confirmed"
+                )
+            return False, "set-down %s" % v.outcome
         # a set-down SUCCEEDS only on the touch: target exactly at surface
         # height can 'arrive' without ever feeling the table — command a
         # hair below so the guard verdict is deterministic
@@ -391,6 +412,7 @@ class Place:
             self.speed,
             guard=guard,
             invalidates=True,
+            verify=verify,
         )
         legs = [transit, descend]
         if self.open_after:

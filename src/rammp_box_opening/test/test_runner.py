@@ -575,3 +575,19 @@ def test_replanned_warped_leg_keeps_its_execution_profile(tmp_path):
     lg3.retime = lambda traj: seen.__setitem__("traj", traj)
     _restore_execution_profile(lg3)
     assert seen["traj"] is lg3.traj
+
+
+def test_guard_observes_but_cannot_trip_before_arm_after():
+    """The fast warp segment's dynamics tripped the gentle set-down
+    threshold 64 ms into the descent and the lid was released 110 mm up
+    (field 2026-09-02). Before arm_after the guard watches but never
+    trips; after it, the same deviation trips."""
+    from rammp_box_opening.runtime.guards import TorqueGuard
+
+    g = TorqueGuard(4.0, arm_after=0.5)
+    g.on_progress(0.05)
+    assert g.on_efforts([0.0] * 4) is False  # baseline
+    assert g.on_efforts([9.0, 0.0, 0.0, 0.0]) is False  # fast-zone jolt held
+    assert g.peak == 9.0  # still observed
+    g.on_progress(0.6)
+    assert g.on_efforts([9.0, 0.0, 0.0, 0.0]) is True  # same dev now trips

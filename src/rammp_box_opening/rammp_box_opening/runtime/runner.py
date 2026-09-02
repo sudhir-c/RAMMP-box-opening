@@ -386,6 +386,7 @@ class Runner:
             TorqueGuard(
                 lead.guard.touch_nm,
                 rebaseline_after=lead.guard.rebaseline_after,
+                arm_after=lead.guard.arm_after,
             )
             if lead.guard
             else None

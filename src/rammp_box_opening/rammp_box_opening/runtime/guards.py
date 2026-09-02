@@ -22,11 +22,18 @@ from rammp_box_opening.constants import (
 
 
 class TorqueGuard:
-    def __init__(self, touch_nm, rebaseline_after=None):
+    def __init__(self, touch_nm, rebaseline_after=None, arm_after=None):
         self.touch_nm = float(touch_nm)
         self.armed = False
         self._baseline = None
         self.peak = 0.0
+        # Progress fraction before which deviations are OBSERVED but never
+        # trip: a set-down's contact physically cannot happen in the first
+        # half of a stroke that ends 5 mm below the surface, yet the fast
+        # warp segment's motion dynamics tripped a 4.0 Nm threshold 64 ms
+        # in and the lid was released 110 mm up (field 2026-09-02).
+        self.arm_after = None if arm_after is None else float(arm_after)
+        self._progress = 0.0
         # Time fraction at which a warped descent changes speed. The guard
         # stays ARMED throughout — coverage is not reduced — but its
         # reference is re-taken once the arm is in the slow regime, so the
@@ -38,6 +45,7 @@ class TorqueGuard:
         self._rebaselined = False
 
     def on_progress(self, progress):
+        self._progress = float(progress)
         if progress > 0.0:
             self.armed = True
         if (
@@ -56,6 +64,8 @@ class TorqueGuard:
             return False
         dev = max(abs(a - b) for a, b in zip(wrist_efforts, self._baseline))
         self.peak = max(self.peak, dev)
+        if self.arm_after is not None and self._progress < self.arm_after:
+            return False
         return dev > self.touch_nm
 
 
@@ -76,6 +86,9 @@ class GuardSpec:
     # the Runner hands it to TorqueGuard so the baseline is re-taken
     # in the regime the touch actually happens in
     rebaseline_after: float = None
+    # progress fraction before which the guard observes but cannot trip
+    # (set-down: contact is only possible at the stroke's very end)
+    arm_after: float = None
 
 
 def sanity_violations(traj, margin_rad):

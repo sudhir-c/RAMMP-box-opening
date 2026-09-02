@@ -668,3 +668,30 @@ def test_place_accounts_for_grip_height_and_gentle_touch():
     assert down.target[1][2] == pytest.approx(want)
     assert down.guard.touch_nm == pytest.approx(cfg.setdown_touch_nm)
     assert cfg.setdown_touch_nm < c.model.touch_nm  # gentler than the press
+
+
+def test_setdown_verify_rejects_early_trips_and_no_touch():
+    """A trip in the first half of the stroke is a strike, not a set-down
+    (the lid was dropped from 110 mm when a fast-segment trip counted as
+    touch, field 2026-09-02); arriving without ever feeling the surface
+    stays a failure. Only a late trip confirms the set-down."""
+    from rammp_box_opening.runtime.legs import VerifyCtx
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    legs = press_demo.build_place_legs(c, cfg)
+    down = next(x for x in legs if x.name == "place:lid:down")
+    assert down.guard.arm_after is not None and down.guard.arm_after >= 0.5
+
+    def v(outcome, progress):
+        return down.verify(
+            VerifyCtx(outcome=outcome, progress=progress, torque_peak=4.2)
+        )
+
+    ok, why = v("touch", 0.06)
+    assert not ok and "NOT confirmed" in why
+    ok, why = v("touch", 0.9)
+    assert ok
+    ok, why = v("arrived", 1.0)
+    assert not ok and "never felt the surface" in why

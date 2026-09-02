@@ -433,6 +433,14 @@ def build_place_legs(ctx, cfg):
     for lg in legs:
         if lg.name == "place:lid:down":
             _apply_warp(lg, cfg, cfg.setdown_speed)
+            # arm no earlier than the slow zone: between arm_after and the
+            # rebaseline the guard would judge slow-zone efforts against a
+            # fast-regime baseline
+            if lg.guard.rebaseline_after is not None:
+                lg.guard = replace(
+                    lg.guard,
+                    arm_after=max(lg.guard.arm_after or 0.0, lg.guard.rebaseline_after),
+                )
     ctx.lid_at = lid  # worlds carry the placed lid from here on
     retreat_legs, st = Retreat(
         m.hover_standoff + m.lid_dims[2], speed=TRANSIT_SPEED
