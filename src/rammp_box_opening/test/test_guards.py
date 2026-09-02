@@ -6,7 +6,6 @@ from rammp_box_opening.runtime.guards import (
     classify_press,
     in_band,
     press_outcome,
-    reverse_retrace,
     sanity_violations,
 )
 
@@ -73,22 +72,6 @@ def test_press_classification():
 def test_in_band():
     assert in_band(0.6, (0.55, 0.75))
     assert not in_band(0.8, (0.55, 0.75))  # closed on air
-
-
-def test_reverse_retrace_reverses_executed_portion():
-    t = _traj([[0.0], [0.2], [0.4], [0.6]], dt=1.0)  # 3 s total
-    r = reverse_retrace(t, progress=0.5)  # stopped ~1.5 s in
-    starts = [p.positions[0] for p in r.points]
-    assert starts[0] == pytest.approx(0.4)  # from deepest executed
-    assert starts[-1] == pytest.approx(0.0)  # back to the start
-    times = [p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 for p in r.points]
-    assert times == sorted(times)
-    # Strictly POSITIVE first stamp, not 0.0: the executor rejects a goal
-    # whose diff(times, prepend=0) contains a non-positive dt, so a retrace
-    # starting at t=0 was refused on first contact with the arm.
-    assert times[0] > 0.0
-    dts = [b - a for a, b in zip(times, times[1:])]
-    assert all(d > 0.0 for d in dts)
 
 
 def test_time_fraction_conversion_tracks_the_path_not_the_clock():

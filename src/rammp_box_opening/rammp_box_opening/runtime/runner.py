@@ -420,7 +420,6 @@ class Runner:
                 return None, next_chain
             leg.traj = plan.trajectory
             leg.chain = next_chain
-            leg.stale = False
             leg.goal_joints = list(plan.trajectory.points[-1].positions)
             _restore_execution_profile(leg)
             # the pre-execution gates ran against the ORIGINAL trajectory;

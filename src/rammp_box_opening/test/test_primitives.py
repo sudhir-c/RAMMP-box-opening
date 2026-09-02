@@ -28,7 +28,7 @@ def ctx():
 
 
 def state():
-    return PlanState(joints=[0.0] * 7, chain=0, contact_broke_chain=False)
+    return PlanState(joints=[0.0] * 7, chain=0)
 
 
 def test_chaining_start_joints_flow():
@@ -56,7 +56,7 @@ def test_place_sequence_and_release():
     assert kinds == [Kind.MOTION, Kind.MOTION, Kind.GRIPPER]
     transit, descend, open_ = legs
     assert descend.guard.trip == "setdown"
-    assert descend.invalidates_downstream
+    assert open_.chain == descend.chain + 1  # contact breaks the chain
     assert open_.gripper_cmd == 0.0
     # field 2026-08-26: the hover start state sat inside the aperture-ring
     # walls (INVALID_START_STATE) — the set-down world must be ring-free
@@ -101,7 +101,7 @@ def test_press_fixed_single_stroke_from_staging():
     assert press.guard is not None and press.guard.trip == "press"
     assert press.speed == pytest.approx(cfg.press_speed)
     assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
-    assert press.invalidates_downstream and st.chain > 0
+    assert st.chain == press.chain + 1  # contact breaks the chain
 
 
 def test_press_fixed_verify_expected_depth_semantics():

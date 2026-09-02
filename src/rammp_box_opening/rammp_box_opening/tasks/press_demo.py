@@ -72,7 +72,7 @@ from rammp_box_opening.worlds import WorldStore
 
 
 def _state(joints):
-    return PlanState(joints=list(joints), chain=0, contact_broke_chain=False)
+    return PlanState(joints=list(joints), chain=0)
 
 
 def rest_joints(cfg):

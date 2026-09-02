@@ -40,7 +40,6 @@ class Leg:
     chain: int
     target: tuple  # ("pose", xyz, quat_xyzw) | ("joints", q7) | None
     goal_joints: list  # predicted end joints (MOTION), None for GRIPPER
-    invalidates_downstream: bool = False
     verify: object = None  # Callable[[VerifyCtx], tuple[bool, str]] | None
     gripper_cmd: float = None
     # GRIPPER legs only: start the command and carry on, joining before
@@ -54,7 +53,6 @@ class Leg:
     # Runner joins it right before that motion executes
     join_before_motion: bool = False
     world_path: str = None  # generated world YAML to push (SetWorld wants a path)
-    stale: bool = field(default=False, compare=False)  # set by the Runner
     # Planning cost, for the preview table. plan_s is the client's round
     # trip; plan_server_s is what the planner reports it spent solving.
     # The gap between them is action/transport overhead — worth watching:

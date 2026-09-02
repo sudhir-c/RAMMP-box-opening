@@ -6,11 +6,8 @@ progress > 0 (never at goal-accept), and guarded runs REFUSE to start
 without effort fields (enforced by the Runner, which owns the streams).
 """
 
-import copy
 import math
 from dataclasses import dataclass
-
-from trajectory_msgs.msg import JointTrajectory
 
 from rammp_curobo.geometry import ang_diff
 
@@ -127,47 +124,6 @@ def press_outcome(outcome, depth_m, window):
 def in_band(pos, band):
     lo, hi = band
     return lo <= float(pos) <= hi
-
-
-def reverse_retrace(traj, progress):
-    """Plan-free retreat: the executed portion of a descent, reversed.
-
-    Used when post-contact planning fails (the start may read as
-    in-collision, spec §6). Revalidated by the server's own gates."""
-    end = traj.points[-1].time_from_start
-    total = end.sec + end.nanosec * 1e-9
-    cut = total * float(progress)
-    done = [
-        p
-        for p in traj.points
-        if p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 <= cut
-    ]
-    # Round UP one waypoint: cancel latency means the arm traveled beyond
-    # the last fully-elapsed point; the retrace must cover that stretch.
-    if len(done) < len(traj.points):
-        done.append(traj.points[len(done)])
-    out = JointTrajectory()
-    out.joint_names = list(traj.joint_names)
-    times = [p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 for p in done]
-    t_deep = times[-1]
-    # One interpolation step of lead-in. Mirroring times about t_deep puts
-    # the FIRST point at exactly t=0.0, and the executor rejects a goal
-    # whose diff(times, prepend=0) contains a non-positive dt — so the
-    # naive retrace was refused on contact with the arm. Offsetting by one
-    # step matches how the planner stamps point k at (k+1)*dt.
-    step = (times[-1] - times[0]) / max(1, len(times) - 1) if len(times) > 1 else 0.05
-    for p, t in zip(reversed(done), reversed(times)):
-        q = copy.deepcopy(p)
-        # velocities/accelerations zeroed deliberately: a retrace starts
-        # from a standstill after a guard cancel, so mirroring the source
-        # cruise velocity would command full speed at the first point.
-        q.velocities = [0.0] * len(p.positions)
-        q.accelerations = [0.0] * len(p.positions)
-        t_new = t_deep - t + step
-        q.time_from_start.sec = int(t_new)
-        q.time_from_start.nanosec = int(round((t_new - int(t_new)) * 1e9))
-        out.points.append(q)
-    return out
 
 
 def time_fraction_at_path_fraction(traj, path_frac):

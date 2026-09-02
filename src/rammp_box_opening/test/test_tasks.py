@@ -117,7 +117,7 @@ def test_open_box_grip_and_place_legs():
     assert down.target[1][0] == pytest.approx(button[0] + cfg.grip_offset_xy[0])
     assert down.target[1][1] == pytest.approx(button[1] + cfg.grip_offset_xy[1])
     assert down.guard is not None and down.guard.trip == "obstruction"
-    assert down.invalidates_downstream
+    assert close.chain == down.chain + 1  # contact breaks the chain
     # closed-on-air (0.8) fails the band; holding the knob passes
     ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.8))
     assert not ok

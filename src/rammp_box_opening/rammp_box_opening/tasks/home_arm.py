@@ -17,7 +17,7 @@ from rammp_box_opening.tasks import cli_common
 
 def build_legs(ctx):
     world = ctx.worlds.push_name("bench", model=ctx.model)
-    state = PlanState(joints=list(ctx.client.joints()), chain=0, contact_broke_chain=False)
+    state = PlanState(joints=list(ctx.client.joints()), chain=0)
     leg, _ = _plan_motion(
         ctx, state, "home", ("joints", list(HOME)), world, TRANSIT_SPEED
     )

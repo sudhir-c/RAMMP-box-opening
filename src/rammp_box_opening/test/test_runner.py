@@ -125,7 +125,6 @@ def leg(
     guard=None,
     kind=Kind.MOTION,
     verify=None,
-    invalidates=False,
     cmd=None,
 ):
     return Leg(
@@ -138,7 +137,6 @@ def leg(
         chain=chain,
         target=("joints", end) if kind is Kind.MOTION else None,
         goal_joints=end if kind is Kind.MOTION else None,
-        invalidates_downstream=invalidates,
         verify=verify,
         gripper_cmd=cmd,
     )
@@ -243,7 +241,7 @@ def test_contact_invalidates_downstream(tmp_path):
         ("touch", {"message": "contact", "progress": 0.5, "torque_peak": 4.0})
     ]
     legs = [
-        leg("descend", guard=g, world="interaction_x", invalidates=True, chain=0),
+        leg("descend", guard=g, world="interaction_x", chain=0),
         leg("after", Q1, Q2, chain=0),
     ]
     res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
@@ -272,7 +270,7 @@ def test_press_verify_uses_depth(tmp_path):
         return press_outcome(ctx.outcome, ctx.depth_m, (0.004, 0.012))
 
     res = runner(c, tmp_path).run(
-        [leg("press", guard=g, world="interaction_b", verify=v, invalidates=True)],
+        [leg("press", guard=g, world="interaction_b", verify=v)],
         execute=True,
         assume_yes=True,
     )
@@ -313,7 +311,7 @@ def test_replanned_trajectories_pass_the_sanity_gate(tmp_path):
         trajectory = wandering
 
     c.plans = [R]
-    group, chain = r._replan_group([leg("a", invalidates=True)], next_chain=5)
+    group, chain = r._replan_group([leg("a")], next_chain=5)
     assert group is None  # wandering replan refused, same gate as pre-built
 
 
@@ -333,7 +331,7 @@ def test_no_replan_when_contact_left_arm_on_plan(tmp_path):
         ("touch", {"message": "contact", "progress": 0.97, "torque_peak": 4.0})
     ]
     legs = [
-        leg("descend", guard=g, world="interaction_x", invalidates=True, chain=0),
+        leg("descend", guard=g, world="interaction_x", chain=0),
         leg("retreat", Q1, Q2, chain=0, speed=0.15, world="interaction_x"),
     ]
     r = runner(c, tmp_path)
@@ -358,7 +356,7 @@ def test_tf_depth_lookup_skipped_unless_the_verify_needs_it(tmp_path):
     g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)  # needs_depth False
     c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
     res = runner(c, tmp_path).run(
-        [leg("press", guard=g, world="interaction_b", invalidates=True)],
+        [leg("press", guard=g, world="interaction_b")],
         execute=True,
         assume_yes=True,
     )
@@ -441,7 +439,7 @@ def test_lazy_leg_is_planned_once_from_live_at_execution(tmp_path):
     lazy.traj = None
     lazy.goal_joints = None
     lazy.world_path = "/w/interaction_x-1.yaml"
-    legs = [leg("down", guard=g, world="interaction_x", invalidates=True, chain=0), lazy]
+    legs = [leg("down", guard=g, world="interaction_x", chain=0), lazy]
     res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
     assert [r.outcome for r in res] == ["touch", "arrived"]
     assert c.worlds_pushed == ["/w/interaction_x-1.yaml"]
@@ -533,7 +531,7 @@ def test_touch_forces_replan_even_under_the_drift_gate(tmp_path):
         ("touch", {"message": "contact", "progress": 0.9, "torque_peak": 4.0})
     ]
     legs = [
-        leg("descend", guard=g, world="interaction_x", invalidates=True, chain=0),
+        leg("descend", guard=g, world="interaction_x", chain=0),
         leg("retreat", Q1, Q2, chain=1),
     ]
     res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
@@ -588,7 +586,7 @@ def test_replanned_warped_leg_keeps_its_execution_profile(tmp_path):
         pt.accelerations = [0.0] * 7
         pt.time_from_start.sec = i
         t.points.append(pt)
-    lg = leg("down", guard=g, world="interaction_x", invalidates=True)
+    lg = leg("down", guard=g, world="interaction_x")
     lg.speed = 1.0
     lg.warp = (0.5, 0.35, 0.3)
     lg.traj = t
@@ -599,7 +597,7 @@ def test_replanned_warped_leg_keeps_its_execution_profile(tmp_path):
     assert end.sec + end.nanosec * 1e-9 > 39.0  # slower than the raw plan
 
     # a degenerate trajectory that cannot be warped: honest downgrade
-    lg2 = leg("down2", guard=g, world="interaction_x", invalidates=True)
+    lg2 = leg("down2", guard=g, world="interaction_x")
     lg2.speed = 1.0
     lg2.warp = (0.35, 0.35, 0.3)  # fast==slow -> warp declines
     _restore_execution_profile(lg2)
@@ -608,7 +606,7 @@ def test_replanned_warped_leg_keeps_its_execution_profile(tmp_path):
 
     # the retime hook follows the trajectory actually flown
     seen = {}
-    lg3 = leg("press", guard=g, world="interaction_x", invalidates=True)
+    lg3 = leg("press", guard=g, world="interaction_x")
     lg3.retime = lambda traj: seen.__setitem__("traj", traj)
     _restore_execution_profile(lg3)
     assert seen["traj"] is lg3.traj
@@ -680,7 +678,7 @@ def test_release_overlaps_the_replan_but_never_the_motion(tmp_path):
     lazy.traj = None
     lazy.target = ("pose", [0.5, 0.0, 0.2], [0.0, 1.0, 0.0, 0.0])
     legs = [
-        leg("down", guard=g, world="interaction_x", invalidates=True, chain=0),
+        leg("down", guard=g, world="interaction_x", chain=0),
         release,
         lazy,
     ]

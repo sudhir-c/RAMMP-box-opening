@@ -109,10 +109,10 @@ With the container at its bench spot:
 ## 3. Every-session preflight
 
 1. `ros2 run rammp_box_opening preflight` — must PASS:
-   `/joint_states` fresh WITH effort fields (guarded primitives refuse
-   without them), planner actions reachable, full world pushed
-   (`SetWorld` is write-only: preflight ESTABLISHES the world). The
-   `execute` param and controller states print as INFO.
+   `/joint_states` fresh WITH effort fields (guarded legs refuse
+   without them) and planner actions reachable. The `execute` param and
+   controller states print as INFO. No world is pushed here: every leg
+   pushes the world it is planned against at plan time.
 2. **Abort drill** (every session, no exceptions): start
    `ros2 run rammp_box_opening home_arm --execute` (type `yes`), then
    Ctrl+C mid-motion. PASS = the arm stops and holds immediately AND the

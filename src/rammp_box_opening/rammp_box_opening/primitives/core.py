@@ -1,10 +1,9 @@
 """The primitives (spec §5): plan/execute split, guarded descents shared.
 
 Each primitive chain-plans from `state.joints` (tour_demo chaining). A
-contact leg invalidates downstream pre-plans: it increments the chain and
-the next primitive previews from the descent plan's end joints (nominal
-contact depth); the Runner re-plans stale legs from the live arm at
-execution time.
+contact leg invalidates downstream pre-plans: it increments the chain, so
+nothing merges across it, and what follows it is LAZY — planned by the
+Runner from the live arm once the guard has stopped it.
 
 Ctx.last_pose / last_world track the most recent commanded tool pose and
 the world it was planned against, so pose-relative primitives (Lift,
@@ -62,9 +61,8 @@ class Ctx:
 
 @dataclass
 class PlanState:
-    joints: list
-    chain: int
-    contact_broke_chain: bool
+    joints: list  # predicted joints the next leg plans from; None = lazy
+    chain: int  # bumped by every contact leg: nothing merges across it
 
 
 def hover_above(xyz, standoff):
@@ -142,11 +140,10 @@ def _plan_motion(
             chain=state.chain,
             target=target,
             goal_joints=None,
-            invalidates_downstream=invalidates,
             verify=verify,
         )
         next_chain = state.chain + 1 if invalidates else state.chain
-        return leg, PlanState(joints=None, chain=next_chain, contact_broke_chain=invalidates)
+        return leg, PlanState(joints=None, chain=next_chain)
     # Worlds are a PLAN-time concern (spec §6): the planner must hold this
     # leg's world BEFORE the plan is requested — SetWorld only at execution
     # time means every trajectory was actually planned against the previous
@@ -183,7 +180,6 @@ def _plan_motion(
         chain=state.chain,
         target=target,
         goal_joints=end,
-        invalidates_downstream=invalidates,
         verify=verify,
         plan_s=plan_s,
         plan_server_s=getattr(plan, "planning_time", None),
@@ -193,7 +189,7 @@ def _plan_motion(
         # every later FULL world allows for a contact-shifted container
         ctx.contact_pad = CONTACT_SHIFT_PAD_M
     next_chain = state.chain + 1 if invalidates else state.chain
-    return leg, PlanState(joints=end, chain=next_chain, contact_broke_chain=invalidates)
+    return leg, PlanState(joints=end, chain=next_chain)
 
 
 def _gripper_leg(
@@ -376,8 +372,10 @@ class Place:
 class Retreat:
     """Vertical disengage by dz from the last commanded pose. Planned
     against the interaction world (a full-world plan would start inside
-    the container cuboid after contact); slow and short. The Runner's
-    reverse-retrace covers the plan-fails case (spec §6)."""
+    the container cuboid after contact). Lazy after a touch: the Runner
+    plans it from live once the guard has stopped the arm, and a failed
+    post-touch replan stops the mission with the arm holding — there is
+    no plan-free fallback."""
 
     def __init__(self, dz, name="retreat", speed=CONTACT_SPEED, lazy=False):
         self.dz = float(dz)
