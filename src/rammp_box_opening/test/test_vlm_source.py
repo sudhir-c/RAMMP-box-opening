@@ -162,3 +162,66 @@ def test_purge_policy_is_per_source():
 
     assert BoxTopWatcher.PURGE_ON_WAIT is False
     assert getattr(TagWatcher, "PURGE_ON_WAIT", True) is True
+
+
+def test_roi_from_bbox_pads_and_clamps():
+    from rammp_box_opening.perception.owl_source import roi_from_bbox
+
+    m = [10.0, 5.0, 100.0, 60.0, 0.4, 0.0]
+    assert roi_from_bbox(m, (480, 848), 20) == (0, 0, 120, 80)
+    assert roi_from_bbox([800.0, 470.0, 900.0, 600.0, 0.4, 0.0], (480, 848), 20) == (
+        780,
+        450,
+        847,
+        479,
+    )
+
+
+def test_owl_rung_gates_the_watcher_only_while_enabled_and_fresh():
+    """A bbox from a moving-camera frame must not gate a parked frame, and
+    a late message must not undo the mission's explicit roi clear
+    (review 2026-09-02): roi is written only while the gate is enabled
+    and the bbox FRAME is fresh."""
+    import types
+
+    from rammp_box_opening.perception.owl_source import OwlRung
+
+    class Watcher:
+        roi = None
+        grab = types.SimpleNamespace(color=__import__("numpy").zeros((480, 848, 3)))
+
+    rung = OwlRung.__new__(OwlRung)  # no node: wire the pure parts
+    rung.cfg = types.SimpleNamespace(vlm_pad_px=20)
+    rung.watcher_holder = {"watcher": Watcher()}
+    rung.latest = None
+    rung.enabled = False
+    rung._now = lambda: 100.0
+    msg = types.SimpleNamespace(data=[10.0, 10.0, 50.0, 50.0, 0.3, 99.5])
+    rung._cb(msg)
+    assert rung.watcher_holder["watcher"].roi is None  # gate closed
+    rung.enabled = True
+    rung._cb(types.SimpleNamespace(data=[10.0, 10.0, 50.0, 50.0, 0.3, 97.0]))
+    assert rung.watcher_holder["watcher"].roi is None  # 3 s old frame
+    rung._cb(msg)
+    assert rung.watcher_holder["watcher"].roi == (0, 0, 70, 70)
+
+
+def test_ladder_skips_owl_without_a_live_rung(cfg):
+    from rammp_box_opening.perception.vlm_source import resolve_roi
+
+    roi, lines = resolve_roi(None, cfg, impls={"claude": lambda img, c: (None, "no")})
+    assert roi is None
+    assert any("owl: no live rung" in ln for ln in lines)
+
+
+def test_cloud_rung_refuses_when_no_budget_is_left(cfg):
+    from rammp_box_opening.perception.vlm_source import fetch_box_roi
+
+    class Never:
+        def __getattr__(self, name):
+            raise AssertionError("must not call the API with no budget")
+
+    roi, why = fetch_box_roi(
+        __import__("numpy").zeros((4, 4, 3), dtype="uint8"), cfg, client=Never(), budget_s=0.2
+    )
+    assert roi is None and "budget" in why

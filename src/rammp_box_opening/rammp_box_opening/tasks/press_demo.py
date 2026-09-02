@@ -527,12 +527,16 @@ def wait_for_fix(node, watcher, cfg, timeout_s=None):
         watcher.reset()
     limit = cfg.timeout_s if timeout_s is None else timeout_s
     t0 = time.monotonic()
-    while time.monotonic() - t0 < limit:
-        _spin_detect(node)
-        got = watcher.fix()
-        if got is not None:
-            return got
-    return None
+    watcher.active = True  # the detector only works inside a detect window
+    try:
+        while time.monotonic() - t0 < limit:
+            _spin_detect(node)
+            got = watcher.fix()
+            if got is not None:
+                return got
+        return None
+    finally:
+        watcher.active = False
 
 
 def center_on_tag(node, watcher, ctx, cfg, runner, execute, wait=None):
@@ -619,6 +623,7 @@ def detect_only_report(node, watcher, ctx, cfg, runner, execute):
     Place the container at a TAPE-MEASURED spot first; the printed base
     pose vs truth solves the wrist-mount error."""
     watcher.reset()
+    watcher.active = True
     print("[press_demo] DETECT-ONLY: reporting fixes for 15 s")
     t0 = time.monotonic()
     last = None
@@ -698,22 +703,22 @@ def main():
     node, client = cli_common.init_runtime()
     worlds = WorldStore(bench)
     runner = Runner(client, worlds)
-    # NOTE: no in-process OWL preload here. The persistent owl_detector
-    # node owns the model; the CLI's fallback copy loads lazily inside
-    # owl_box_roi only when the node's topic does not answer. A boot-time
-    # preload put TWO OWLv2 copies on the GPU beside cuRobo (field
-    # 2026-09-01) for the price of zero — the node path never used it.
+    # The persistent owl_detector node owns the OWL model; there is no
+    # in-process copy (a second OWLv2 beside cuRobo on one GPU, field
+    # 2026-09-01). The rung also owns the node's ENABLE gate: inference
+    # runs only inside the mission's detect windows, because at 100 % GPU
+    # duty it doubled every cuRobo solve (measured 2026-09-02).
     impls = None
+    owl = None
     if cfg.detect_source == "vlm" and "owl" in cfg.vlm_backends:
         from rammp_box_opening.perception.owl_source import make_topic_rung
         from rammp_box_opening.perception.vlm_source import fetch_box_roi
 
         # listener starts NOW, not at detect time: the node sees the box
-        # mid-scan and its bbox gates the depth watcher while the arm is
-        # still flipping over — by arrival the fix is usually already
-        # committed (owner: detect during the flip, 2026-09-01)
-        rung = make_topic_rung(node, cfg, watcher_holder := {})
-        impls = {"owl": rung, "claude": fetch_box_roi}
+        # as the arm settles and its bbox gates the depth watcher, so the
+        # fix is usually ready within a few still frames of arrival
+        owl = make_topic_rung(node, cfg, watcher_holder := {})
+        impls = {"owl": owl, "claude": fetch_box_roi}
     if cfg.detect_source in ("depth", "vlm"):
         # the box found by geometry: lid plateau above the measured table.
         # No print to wear out — the press knuckles destroyed two tag
@@ -748,6 +753,8 @@ def main():
                 % (worst, HOME_START_TOL_RAD)
             )
             sys.exit(3)
+        if owl is not None:
+            owl.enable()  # the node infers only while a detect window is open
         res = runner.run(
             [build_scan_leg(ctx, cfg, live)],
             execute=args.execute,
@@ -775,7 +782,16 @@ def main():
             if got is None and cfg.detect_source == "vlm":
                 while watcher.grab.color is None:
                     _spin_detect(node)
-                roi, lines = resolve_roi(watcher.grab.color, cfg, impls=impls)
+                # the cloud rung is bounded to the detect time LEFT: on the
+                # no-internet target an unbounded call stalled far past
+                # the budget (review 2026-09-02)
+                budget = cfg.timeout_s - (time.monotonic() - t_detect)
+                bound = dict(impls)
+                if "claude" in bound:
+                    bound["claude"] = lambda img, c, _b=budget: fetch_box_roi(
+                        img, c, budget_s=_b
+                    )
+                roi, lines = resolve_roi(watcher.grab.color, cfg, impls=bound)
                 for ln in lines:
                     print("[press_demo] VLM %s" % ln)
                 watcher.roi = roi  # None = ungated, honest refusals stand
@@ -789,6 +805,8 @@ def main():
             why = "ok" if got is not None else "no_tag"
         else:
             got, why = center_on_tag(node, watcher, ctx, cfg, runner, args.execute)
+        if owl is not None:
+            owl.disable()  # detect window closed: give the GPU back
         if got is None:
             if why == "no_tag":
                 try_home(

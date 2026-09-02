@@ -23,16 +23,29 @@ trained detector.
 
 import base64
 
-from pydantic import BaseModel
+
+def _box_schema():
+    # pydantic is a dependency of the cloud rung only; keep the mission's
+    # import cheap and the rung's failure mode a fallback, never a crash
+    from pydantic import BaseModel
+
+    class BoxLocation(BaseModel):
+        found: bool
+        x0: int
+        y0: int
+        x1: int
+        y1: int
+        confidence: float
+
+    return BoxLocation
 
 
-class BoxLocation(BaseModel):
-    found: bool
-    x0: int
-    y0: int
-    x1: int
-    y1: int
-    confidence: float
+def __getattr__(name):
+    # tests build BoxLocation results directly; keep the name importable
+    # without paying the pydantic import on the mission's happy path
+    if name == "BoxLocation":
+        return _box_schema()
+    raise AttributeError(name)
 
 
 PROMPT = (
@@ -44,22 +57,31 @@ PROMPT = (
 )
 
 
-def fetch_box_roi(color_rgb, cfg, client=None):
+def fetch_box_roi(color_bgr, cfg, client=None, budget_s=None):
     """One VLM call -> (roi, why). roi is a padded, image-clamped pixel
     bbox for top_face_from_depth, or None with the reason.
 
     `client` is injectable for tests; by default the Anthropic SDK client
     is built from the environment (ANTHROPIC_API_KEY / an active auth
-    profile) at call time, so import stays cheap and key-free."""
+    profile) at call time, so import stays cheap and key-free. The call
+    is BOUNDED: no SDK retries and a timeout no longer than the detect
+    budget left — on the no-internet target the default retries could
+    stall ~60 s outside the 10 s budget (review 2026-09-02)."""
     import cv2
 
-    h, w = color_rgb.shape[:2]
+    h, w = color_bgr.shape[:2]
+    timeout = float(cfg.vlm_timeout_s)
+    if budget_s is not None:
+        timeout = min(timeout, float(budget_s))
+        if timeout < 0.5:
+            return None, "no detect budget left for a cloud call"
     try:
         if client is None:
             import anthropic
 
-            client = anthropic.Anthropic(timeout=float(cfg.vlm_timeout_s))
-        ok, png = cv2.imencode(".png", cv2.cvtColor(color_rgb, cv2.COLOR_RGB2BGR))
+            client = anthropic.Anthropic(timeout=timeout, max_retries=0)
+        # the grabber stores BGR, which is what imencode expects
+        ok, png = cv2.imencode(".png", color_bgr)
         if not ok:
             return None, "could not encode the frame"
         resp = client.messages.parse(
@@ -83,7 +105,7 @@ def fetch_box_roi(color_rgb, cfg, client=None):
                     ],
                 }
             ],
-            output_format=BoxLocation,
+            output_format=_box_schema(),
         )
         loc = resp.parsed_output
     except Exception as exc:  # network, auth, timeout, refusal — all fall back
@@ -104,25 +126,25 @@ def fetch_box_roi(color_rgb, cfg, client=None):
     return roi, "bbox (%d,%d)-(%d,%d) conf %.2f" % (*roi, loc.confidence)
 
 
-def resolve_roi(color_rgb, cfg, impls=None):
+def resolve_roi(color_bgr, cfg, impls=None):
     """Walk the configured backend ladder; first roi wins.
 
     Ladder shape (deployment review, 2026-09-01): the wheelchair will not
     always have internet, so LOCAL comes first and the cloud is the
     fallback, with plain depth as the floor when every rung declines.
-    Returns (roi | None, [per-backend status lines]).
-    `impls` is injectable for tests."""
+    Returns (roi | None, [per-backend status lines]). `impls` is
+    injectable for tests; the owl rung needs the live node (an OwlRung
+    from owl_source) and is skipped when none was supplied. The caller
+    binds the cloud rung's budget (fetch_box_roi's budget_s)."""
     if impls is None:
-        from rammp_box_opening.perception.owl_source import owl_box_roi
-
-        impls = {"owl": owl_box_roi, "claude": fetch_box_roi}
+        impls = {"claude": fetch_box_roi}
     lines = []
     for name in cfg.vlm_backends:
         fn = impls.get(name)
         if fn is None:
-            lines.append("%s: unknown backend — skipped" % name)
+            lines.append("%s: no live rung — skipped" % name)
             continue
-        roi, why = fn(color_rgb, cfg)
+        roi, why = fn(color_bgr, cfg)
         lines.append("%s: %s" % (name, why))
         if roi is not None:
             return roi, lines

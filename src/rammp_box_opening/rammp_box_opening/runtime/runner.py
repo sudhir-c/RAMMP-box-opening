@@ -74,6 +74,10 @@ class Runner:
         self.client = client
         self.worlds = world_store
         self.margin_rad = margin_rad
+        # after a no-motion fault the server already runs its own ~4.5 s
+        # servoing recovery; this is the client-side breather before the
+        # single retry (tests set it to 0 — it was 35 % of the suite)
+        self.no_motion_retry_delay_s = 3.0
         self._log_dir = Path(
             log_dir
             if log_dir is not None
@@ -395,7 +399,7 @@ class Runner:
         outcome, info = self.client.execute(traj, lead.speed, guard=guard)
         if outcome == "failed" and NO_MOTION_SIGNATURE in info.get("message", ""):
             print("  no-motion fault at start — one retry from standstill")
-            time.sleep(3.0)
+            time.sleep(self.no_motion_retry_delay_s)
             outcome, info = self.client.execute(traj, lead.speed, guard=guard)
         depth = None
         if outcome == "touch" and lead.guard and lead.guard.needs_depth:

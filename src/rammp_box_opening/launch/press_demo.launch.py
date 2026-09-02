@@ -1,4 +1,4 @@
-"""Planner + wrist-camera driver for the tag-driven press demo.
+"""Planner, joint-state relay, OWL detector and wrist camera for the press demo.
 
     ros2 launch rammp_box_opening press_demo.launch.py                # dry-run
     ros2 launch rammp_box_opening press_demo.launch.py execute:=true  # it moves
@@ -22,6 +22,7 @@ import os
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    GroupAction,
     IncludeLaunchDescription,
     OpaqueFunction,
 )
@@ -109,9 +110,24 @@ def _nodes(context, *_args, **_kwargs):
         # an in-flight cuRobo solve runs ~5 s and cannot be interrupted;
         # give launch more than its 5 s default before SIGINT -> SIGTERM
         sigterm_timeout="12",
-        parameters=[{"config": val("config"), "execute": flag("execute")}],
+        parameters=[
+            {
+                "config": val("config"),
+                "execute": flag("execute"),
+                # the planner reads joint states from a 20 Hz relay in its
+                # own process: its per-message Python callback at the
+                # driver's ~100 Hz lifted every solve 0.22 -> 0.37 s
+                "joint_states_topic": "/rammp_box_opening/joint_states",
+            }
+        ],
     )
-    nodes = [planner]
+    relay = Node(
+        package="rammp_box_opening",
+        executable="joint_state_relay",
+        name="joint_state_relay",
+        output="screen",
+    )
+    nodes = [relay, planner]
     if flag("owl"):
         # persistent semantic gate: the OWL model loads ONCE here,
         # overlapping the planner's GPU init, instead of once per CLI run
@@ -125,23 +141,25 @@ def _nodes(context, *_args, **_kwargs):
             )
         )
     if flag("camera"):
-        nodes.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    [
-                        FindPackageShare("realsense2_camera"),
-                        "/launch/rs_launch.py",
-                    ]
-                ),
-                launch_arguments={
-                    "camera_namespace": "d405",
-                    "camera_name": "d405",
-                    # the watcher's depth refinement reads depth at the
-                    # tag's COLOR pixel — alignment is required
-                    "align_depth.enable": "true",
-                }.items(),
-            )
+        camera = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                [
+                    FindPackageShare("realsense2_camera"),
+                    "/launch/rs_launch.py",
+                ]
+            ),
+            launch_arguments={
+                "camera_namespace": "d405",
+                "camera_name": "d405",
+                # the watcher's depth refinement reads depth at the
+                # box's COLOR pixel — alignment is required
+                "align_depth.enable": "true",
+            }.items(),
         )
+        # forwarding=False: rs_launch.py warns (80 names each) about every
+        # launch configuration it does not declare — ours (execute, config,
+        # camera, owl) leaked into it and buried real camera warnings
+        nodes.append(GroupAction([camera], forwarding=False))
     return nodes
 
 

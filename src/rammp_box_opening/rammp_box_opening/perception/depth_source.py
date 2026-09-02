@@ -257,8 +257,11 @@ def button_circle_refine(color_rgb, depth, k, rot_cam, trans_cam, center, button
     x1, y1 = int(u0) + half, int(v0) + half
     if x0 < 0 or y0 < 0 or x1 >= w or y1 >= h:
         return None  # crop truncated: centroid fallback beats a biased circle
+    # the grabber stores BGR (verified 2026-09-02); grey from the right
+    # channel order — the seam is achromatic so the Hough is insensitive,
+    # but the buffer is what it is
     gray = cv2.cvtColor(
-        np.ascontiguousarray(color_rgb[y0:y1, x0:x1]), cv2.COLOR_RGB2GRAY
+        np.ascontiguousarray(color_rgb[y0:y1, x0:x1]), cv2.COLOR_BGR2GRAY
     )
     # blur 3, NOT 5: the heavier blur smeared the button seam and
     # Hough hit 1/37 capture frames; at 3 it hits 36/37 with 2.6 px
@@ -364,9 +367,15 @@ class BoxTopWatcher:
         self.last_reject = None  # why the last non-hit frame was refused
         self._last_stamp = None
         self._last_cam = None  # previous frame's camera pose (still filter)
+        # detection runs only inside a detect window (wait_for_fix and the
+        # detect-only report set it); the idle 20 Hz tick otherwise costs a
+        # TF lookup per frame for nothing
+        self.active = False
         node.create_timer(period_s, self._tick)
 
     def _tick(self):
+        if not self.active:
+            return
         g = self.grab
         if g.depth is None or g.k is None or g.color_stamp is None:
             return
@@ -417,10 +426,17 @@ class BoxTopWatcher:
         self.window.add(np.asarray(fix.center), fix.yaw, time.monotonic())
 
     def reset(self):
-        """Purge the window when the arm settles (same rationale as the
-        tag path: in-motion sightings carry TF/depth timing skew)."""
+        """Purge the window AND the counters: status() must describe the
+        window it is asked about, not the mission's whole history (the
+        pre-grip re-look printed scan-pose hit counts and hid its own
+        reject reason for two days, 2026-09-02)."""
         self.window.samples = []
         self.window.last_seen = None
+        self.frames = 0
+        self.hits = 0
+        self.refined_hits = 0
+        self.circle_hits = 0
+        self.last_reject = None
 
     def fix(self, now=None):
         return self.window.fix(time.monotonic() if now is None else now)
@@ -443,5 +459,5 @@ class BoxTopWatcher:
             self.hits,
             self.frames,
             self.circle_hits,
-            why if self.hits == 0 else "",
+            why,
         )

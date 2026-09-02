@@ -30,6 +30,7 @@ setup(
         "console_scripts": [
             "open_container = rammp_box_opening.tasks.open_container:main",
             "owl_detector = rammp_box_opening.perception.owl_node:main",
+            "joint_state_relay = rammp_box_opening.runtime.joint_state_relay:main",
             "pickup_container = rammp_box_opening.tasks.pickup_container:main",
             "approach = rammp_box_opening.tasks.primitive_clis:main_approach",
             "press = rammp_box_opening.tasks.primitive_clis:main_press",

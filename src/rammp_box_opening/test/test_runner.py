@@ -137,7 +137,9 @@ def leg(
 
 
 def runner(client, tmp_path):
-    return Runner(client, FakeStore(), log_dir=tmp_path)
+    r = Runner(client, FakeStore(), log_dir=tmp_path)
+    r.no_motion_retry_delay_s = 0.0  # production waits 3 s; tests must not
+    return r
 
 
 def test_dry_run_executes_nothing(tmp_path):

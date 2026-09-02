@@ -11,11 +11,12 @@ stream at a gentle cadence and publishes the best bbox:
     /rammp_box_opening/owl_bbox   std_msgs/Float32MultiArray
                                   [x0, y0, x1, y1, score, stamp_sec]
 
-Published only when something clears vlm.owl_min_score; the stamp lets
-the mission ignore stale sightings. The mission's owl rung reads this
-topic first and only falls back to an in-process load when the node is
-not running. This is also the architecture the deployment target wants:
-an always-on perception service whose output the mission consumes.
+Published only when something clears vlm.owl_min_score; the stamp is the
+FRAME time so the mission can ignore stale sightings. Inference runs only
+while the mission has enabled it (a latched Bool on owl_enable, auto-off
+after 30 s): outside its detect windows the node heartbeats and leaves
+the GPU to the planner. This is the architecture the deployment target
+wants: an always-on perception service whose output the mission consumes.
 
 Queries, model, and threshold come from the same container YAML the
 mission uses (`container` parameter), so there is exactly one place to
@@ -27,7 +28,14 @@ import warnings
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32MultiArray
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, Float32MultiArray
+
+# the mission enables inference only around its detect windows: OWLv2
+# at 100 % GPU duty doubled every cuRobo solve (0.22 s -> 0.47 s measured
+# offline 2026-09-02). A stale enable cannot pin the GPU forever either.
+ENABLE_TOPIC = "/rammp_box_opening/owl_enable"
+ENABLE_MAX_S = 30.0
 
 
 class OwlDetector(Node):
@@ -75,7 +83,21 @@ class OwlDetector(Node):
             Float32MultiArray, "/rammp_box_opening/owl_bbox", 1
         )
         self._last_stamp = None
+        self._enabled_until = 0.0
+        latched = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.create_subscription(Bool, ENABLE_TOPIC, self._on_enable, latched)
         self.create_timer(period, self._tick)
+
+    def _on_enable(self, msg):
+        self._enabled_until = (time.monotonic() + ENABLE_MAX_S) if msg.data else 0.0
+
+    @property
+    def enabled(self):
+        return time.monotonic() < self._enabled_until
 
     def _tick(self):
         g = self.grab
@@ -85,6 +107,14 @@ class OwlDetector(Node):
         if stamp == self._last_stamp:
             return
         self._last_stamp = stamp
+        frame_t = g.color_stamp.sec + g.color_stamp.nanosec * 1e-9
+        if not self.enabled:
+            # heartbeat only: the mission's rung must still tell "node
+            # alive, idle" from "node absent"
+            msg = Float32MultiArray()
+            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, self.get_clock().now().nanoseconds * 1e-9]
+            self.pub.publish(msg)
+            return
 
         import torch
 
@@ -92,7 +122,10 @@ class OwlDetector(Node):
 
         h, w = g.color.shape[:2]
         queries = list(self.cfg.owl_queries)
-        inputs = self._proc(text=[queries], images=[g.color], return_tensors="pt").to(
+        # D405Grabber stores BGR; the processor expects RGB (measured
+        # harmless on the capture set, but it is the wrong buffer)
+        rgb = g.color[:, :, ::-1]
+        inputs = self._proc(text=[queries], images=[rgb], return_tensors="pt").to(
             "cuda"
         )
         with torch.no_grad():
@@ -116,8 +149,11 @@ class OwlDetector(Node):
             # this, one missed window cost a cold in-process model load)
             msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, now]
         else:
+            # stamped with the FRAME time, not publish time: a bbox is
+            # 0.65-1.15 s old by the time it lands, and the mission must
+            # not gate a parked frame with a box seen while moving
             score, (x0, y0, x1, y1) = best
-            msg.data = [float(x0), float(y0), float(x1), float(y1), float(score), now]
+            msg.data = [float(x0), float(y0), float(x1), float(y1), float(score), frame_t]
         self.pub.publish(msg)
 
 

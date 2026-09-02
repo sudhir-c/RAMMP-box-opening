@@ -337,10 +337,42 @@ class PlannerClient:
             return None
         return send
 
+    GRIPPER_SETTLE_S = 0.15
+    GRIPPER_MOVED_MIN = 0.01
+    GRIPPER_SETTLE_TOL = 0.003
+
     def gripper_join(self, handle):
         """Wait out a gripper_send. Same (ok, position, stalled) as
-        gripper_cmd — the overlap must not change what callers verify."""
-        wrapped = spin_until_done(self.node, handle.get_result_async(), 10.0)
-        if wrapped is None:
-            return False, 0.0, False
-        return True, float(wrapped.result.position), bool(wrapped.result.stalled)
+        gripper_cmd — the overlap must not change what callers verify.
+
+        Returns as soon as EITHER the action result arrives OR the live
+        knuckle position has moved and then held still for
+        GRIPPER_SETTLE_S: the Robotiq controller only reports its result
+        after a 1.0 s stall timer, long after the fingers have settled on
+        the knob (~0.6 s per grip:close, review 2026-09-02). The verify
+        reads the same live position either way."""
+        fut = handle.get_result_async()
+        start = self._gripper_pos
+        last_pos = start
+        settled_since = None
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 10.0:
+            rclpy.spin_once(self.node, timeout_sec=0.02)
+            if fut.done():
+                wrapped = fut.result()
+                if wrapped is None:
+                    return False, 0.0, False
+                return True, float(wrapped.result.position), bool(wrapped.result.stalled)
+            pos = self._gripper_pos
+            if pos is None or start is None:
+                continue
+            moved = abs(pos - start) >= self.GRIPPER_MOVED_MIN
+            if last_pos is not None and abs(pos - last_pos) > self.GRIPPER_SETTLE_TOL:
+                settled_since = None
+            elif moved and settled_since is None:
+                settled_since = time.monotonic()
+            last_pos = pos
+            if moved and settled_since is not None:
+                if time.monotonic() - settled_since >= self.GRIPPER_SETTLE_S:
+                    return True, float(pos), False
+        return False, 0.0, False

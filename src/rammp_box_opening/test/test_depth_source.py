@@ -296,3 +296,19 @@ def test_far_from_nominal_top_is_refused_for_commit(model):
     for bad in (nominal + 0.020, nominal - 0.020):
         why = top_residual_reject(bad, TABLE_Z, model)
         assert why and "recalibrat" in why
+
+
+def test_watcher_reset_zeroes_the_window_counters(model):
+    """The re-look line printed scan-pose totals and hid its own reject
+    reason (2026-09-02): reset() now zeroes the per-window counters and
+    status() always names the last reject."""
+    from rammp_box_opening.perception.depth_source import BoxTopWatcher, FixWindow
+
+    w = BoxTopWatcher.__new__(BoxTopWatcher)
+    w.grab = type("G", (), {"missing": lambda self: []})()
+    w.window = FixWindow(3, 0.015, 2.0, 1.0)
+    w.frames, w.hits, w.refined_hits, w.circle_hits = 40, 12, 12, 11
+    w.last_reject = "a top touches the image border"
+    assert "border" in w.status()  # reported even though hits > 0
+    w.reset()
+    assert (w.frames, w.hits, w.circle_hits, w.last_reject) == (0, 0, 0, None)
