@@ -98,12 +98,15 @@ def test_press_demo_legs_compose_close_staging_press_retreat_home():
     cfg = _demo_cfg()
     legs = press_demo.build_demo_legs(c, cfg)
     seq = names(legs)
-    assert seq[:4] == ["press:close", "approach:staging", "press:down", "retreat"]
+    # press:close is no longer a leg: main() dispatches it at fix commit
+    assert seq[:4] == ["approach:staging", "press:down", "retreat", "grip:open"]
     button = from_container(c.cpose, c.model.button_offset)
-    staging = legs[1]
+    staging = legs[0]
     assert staging.world.startswith("full") and staging.speed == TRANSIT_SPEED
     assert staging.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
-    retreat = legs[3]
+    retreat = legs[2]
+    assert retreat.traj is None  # lazy: planned from live after the touch
+    assert legs[3].defer_join  # the fingers open on arrival at the hop
     assert retreat.world.startswith("interaction")
     assert retreat.speed == pytest.approx(TRANSIT_SPEED)  # fast up
     # the OPEN-BOX composition re-descends straight away, so the retreat
@@ -264,9 +267,9 @@ def test_open_box_grip_and_place_legs():
     c = ctx()
     cfg = _demo_cfg()
     legs = press_demo.build_grip_legs(c, cfg)
-    assert names(legs) == ["grip:open", "grip:down", "grip:close", "lift"]
-    open_leg, down, close, lift = legs
-    assert open_leg.gripper_cmd == 0.0 and close.gripper_cmd == 0.8
+    assert names(legs) == ["grip:down", "grip:close", "lift"]
+    down, close, lift = legs
+    assert close.gripper_cmd == 0.8
     button = from_container(c.cpose, c.model.button_offset)
     # ABOVE the tag/lid plane (press depth = into the lid — field
     # 2026-08-26), with the bench-measured lateral trim applied
@@ -302,9 +305,16 @@ def test_open_box_grip_and_place_legs():
     assert place_legs[0].target[1][2] >= carry_floor - 1e-9
     assert place_legs[1].guard.trip == "setdown"
     assert place_legs[2].gripper_cmd == 0.0
+    # a release: dispatched at once, joined before the retreat MOVES
+    assert place_legs[2].defer_join and place_legs[2].join_before_motion
     assert c.lid_at is not None  # the placed lid joins later worlds
     assert "lid" in place_legs[4].world  # home plans around the placed lid
     assert place_legs[3].speed == TRANSIT_SPEED
+    # both lazy, one chain: planned from live as one group after the touch
+    assert place_legs[3].traj is None and place_legs[4].traj is None
+    assert place_legs[3].chain == place_legs[4].chain
+    # the retreat climbs to the CARRY height, where home is plannable
+    assert place_legs[3].target[1][2] == pytest.approx(place_legs[0].target[1][2])
 
 
 def test_press_demo_full_composition():
@@ -313,9 +323,9 @@ def test_press_demo_full_composition():
     c = ctx()
     legs = press_demo.build_demo_legs(c, _demo_cfg())
     seq = names(legs)
-    assert seq[:4] == ["press:close", "approach:staging", "press:down", "retreat"]
-    assert seq[4:8] == ["grip:open", "grip:down", "grip:close", "lift"]
-    assert seq[8:] == [
+    assert seq[:4] == ["approach:staging", "press:down", "retreat", "grip:open"]
+    assert seq[4:7] == ["grip:down", "grip:close", "lift"]
+    assert seq[7:] == [
         "place:lid:transit",
         "place:lid:down",
         "place:lid:open",
@@ -486,10 +496,11 @@ def test_merged_press_is_one_continuous_motion_with_no_staging_stop():
     assert ok and lateral == pytest.approx(0.0, abs=1e-9)
 
     legs = press_demo.build_merged_press_legs(c, cfg)
-    assert names(legs) == ["press:close", "press:down", "retreat"]
+    assert names(legs) == ["press:down", "retreat", "grip:open"]
     assert "approach:staging" not in names(legs)  # the stop is gone
-    close, press, retreat = legs
-    assert close.defer_join  # fingers shut while the arm is already moving
+    press, retreat, open_leg = legs
+    assert retreat.traj is None  # lazy: planned from live after the touch
+    assert open_leg.defer_join and open_leg.gripper_cmd == 0.0  # opens at the hop
     assert press.guard is not None and press.guard.trip == "press"
     assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
     # continuous by construction: ONE solve, then warped fast-into-slow
@@ -543,10 +554,11 @@ def test_merged_press_press_only_keeps_full_retreat_and_home():
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
     legs = press_demo.build_merged_press_legs(c, cfg, include_home=True)
-    assert names(legs) == ["press:close", "press:down", "retreat", "home"]
-    retreat = legs[2]
+    assert names(legs) == ["press:down", "retreat", "home"]
+    retreat = legs[1]
     assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
-    assert legs[3].world.startswith("full")
+    assert legs[2].world.startswith("full")
+    assert legs[2].traj is None  # lazy, chained after the lazy retreat
 
 
 def test_merged_press_accepts_a_realistic_off_axis_box():
@@ -608,42 +620,31 @@ def test_every_descent_carries_a_vertical_final_constraint():
         assert leg.target[3] == pytest.approx(off), name
 
 
-def test_place_home_replans_from_the_transit_end_when_the_retreat_end_is_refused():
-    """The place retreat plans in the REDUCED world, so a rare family
-    draw can end it inside the real padded container — the full-world
-    home pre-plan then dies with INVALID_START_STATE while the arm holds
-    the lid (field 2026-09-01). The fallback re-plans home from the
-    transit end (full-world valid by construction), in its own chain so
-    it cannot merge onto the retreat with a mismatched junction."""
+def test_post_touch_legs_are_lazy_and_home_needs_no_fallback():
+    """Legs after an expected touch used to be pre-planned and then thrown
+    away by the post-touch replan every run; home was even planned twice
+    (retreat-end refused, transit-end fallback) and then failed live
+    anyway. Now they are LAZY — no plan call at build time — and the
+    Runner plans them once, from live, as one group (audit 2026-09-02)."""
     from rammp_box_opening.tasks import press_demo
 
-    class HomeOnceRefused(FakeClient):
+    class CountingClient(FakeClient):
         def __init__(self):
             super().__init__()
-            self.joint_starts = []
+            self.joint_plans = 0
 
         def plan_to_joints(self, q7, start_joints):
-            self.joint_starts.append(list(start_joints))
-
-            class Bad:
-                success = False
-                message = "INVALID_START_STATE_WORLD_COLLISION"
-
-            if len(self.joint_starts) == 1:
-                return Bad()
+            self.joint_plans += 1
             return super().plan_to_joints(q7, start_joints)
 
     c = ctx()
-    c.client = HomeOnceRefused()
+    c.client = CountingClient()
     legs = press_demo.build_place_legs(c, _demo_cfg())
-    assert names(legs)[-1] == "home"
-    transit = next(x for x in legs if x.name == "place:lid:transit")
-    home = legs[-1]
-    # the retry planned from the TRANSIT end, not the refused retreat end
-    assert c.client.joint_starts[1] == list(transit.goal_joints)
-    # separate chain: the runner may never merge home onto the retreat
-    retreat = next(x for x in legs if x.name == "retreat")
-    assert home.chain != retreat.chain
+    assert names(legs)[-2:] == ["retreat", "home"]
+    assert c.client.joint_plans == 0  # home is not planned at build time
+    assert all(x.traj is None for x in legs[-2:])
+    # build-time plans: transit + set-down only
+    assert len(c.client.approach_offsets) == 2
 
 
 def test_place_accounts_for_grip_height_and_gentle_touch():

@@ -30,7 +30,10 @@ class VerifyCtx:
 class Leg:
     name: str
     kind: Kind
-    traj: object  # JointTrajectory | None
+    # JointTrajectory, or None for a LAZY motion leg: one that follows an
+    # expected touch, whose start is unknown until the guard stops the arm
+    # — the Runner plans it from live joints exactly once, at execution
+    traj: object
     speed: float
     guard: object  # GuardSpec | None
     world: str  # world name this leg was PLANNED against
@@ -45,6 +48,11 @@ class Leg:
     # overlap is SAFE — a close during a transit — never on a release,
     # which must complete before the arm moves away from what it dropped.
     defer_join: bool = False
+    # GRIPPER legs only, with defer_join: a RELEASE may be dispatched now
+    # and the next motion's replan may proceed, but the arm must not move
+    # away from what it dropped before the fingers have settled — the
+    # Runner joins it right before that motion executes
+    join_before_motion: bool = False
     world_path: str = None  # generated world YAML to push (SetWorld wants a path)
     stale: bool = field(default=False, compare=False)  # set by the Runner
     # Planning cost, for the preview table. plan_s is the client's round

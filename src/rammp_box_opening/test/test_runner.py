@@ -405,16 +405,39 @@ def test_merged_group_refuses_a_guard_that_is_not_last(tmp_path):
         runner(c, tmp_path)._run_motion(group)
 
 
-def test_world_is_repushed_when_its_CONTENT_changed(tmp_path):
-    """Same world NAME, different content (the container moved after a
-    close-range re-fix) must reach the planner."""
+def test_replans_push_the_legs_own_world(tmp_path):
+    """Worlds are pushed at plan time and by the replan path per leg —
+    execution never consults the collision world, so the runner no longer
+    pushes per group (one tracker lives in the client, audit 2026-09-02).
+    A replanned leg must reach the planner with ITS world (content-hashed
+    path), not whatever was loaded."""
     c = FakeClient()
-    a = leg("a", world="full", chain=0)
+    a = leg("a", Q0, Q1, world="full", chain=0)
     a.world_path = "/w/full-aaaa.yaml"
     b = leg("b", Q1, Q2, world="full", chain=1)
     b.world_path = "/w/full-bbbb.yaml"  # same name, new contents
+    c.live = [0.06] + [0.0] * 6  # drift: a replans, then b chains clean
     runner(c, tmp_path).run([a, b], execute=True, assume_yes=True)
-    assert c.worlds_pushed == ["/w/full-aaaa.yaml", "/w/full-bbbb.yaml"]
+    assert c.worlds_pushed == ["/w/full-aaaa.yaml"]
+
+
+def test_lazy_leg_is_planned_once_from_live_at_execution(tmp_path):
+    """A lazy leg (traj None) after a touch is planned from live joints
+    exactly when it executes, in its own world."""
+    c = FakeClient()
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0)
+    c.exec_script = [
+        ("touch", {"message": "contact", "progress": 0.9, "torque_peak": 4.0})
+    ]
+    lazy = leg("retreat", Q1, Q2, chain=1, world="interaction_x")
+    lazy.traj = None
+    lazy.goal_joints = None
+    lazy.world_path = "/w/interaction_x-1.yaml"
+    legs = [leg("down", guard=g, world="interaction_x", invalidates=True, chain=0), lazy]
+    res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert [r.outcome for r in res] == ["touch", "arrived"]
+    assert c.worlds_pushed == ["/w/interaction_x-1.yaml"]
+    assert len(c.executed) == 2
 
 
 class _AsyncGripClient(FakeClient):
@@ -450,9 +473,13 @@ def test_deferred_gripper_close_overlaps_the_next_transit(tmp_path):
     close = leg("press:close", kind=Kind.GRIPPER, cmd=0.8)
     close.defer_join = True
     legs = [close, leg("approach", Q0, Q1, chain=0)]
-    res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
-    assert all(r.ok for r in res)
-    # sent, THEN the transit ran, and only afterwards was it collected
+    r = runner(c, tmp_path)
+    res = r.run(legs, execute=True, assume_yes=True)
+    assert all(r_.ok for r_ in res)
+    # sent, THEN the transit ran; the join is lazy — it outlives the run
+    # to overlap whatever planning follows, and finish() collects it
+    assert c.events == ["send", "execute"]
+    assert r.finish().ok
     assert c.events == ["send", "execute", "join"]
 
 
@@ -593,3 +620,62 @@ def test_guard_observes_but_cannot_trip_before_arm_after():
     assert g.peak == 9.0  # still observed
     g.on_progress(0.6)
     assert g.on_efforts([9.0, 0.0, 0.0, 0.0]) is True  # same dev now trips
+
+
+def test_pending_gripper_outlives_the_run_and_joins_before_a_guarded_leg(tmp_path):
+    """grip:open is dispatched on arrival at the hop (last leg of the press
+    phase) and must overlap the NEXT phase's planning — so a run() ends
+    without joining it, and the following run joins it before its guarded
+    descent (audit 2026-09-02)."""
+    c = _AsyncGripClient()
+    r = runner(c, tmp_path)
+    open_leg = leg("grip:open", kind=Kind.GRIPPER, cmd=0.0)
+    open_leg.defer_join = True
+    r.run([leg("retreat", Q0, Q1), open_leg], execute=True, assume_yes=True)
+    assert c.events == ["execute", "send"]  # NOT joined at the end of run()
+    g = GuardSpec(touch_nm=3.0, trip="obstruction", target_z=0.0)
+    r.run([leg("grip:down", Q1, Q2, guard=g, world="interaction_b")], execute=True, assume_yes=True)
+    assert c.events == ["execute", "send", "join", "execute"]
+
+
+def test_start_gripper_dispatches_now_and_joins_lazily(tmp_path):
+    c = _AsyncGripClient()
+    r = runner(c, tmp_path)
+    assert r.start_gripper("press:close", 0.8, execute=True)
+    assert c.events == ["send"]
+    g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    r.run([leg("press:down", Q0, Q1, guard=g, world="interaction_b")], execute=True, assume_yes=True)
+    assert c.events == ["send", "join", "execute"]
+    assert r.finish() is None  # nothing left pending
+
+
+def test_release_overlaps_the_replan_but_never_the_motion(tmp_path):
+    """place:lid:open is dispatched at once; the retreat's post-touch replan
+    proceeds while the fingers open; the join lands before the retreat
+    EXECUTES (a release completes before the arm moves away)."""
+    c = _AsyncGripClient()
+    g = GuardSpec(touch_nm=3.0, trip="setdown", target_z=0.0)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    release = leg("place:lid:open", kind=Kind.GRIPPER, cmd=0.0)
+    release.defer_join = True
+    release.join_before_motion = True
+
+    class Spy(_AsyncGripClient):
+        def plan_to_pose(self, *a, **k):
+            self.events.append("plan")
+            return super().plan_to_pose(*a, **k)
+
+    c = Spy()
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    lazy = leg("retreat", Q1, Q2, chain=1, world="interaction_x")
+    lazy.traj = None
+    lazy.target = ("pose", [0.5, 0.0, 0.2], [0.0, 1.0, 0.0, 0.0])
+    legs = [
+        leg("down", guard=g, world="interaction_x", invalidates=True, chain=0),
+        release,
+        lazy,
+    ]
+    res = runner(c, tmp_path).run(legs, execute=True, assume_yes=True)
+    assert all(r.ok for r in res)
+    assert c.events == ["execute", "send", "plan", "join", "execute"]

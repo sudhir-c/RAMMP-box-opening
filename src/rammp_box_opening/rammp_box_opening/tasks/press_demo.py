@@ -52,6 +52,7 @@ from rammp_box_opening.perception.tag_source import (
     to_camera,
 )
 from rammp_box_opening.primitives.core import (
+    SETDOWN_OVERDRIVE_M,
     Ctx,
     Home,
     Lift,
@@ -122,21 +123,11 @@ def build_home_leg(ctx, start_joints):
 
 
 def build_close_and_approach(ctx, cfg):
-    """Gripper close bundled with the staging approach (owner 2026-08-25:
-    fewer pauses — the fingers close before/while the arm transits, not
-    as a separate stop at the press site)."""
-    close = _gripper_leg(
-        ctx,
-        _state(ctx.client.joints()),
-        "press:close",
-        GRIPPER_CMD_CLOSED,
-        _full_world(ctx),
-        # the fingers shut into free air while the arm transits to staging,
-        # instead of the arm standing still for a full action round trip.
-        # The Runner joins before the guarded press, which needs them shut.
-        defer_join=True,
-    )
-    return [close, build_approach_leg(ctx, cfg)]
+    """The staging approach. The gripper close is no longer a leg here:
+    main() dispatches it the moment the fix commits (runner.start_gripper)
+    so the fingers shut while the press is being PLANNED, and the Runner
+    joins it before the guarded stroke as ever."""
+    return [build_approach_leg(ctx, cfg)]
 
 
 def build_approach_leg(ctx, cfg):
@@ -173,12 +164,27 @@ def build_press_legs(ctx, cfg, include_home=True):
     # in the FULL world where the finger spheres need the taller staging
     # clearance (staging_m 0.12 is the measured boundary, not a guess).
     up_to = cfg.staging_m if include_home else cfg.grip_hop_m
-    retreat_legs, st = Retreat(up_to + cfg.travel_m, speed=TRANSIT_SPEED).plan(ctx, st)
+    # LAZY: the press stops on a touch, so the retreat's start is unknown
+    # until then — the Runner plans it (and home) from live, once
+    retreat_legs, st = Retreat(
+        up_to + cfg.travel_m, speed=TRANSIT_SPEED, lazy=True
+    ).plan(ctx, st)
     legs = [*press_legs, *retreat_legs]
     if include_home:
         home_legs, st = Home().plan(ctx, st)
         legs += home_legs
+    else:
+        legs.append(_grip_open_after_retreat(ctx, st))
     return legs
+
+
+def _grip_open_after_retreat(ctx, st):
+    """grip:open dispatched on arrival at the hop, overlapping the grip
+    phase's planning; the Runner joins it before the guarded grip:down.
+    Never at the press bottom: the pads sit in the button recess there and
+    the knob pops 15 mm — at the hop they are 35 mm above it."""
+    world = ctx.last_world or _full_world(ctx)
+    return _gripper_leg(ctx, st, "grip:open", GRIPPER_CMD_OPEN, world, defer_join=True)
 
 
 def _apply_warp(leg, cfg, slow_speed):
@@ -246,9 +252,6 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     )
     ctx.last_world = world
     st = _state(ctx.client.joints())
-    close = _gripper_leg(
-        ctx, st, "press:close", GRIPPER_CMD_CLOSED, world, defer_join=True
-    )
     guard = GuardSpec(
         touch_nm=m.touch_nm,
         trip="press",
@@ -308,11 +311,15 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     # at once, so the hop suffices; press-only continues to HOME, planned in
     # the FULL world where the finger spheres need the staging clearance.
     up_to = cfg.staging_m if include_home else cfg.grip_hop_m
-    retreat_legs, st = Retreat(up_to + cfg.travel_m, speed=TRANSIT_SPEED).plan(ctx, st)
-    legs = [close, press, *retreat_legs]
+    retreat_legs, st = Retreat(
+        up_to + cfg.travel_m, speed=TRANSIT_SPEED, lazy=True
+    ).plan(ctx, st)
+    legs = [press, *retreat_legs]
     if include_home:
         home_legs, st = Home().plan(ctx, st)
         legs += home_legs
+    else:
+        legs.append(_grip_open_after_retreat(ctx, st))
     return legs
 
 
@@ -333,7 +340,8 @@ def build_grip_legs(ctx, cfg):
     )
     ctx.last_world = world
     st = _state(ctx.client.joints())
-    open_leg = _gripper_leg(ctx, st, "grip:open", GRIPPER_CMD_OPEN, world)
+    # the fingers were opened on arrival at the hop (press phase); the
+    # Runner joins that before the guarded descent below
     target = [
         button[0] + cfg.grip_offset_xy[0],
         button[1] + cfg.grip_offset_xy[1],
@@ -366,7 +374,7 @@ def build_grip_legs(ctx, cfg):
     lift_legs, st = Lift(cfg.lift_m, band=cfg.grip_band, speed=cfg.lift_speed).plan(
         ctx, st
     )
-    return [open_leg, down, close, *lift_legs]
+    return [down, close, *lift_legs]
 
 
 DROP_X_M = (0.28, 0.65)  # set-down zone: inside the tool-down reach band
@@ -422,6 +430,7 @@ def build_place_legs(ctx, cfg):
         lid.xyz[2] + m.lid_dims[2] + cfg.grip_clear_m,
     ]
     st = _state(ctx.client.joints())
+    hover = Place.hover_for(ctx, target)
     legs, st = Place(
         target,
         quat,
@@ -442,31 +451,21 @@ def build_place_legs(ctx, cfg):
                     arm_after=max(lg.guard.arm_after or 0.0, lg.guard.rebaseline_after),
                 )
     ctx.lid_at = lid  # worlds carry the placed lid from here on
-    retreat_legs, st = Retreat(
-        m.hover_standoff + m.lid_dims[2], speed=TRANSIT_SPEED
-    ).plan(ctx, st)
-    try:
-        home_legs, st = Home().plan(ctx, st)
-    except RuntimeError as e:
-        # The retreat plans in the REDUCED world, so its end config can
-        # be collision-free there yet read as inside the real (padded)
-        # container in the full world — a rare family draw did exactly
-        # that live (2026-09-01) and killed the mission at plan time
-        # while the arm held the lid. The transit end is full-world
-        # valid BY CONSTRUCTION and sits ~5 mm from the retreat end:
-        # re-plan home from there, in its own group so it cannot merge
-        # onto the retreat with a mismatched junction.
-        print(
-            "[press_demo] home from the retreat end refused (%s) — "
-            "re-planning from the transit end" % e
-        )
-        home_state = PlanState(
-            joints=list(legs[0].goal_joints),
-            chain=st.chain + 1,
-            contact_broke_chain=False,
-        )
-        home_legs, st = Home().plan(ctx, home_state)
+    # Retreat to the CARRY height, not 0.11 m: the transit hover sits
+    # 37 mm higher (carry floor), and from the lower retreat end the arm's
+    # spheres sit 18-21 mm from the padded container — inside its 20 mm
+    # padding — so home was refused 12/12 draws at two of three bench
+    # geometries (2026-09-02); from the hover it is valid 18/18. Lazy:
+    # the set-down stops on a touch, so both legs plan from live, once,
+    # as one group.
+    down_z = target[2] - SETDOWN_OVERDRIVE_M
+    retreat_legs, st = Retreat(hover[2] - down_z, speed=TRANSIT_SPEED, lazy=True).plan(
+        ctx, st
+    )
+    home_legs, st = Home().plan(ctx, st)
     return [*legs, *retreat_legs, *home_legs]
+
+
 
 
 def build_demo_legs(ctx, cfg):
@@ -837,6 +836,10 @@ def main():
             )
         )
 
+        # the fingers shut NOW, while the press is planned — the join lands
+        # before the guarded stroke, which needs them closed
+        runner.start_gripper("press:close", GRIPPER_CMD_CLOSED, args.execute)
+
         if not args.press_only:
             # the box lands wherever it lands: resolve the drop spot NOW,
             # before any container-directed motion — configured lid_place
@@ -1018,37 +1021,16 @@ def main():
                 % (press[-1].detail if press else "no press leg ran (dry-run)")
             )
         if args.press_only:
+            runner.finish()
             sys.exit(0)
 
-        # The press can scoot the box (any rim contact shoves it — both
-        # 2026-09-01 air-grabs descended onto the PRE-press position). So
-        # the re-look before the grip is MANDATORY, not a peek: purge the
-        # window and wait briefly for a fix taken from the hop pose — the
-        # camera sits ~0.18 m over the lid there and the top fits the
-        # view. No fresh fix within the budget = the scan fix stands.
-        if hasattr(watcher, "roi"):
-            watcher.roi = None  # scan-pose bbox is stale here
-        watcher.reset()  # only hop-pose sightings may re-aim the grip
-        got3 = wait_for_fix(node, watcher, cfg, timeout_s=1.2)
-        if got3 is None:
-            print(
-                "[press_demo] pre-grip re-look found nothing (%s) — gripping "
-                "the scan fix" % watcher.status()
-            )
-        if got3 is not None:
-            cp3 = fix_to_cpose(watcher, got3, model, cfg)
-            d3 = math.hypot(
-                cp3.xyz[0] - ctx.cpose.xyz[0], cp3.xyz[1] - ctx.cpose.xyz[1]
-            )
-            if d3 < 0.08:
-                if d3 > 0.003:
-                    print(
-                        "[press_demo] pre-grip re-fix: box moved %.1f mm — "
-                        "gripping where it is NOW" % (d3 * 1000)
-                    )
-                ctx.cpose = cp3  # xy/yaw re-measured; z stays pinned to
-                # the calibrated table (the moulded height is constant)
-        print("[press_demo] GRIP: open, descend to press depth, close, pull")
+        # No pre-grip re-look: at the hop the lid does not fit in the depth
+        # frame (its far edge projects past the last row), so the border
+        # gate refused every attempt — 1.2 s per run for nothing (audit
+        # 2026-09-02). A press that scoots the box is caught by the guarded
+        # grip:down (an obstruction trip) and the band verify (closed on
+        # air), both honest failures.
+        print("[press_demo] GRIP: descend to press depth, close, pull")
         res = runner.run(
             build_grip_legs(ctx, cfg), execute=args.execute, assume_yes=True
         )
@@ -1063,6 +1045,7 @@ def main():
         )
         if any(not r.ok for r in res):
             sys.exit(1)
+        runner.finish()
         print("[press_demo] DONE — box open, lid placed, arm home")
     except KeyboardInterrupt:
         sys.exit(130)  # the abort path already reported what was confirmed

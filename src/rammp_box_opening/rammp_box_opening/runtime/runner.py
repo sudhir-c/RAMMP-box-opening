@@ -84,7 +84,10 @@ class Runner:
             else Path.home() / ".ros" / "rammp_box_opening" / "runs"
         )
         self._log_path = None
-        self._last_world = None
+        # an overlapped gripper command that outlives a run(): sent at fix
+        # commit or on arrival at the hop, joined lazily before anything
+        # that needs the fingers settled (audit 2026-09-02)
+        self._pending = None  # (leg, handle, t0)
 
     # -- preview -----------------------------------------------------------
     def preview(self, legs):
@@ -204,39 +207,23 @@ class Runner:
                 return [res]
 
         results = []
-        pending = None  # (leg, handle, t0) of an overlapped gripper command
         after_touch = False  # the previous motion stopped ON something
         next_chain = max((leg.chain for leg in legs), default=0) + 1
         for group in merge_groups(legs):
             lead = group[0]
-            # dedup on the PATH, not the name: world files are content-
-            # hashed, so a world whose contents changed (e.g. the container
-            # pose after a close-range re-fix) has a different path and is
-            # re-pushed. Comparing names skipped that push and executed
-            # against a stale container (found by review 2026-08-28).
-            world_key = str(lead.world_path or lead.world)
-            if world_key != self._last_world:
-                ok, msg = self.client.set_world(lead.world_path or lead.world)
-                if not ok:
-                    res = LegResult(
-                        lead.name, "refused", False, "set_world failed: " + msg
-                    )
-                    self._log(res, lead)
-                    results.append(res)
-                    return results
-                self._last_world = world_key
+            # Worlds are pushed at PLAN time (core._plan_motion) and by the
+            # replan path per leg; execution itself never consults the
+            # collision world, so nothing is pushed here.
 
             # A deferred gripper command must be settled before anything
             # that depends on the fingers having arrived: another gripper
             # leg, or any guarded motion (the press descends with them
-            # closed). Everything else — a plain transit — is exactly what
-            # we want it to overlap with.
-            if pending is not None and (
+            # closed). Everything else — a plain transit, a replan — is
+            # exactly what we want it to overlap with.
+            if self._pending is not None and (
                 lead.kind is Kind.GRIPPER or any(g.guard is not None for g in group)
             ):
-                res = self._join_gripper(*pending)
-                self._log(res, pending[0])
-                pending = None
+                res = self._join_pending()
                 results.append(res)
                 if not res.ok:
                     print(
@@ -249,7 +236,7 @@ class Runner:
                 if lead.defer_join and lead.verify is None:
                     handle = self.client.gripper_send(lead.gripper_cmd)
                     if handle is not None:
-                        pending = (lead, handle, time.monotonic())
+                        self._pending = (lead, handle, time.monotonic())
                         continue
                     # send failed — fall through to the blocking path so
                     # the failure is reported the same way as ever
@@ -289,6 +276,18 @@ class Runner:
                         results.append(res)
                         return results
                     lead = group[0]
+                # a RELEASE overlaps the replan above, never the motion:
+                # the arm must not move away from what it dropped before
+                # the fingers have settled
+                if self._pending is not None and self._pending[0].join_before_motion:
+                    res = self._join_pending()
+                    results.append(res)
+                    if not res.ok:
+                        print(
+                            "STOP: leg %s -> %s (%s) — arm holds"
+                            % (res.leg_name, res.outcome, res.detail)
+                        )
+                        return results
                 after_touch = False
                 res = self._run_motion(group)
                 after_touch = res.outcome == "touch"
@@ -301,14 +300,66 @@ class Runner:
                     % (res.leg_name, res.outcome, res.detail)
                 )
                 return results
-        if pending is not None:  # nothing needed it; settle before we finish
-            res = self._join_gripper(*pending)
-            self._log(res, pending[0])
-            results.append(res)
+        # a pending gripper command deliberately OUTLIVES the run: the next
+        # phase's planning is what it overlaps with (finish() collects it)
         return results
+
+    def start_gripper(self, name, cmd, execute, world="full"):
+        """Dispatch a gripper command NOW, outside any leg sequence, to
+        overlap the planning that follows (the press close goes out the
+        moment the fix commits, audit 2026-09-02). Same gates as a leg;
+        joined lazily like any deferred command. Returns False if refused."""
+        from rammp_box_opening.runtime.legs import Leg
+
+        leg = Leg(
+            name=name,
+            kind=Kind.GRIPPER,
+            traj=None,
+            speed=0.0,
+            guard=None,
+            world=world,
+            chain=0,
+            target=None,
+            goal_joints=None,
+            gripper_cmd=cmd,
+            defer_join=True,
+        )
+        if not execute:
+            print("[runner] %s: dry-run, not sent" % name)
+            return True
+        why = self._refusal(leg)
+        if why:
+            print("REFUSED: %s — %s" % (name, why))
+            return False
+        if self._pending is not None:
+            res = self._join_pending()
+            if not res.ok:
+                return False
+        handle = self.client.gripper_send(cmd)
+        if handle is None:
+            res = self._run_gripper(leg)  # send failed: blocking path, honest
+            self._log(res, leg)
+            return res.ok
+        self._pending = (leg, handle, time.monotonic())
+        return True
+
+    def finish(self):
+        """Collect any pending gripper command (mission end / exit)."""
+        if self._pending is None:
+            return None
+        return self._join_pending()
+
+    def _join_pending(self):
+        leg, handle, t0 = self._pending
+        self._pending = None
+        res = self._join_gripper(leg, handle, t0)
+        self._log(res, leg)
+        return res
 
     # -- helpers -------------------------------------------------------------
     def _drifted(self, group):
+        if group[0].traj is None:
+            return True  # lazy: planned here, from live, for the first time
         start = group[0].traj.points[0].positions
         live = self.client.joints()
         return max(abs(ang_diff(a, b)) for a, b in zip(live, start)) > DRIFT_REPLAN_RAD
@@ -322,15 +373,10 @@ class Runner:
             # merged [retreat, home] group that meant re-planning `home` at
             # transit speed against an interaction world, whose obstacles
             # are deliberately capped (review 2026-08-28).
-            key = str(leg.world_path or leg.world)
-            if key != self._last_world:
-                ok, msg = self.client.set_world(leg.world_path or leg.world)
-                if not ok:
-                    print(
-                        "REFUSED replan of %s — set_world failed: %s" % (leg.name, msg)
-                    )
-                    return None, next_chain
-                self._last_world = key
+            ok, msg = self.client.set_world(leg.world_path or leg.world)
+            if not ok:
+                print("REFUSED replan of %s — set_world failed: %s" % (leg.name, msg))
+                return None, next_chain
             kind, *rest = leg.target
             if kind == "pose":
                 off = float(rest[2]) if len(rest) > 2 else 0.0

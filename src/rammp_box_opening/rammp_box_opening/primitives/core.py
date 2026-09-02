@@ -60,7 +60,6 @@ class Ctx:
     config_path: str = None
     last_pose: tuple = None  # (xyz, quat_xyzw) of the last commanded pose
     last_world: tuple = None  # (name, path) of the last interaction world
-    pushed_world: str = None  # last world path pushed at PLAN time
     contact_pad: float = 0.0  # container xy padding once contact has happened
 
 
@@ -114,20 +113,51 @@ def _interaction_world(ctx, target_xyz, contact_z, depth_max, tag, ring=True):
 
 
 def _plan_motion(
-    ctx, state, name, target, world, speed, guard=None, invalidates=False, verify=None
+    ctx,
+    state,
+    name,
+    target,
+    world,
+    speed,
+    guard=None,
+    invalidates=False,
+    verify=None,
+    lazy=False,
 ):
     world_name, world_path = world
+    kind, *rest = target
+    if lazy or state.joints is None:
+        # LAZY: this leg follows an expected touch, so its start is unknown
+        # until the guard stops the arm. Pre-planning it was pure waste —
+        # the post-touch replan discarded it every run (audit 2026-09-02).
+        # The Runner plans it from live joints, once, in the leg's world.
+        # Everything chained after it is lazy too (its end is unknown).
+        if kind == "pose":
+            ctx.last_pose = (list(rest[0]), list(rest[1]))
+        leg = Leg(
+            name=name,
+            kind=Kind.MOTION,
+            traj=None,
+            speed=speed,
+            guard=guard,
+            world=world_name,
+            world_path=str(world_path),
+            chain=state.chain,
+            target=target,
+            goal_joints=None,
+            invalidates_downstream=invalidates,
+            verify=verify,
+        )
+        next_chain = state.chain + 1 if invalidates else state.chain
+        return leg, PlanState(joints=None, chain=next_chain, contact_broke_chain=invalidates)
     # Worlds are a PLAN-time concern (spec §6): the planner must hold this
     # leg's world BEFORE the plan is requested — SetWorld only at execution
     # time means every trajectory was actually planned against the previous
-    # world (2026-08-24 review, critical). The Runner still re-pushes per
-    # executed group, which keeps drift-replans correct.
-    if str(world_path) != ctx.pushed_world:
-        ok, msg = ctx.client.set_world(world_path)
-        if not ok:
-            raise RuntimeError("set_world before planning %s failed: %s" % (name, msg))
-        ctx.pushed_world = str(world_path)
-    kind, *rest = target
+    # world (2026-08-24 review, critical). The client deduplicates pushes of
+    # the world it already holds (one tracker, review 2026-09-02).
+    ok, msg = ctx.client.set_world(world_path)
+    if not ok:
+        raise RuntimeError("set_world before planning %s failed: %s" % (name, msg))
     t_plan = time.monotonic()
 
     if kind == "pose":
@@ -169,7 +199,9 @@ def _plan_motion(
     return leg, PlanState(joints=end, chain=next_chain, contact_broke_chain=invalidates)
 
 
-def _gripper_leg(ctx, state, name, cmd, world, verify=None, defer_join=False):
+def _gripper_leg(
+    ctx, state, name, cmd, world, verify=None, defer_join=False, join_before_motion=False
+):
     world_name, world_path = world
     return Leg(
         name=name,
@@ -185,6 +217,7 @@ def _gripper_leg(ctx, state, name, cmd, world, verify=None, defer_join=False):
         gripper_cmd=cmd,
         verify=verify,
         defer_join=defer_join,
+        join_before_motion=join_before_motion,
     )
 
 
@@ -337,14 +370,21 @@ class Place:
         # crunch at the slid drop spot (field 2026-09-02).
         self.touch_nm = touch_nm
 
-    def plan(self, ctx, state):
+    @staticmethod
+    def hover_for(ctx, target_xyz):
+        """The carry pose above a set-down target: hover standoff plus a
+        lid height, raised to the carry floor — the carried lid hangs a
+        lid-height below the fingertips and the planner cannot see it, so
+        the carry must clear the container body even directly overhead."""
         m = ctx.model
-        hover = hover_above(self.target_xyz, m.hover_standoff + m.lid_dims[2])
-        # the carried lid hangs a lid-height below the fingertips and the
-        # planner cannot see it: keep the carry high enough that the lid
-        # clears the container body even when passing directly over it
+        hover = hover_above(list(target_xyz), m.hover_standoff + m.lid_dims[2])
         carry_floor = ctx.cpose.xyz[2] + m.dims[2] + m.lid_dims[2] + CARRY_CLEAR_M
         hover[2] = max(hover[2], carry_floor)
+        return hover
+
+    def plan(self, ctx, state):
+        m = ctx.model
+        hover = self.hover_for(ctx, self.target_xyz)
         full = _full_world(ctx)
         transit, state = _plan_motion(
             ctx,
@@ -417,7 +457,19 @@ class Place:
         legs = [transit, descend]
         if self.open_after:
             legs.append(
-                _gripper_leg(ctx, state, self.name + ":open", GRIPPER_CMD_OPEN, world)
+                _gripper_leg(
+                    ctx,
+                    state,
+                    self.name + ":open",
+                    GRIPPER_CMD_OPEN,
+                    world,
+                    # dispatched at once; the retreat's post-touch replan
+                    # runs while the fingers open and the join lands right
+                    # before that retreat executes — a release still
+                    # completes before the arm moves away (audit 2026-09-02)
+                    defer_join=True,
+                    join_before_motion=True,
+                )
             )
         return legs, state
 
@@ -428,10 +480,11 @@ class Retreat:
     the container cuboid after contact); slow and short. The Runner's
     reverse-retrace covers the plan-fails case (spec §6)."""
 
-    def __init__(self, dz, name="retreat", speed=CONTACT_SPEED):
+    def __init__(self, dz, name="retreat", speed=CONTACT_SPEED, lazy=False):
         self.dz = float(dz)
         self.name = name
         self.speed = float(speed)
+        self.lazy = lazy  # follows an expected touch: planned at execution
 
     def plan(self, ctx, state):
         if ctx.last_pose is None:
@@ -446,6 +499,7 @@ class Retreat:
             ("pose", target, list(quat)),
             world,
             self.speed,
+            lazy=self.lazy,
         )
         return [leg], state
 
@@ -539,7 +593,8 @@ class PressFixed:
 
 
 class Home:
-    """Return to HOME joints via plan_to_joints (spec §5)."""
+    """Return to HOME joints via plan_to_joints (spec §5). Lazy when it
+    follows a lazy retreat (its start is unknown until then)."""
 
     def plan(self, ctx, state):
         world = _full_world(ctx)

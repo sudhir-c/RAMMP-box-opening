@@ -48,6 +48,7 @@ class PlannerClient:
         self._eff = None
         self._eff_at = 0.0  # monotonic stamp of the last joint_states message
         self._gripper_pos = None
+        self.world_held = None  # path of the world the planner holds
         node.create_subscription(JointState, "/joint_states", self._js_cb, 10)
         self._plan_pose = ActionClient(
             node, PlanToPose, NODE_NAMESPACE + "/plan_to_pose"
@@ -285,13 +286,22 @@ class PlannerClient:
 
     # -- services / gripper ------------------------------------------------
     def set_world(self, path_or_name):
+        """Push a world; a no-op when the planner already holds it. This is
+        the ONE record of what the planner holds (plan-time pushes and
+        replans both route here; two trackers drifted, review 2026-09-02).
+        Worlds are content-hashed paths, so equal path == equal world."""
+        key = str(path_or_name)
+        if key == self.world_held:
+            return True, "held"
         if not self._set_world.wait_for_service(timeout_sec=5.0):
             return False, "set_world service unavailable"
-        req = SetWorld.Request(world=str(path_or_name))
+        req = SetWorld.Request(world=key)
         resp = spin_until_done(self.node, self._set_world.call_async(req), 10.0)
-        if resp is None:
-            return False, "set_world timed out"
-        return resp.success, resp.message
+        if resp is None or not resp.success:
+            self.world_held = None
+            return False, "set_world timed out" if resp is None else resp.message
+        self.world_held = key
+        return True, resp.message
 
     def planner_execute_enabled(self):
         """Read the planner's LIVE execute parameter; False if unreachable
