@@ -411,10 +411,24 @@ def build_place_legs(ctx, cfg):
     m = ctx.model
     lid = ctx.lid_drop or load_lid_place(ctx.config_path)
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(lid.xyz[1], lid.xyz[0]))
-    target = [lid.xyz[0], lid.xyz[1], lid.xyz[2] + m.lid_dims[2]]
+    # the fingers grip the knob grip_clear_m ABOVE the lid plane, so the
+    # lid touches down when the TOOL is that much above lid-top height —
+    # without this the stroke over-travels by grip_clear_m past contact
+    # and crunches the lid into the table (field 2026-09-02, felt as
+    # "pushes too hard" the moment grip_clear_m grew to 5 mm)
+    target = [
+        lid.xyz[0],
+        lid.xyz[1],
+        lid.xyz[2] + m.lid_dims[2] + cfg.grip_clear_m,
+    ]
     st = _state(ctx.client.joints())
     legs, st = Place(
-        target, quat, open_after=True, name="place:lid", speed=cfg.setdown_speed
+        target,
+        quat,
+        open_after=True,
+        name="place:lid",
+        speed=cfg.setdown_speed,
+        touch_nm=cfg.setdown_touch_nm,
     ).plan(ctx, st)
     for lg in legs:
         if lg.name == "place:lid:down":

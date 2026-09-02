@@ -120,6 +120,10 @@ open_box:
   setdown_speed: 0.35             # guarded set-down; a trip IS the success
                                   # here, and the guard arms in 1.7 mm once
                                   # the executor polls at 0.02 s
+  setdown_touch_nm: 4.0           # set-down trip threshold — a lid on a
+                                  # table loads the wrist far less than a
+                                  # press pops a seal; 7.0 stayed blind
+                                  # through the crunch (field 2026-09-02)
   grip_clear_m: 0.005             # fingertip stop height ABOVE the lid
                                   # plane. 0.002 grazed the lid at the bench
                                   # (2026-09-01 — z fixes are good to ~2-3 mm,

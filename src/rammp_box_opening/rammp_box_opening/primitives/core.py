@@ -321,7 +321,9 @@ class Place:
     model a held object), guarded descent where a trip = set-down, then
     open the gripper (spec §5, §6)."""
 
-    def __init__(self, target_xyz, quat, open_after=True, name="place", speed=None):
+    def __init__(
+        self, target_xyz, quat, open_after=True, name="place", speed=None, touch_nm=None
+    ):
         self.target_xyz = list(target_xyz)
         self.quat = list(quat)
         self.open_after = open_after
@@ -329,6 +331,11 @@ class Place:
         # descent speed; None keeps the conservative contact default for
         # callers that predate the config knob (tests, isolated CLI use)
         self.speed = CONTACT_SPEED if speed is None else float(speed)
+        # set-down trip threshold; None keeps the model's press threshold.
+        # A lid touching a table loads the wrist far less than a press
+        # pops a seal — at 7.0 the guard stayed blind through a 10 mm
+        # crunch at the slid drop spot (field 2026-09-02).
+        self.touch_nm = touch_nm
 
     def plan(self, ctx, state):
         m = ctx.model
@@ -360,7 +367,9 @@ class Place:
         )
         ctx.last_world = world
         guard = GuardSpec(
-            touch_nm=m.touch_nm, trip="setdown", target_z=self.target_xyz[2]
+            touch_nm=m.touch_nm if self.touch_nm is None else float(self.touch_nm),
+            trip="setdown",
+            target_z=self.target_xyz[2],
         )
         # a set-down SUCCEEDS only on the touch: target exactly at surface
         # height can 'arrive' without ever feeling the table — command a

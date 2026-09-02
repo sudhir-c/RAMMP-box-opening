@@ -644,3 +644,27 @@ def test_place_home_replans_from_the_transit_end_when_the_retreat_end_is_refused
     # separate chain: the runner may never merge home onto the retreat
     retreat = next(x for x in legs if x.name == "retreat")
     assert home.chain != retreat.chain
+
+
+def test_place_accounts_for_grip_height_and_gentle_touch():
+    """The fingers hold the knob grip_clear_m above the lid plane, so lid
+    contact happens with the TOOL that much above lid-top height — the
+    uncompensated target over-travelled by grip_clear_m and crunched the
+    lid into the table without tripping the press-strength guard (field
+    2026-09-02). The set-down also gets its own gentler threshold."""
+    import pytest
+
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx()
+    cfg = _demo_cfg()
+    legs = press_demo.build_place_legs(c, cfg)
+    down = next(x for x in legs if x.name == "place:lid:down")
+    from rammp_box_opening.primitives.core import SETDOWN_OVERDRIVE_M
+    from rammp_box_opening.tasks.press_demo import load_lid_place
+
+    lid = load_lid_place(CFG)
+    want = lid.xyz[2] + c.model.lid_dims[2] + cfg.grip_clear_m - SETDOWN_OVERDRIVE_M
+    assert down.target[1][2] == pytest.approx(want)
+    assert down.guard.touch_nm == pytest.approx(cfg.setdown_touch_nm)
+    assert cfg.setdown_touch_nm < c.model.touch_nm  # gentler than the press

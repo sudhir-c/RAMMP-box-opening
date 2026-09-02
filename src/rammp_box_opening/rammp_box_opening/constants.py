@@ -11,7 +11,8 @@ WRIST_FLAT_XYZW = [0.5, 0.5, 0.5, 0.5]
 NODE_NAMESPACE = "/rammp_curobo"
 GRIPPER_ACTION = "/robotiq_gripper_controller/gripper_cmd"
 
-TRANSIT_SPEED = 1.0  # full rated speed (owner 2026-08-26); the press
+TRANSIT_SPEED = 0.75  # was 1.0: full-speed arrivals read rough and settle
+# imprecisely at the bench (owner 2026-09-02, "slow it down a bit"); the press
 #                      stroke alone stays at press_demo.speed
 CONTACT_SPEED = 0.15
 DRIFT_REPLAN_RAD = 0.04  # < server start gate (0.05); catches arrival-tol drift
