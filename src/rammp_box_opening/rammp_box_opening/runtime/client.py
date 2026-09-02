@@ -247,15 +247,23 @@ class PlannerClient:
             aborted = False
             t0 = time.monotonic()
             efforts_ok_at = time.monotonic()
-            if while_running is not None and guard is None:
-                try:
-                    info["while_running"] = while_running()
-                except KeyboardInterrupt:
-                    raise
-                except Exception as exc:  # a failed lookahead is not a failed leg
-                    info["while_running_error"] = str(exc)
             try:
-                while not result_future.done():
+                if while_running is not None and guard is None:
+                    # INSIDE the cancel backstop: a second Ctrl+C raised from
+                    # the hosted plan must still reach the cancel below, and
+                    # a first Ctrl+C that only set the flag while the motion
+                    # finished under the plan must not be swallowed (review
+                    # 2026-09-02)
+                    try:
+                        info["while_running"] = while_running()
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as exc:  # a failed lookahead is not a failed leg
+                        info["while_running_error"] = str(exc)
+                    if self._abort is not None and self._abort.requested:
+                        self._cancel_confirm(send, result_future)
+                        aborted = True
+                while not aborted and not result_future.done():
                     if self._abort is not None and self._abort.requested:
                         self._cancel_confirm(send, result_future)
                         aborted = True
@@ -398,6 +406,11 @@ class PlannerClient:
                 return True, float(wrapped.result.position), bool(wrapped.result.stalled)
             pos = self._gripper_pos
             if pos is None or start is None:
+                continue
+            if time.monotonic() - self._eff_at > 0.2:
+                # no fresh /joint_states: a stream gap must not read as
+                # "fingers settled" (review 2026-09-02)
+                settled_since = None
                 continue
             moved = abs(pos - start) >= self.GRIPPER_MOVED_MIN
             if last_pos is not None and abs(pos - last_pos) > self.GRIPPER_SETTLE_TOL:

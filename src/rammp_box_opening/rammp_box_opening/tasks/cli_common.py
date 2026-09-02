@@ -103,7 +103,12 @@ def build_ctx(args):
 
 def run_task(args, build_legs):
     ctx, runner = build_ctx(args)
-    legs = build_legs(ctx)
+    try:
+        legs = build_legs(ctx)
+    except RuntimeError as e:
+        # a refused plan is an honest line, never a traceback — the arm
+        # holds where it is
+        sys.exit("plan refused — arm holds: %s" % e)
     try:
         results = runner.run(legs, execute=args.execute)
     except KeyboardInterrupt:

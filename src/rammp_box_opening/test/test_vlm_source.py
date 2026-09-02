@@ -179,6 +179,9 @@ def test_owl_rung_gates_the_watcher_only_while_enabled_and_fresh():
         roi = None
         grab = types.SimpleNamespace(color=__import__("numpy").zeros((480, 848, 3)))
 
+        def offer_roi(self, roi, frame_t):
+            self.roi = roi  # the real watcher applies it from the still epoch
+
     rung = OwlRung.__new__(OwlRung)  # no node: wire the pure parts
     rung.cfg = types.SimpleNamespace(vlm_pad_px=20)
     rung.watcher_holder = {"watcher": Watcher()}

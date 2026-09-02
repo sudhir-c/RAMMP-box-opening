@@ -546,3 +546,33 @@ def test_park_tool_down_rests_at_the_scan_pose(ctx):
     nudged[3] += REST_TOL_RAD * 2
     assert press_demo.rest_distance(nudged, PARK) > REST_TOL_RAD
     assert press_demo.rest_distance([math.pi] + PARK[1:], PARK) > 1.0
+
+
+def test_home_arm_falls_back_to_the_bare_table_when_the_band_refuses_the_start(ctx):
+    """A recovery home usually starts INSIDE the unseen-container band (the
+    arm is holding at a press or a grip), which made the guarded bench
+    world refuse every post-contact home; it now falls back to the bare
+    table with a caution (review 2026-09-02)."""
+    from rammp_box_opening.tasks import home_arm
+
+    class RefusesOnce(FakeClient):
+        def __init__(self):
+            super().__init__()
+            self.n = 0
+
+        def plan_to_joints(self, q7, start_joints):
+            self.n += 1
+            if self.n == 1:
+                class Bad:
+                    success = False
+                    message = "INVALID_START_STATE_WORLD_COLLISION"
+
+                return Bad()
+            return super().plan_to_joints(q7, start_joints)
+
+    c = ctx
+    c.client = RefusesOnce()
+    legs = home_arm.build_legs(c)
+    assert legs[0].name == "home" and legs[0].world == "bench_bare"
+    kinds = [kw.get("model") is None for kind, kw in c.worlds.pushes if kind == "bench"]
+    assert kinds == [False, True]  # guarded band first, then the bare table

@@ -431,7 +431,27 @@ class BoxTopWatcher:
         # detect-only report set it); the idle 20 Hz tick otherwise costs a
         # TF lookup per frame for nothing
         self.active = False
+        # an offered roi is applied only once the camera has been still
+        # since BEFORE the bbox's frame: a box seen while decelerating must
+        # not gate the parked frames (review 2026-09-02)
+        self._still_since = None  # frame stamp when the camera became still
+        self._pending_roi = None  # (roi, frame_t) waiting for a still epoch
         node.create_timer(period_s, self._tick)
+
+    def offer_roi(self, roi, frame_t):
+        self._pending_roi = (roi, float(frame_t))
+
+    def _apply_pending_roi(self, still, frame_t):
+        if not still:
+            self._still_since = None
+            return
+        if self._still_since is None:
+            self._still_since = float(frame_t)
+        if self._pending_roi is not None:
+            roi, t = self._pending_roi
+            self._pending_roi = None
+            if t >= self._still_since:
+                self.roi = roi
 
     def _tick(self):
         if not self.active:
@@ -450,6 +470,7 @@ class BoxTopWatcher:
         rot_cam, trans_cam = cam
         still = camera_is_still(self._last_cam, cam)
         self._last_cam = cam
+        self._apply_pending_roi(still, g.color_stamp.sec + g.color_stamp.nanosec * 1e-9)
         if not still:
             self.last_reject = "camera moving"
             return

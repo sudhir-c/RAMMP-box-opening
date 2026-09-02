@@ -337,3 +337,26 @@ def test_watcher_reset_zeroes_the_window_counters(model):
     assert "border" in w.status()  # reported even though hits > 0
     w.reset()
     assert (w.frames, w.hits, w.circle_hits, w.last_reject) == (0, 0, 0, None)
+
+
+def test_offered_roi_applies_only_from_the_still_epoch(model):
+    """A bbox from a frame taken while the camera was still decelerating
+    must not gate the parked frames; one from a still frame must (review
+    2026-09-02)."""
+    from rammp_box_opening.perception.depth_source import BoxTopWatcher
+
+    w = BoxTopWatcher.__new__(BoxTopWatcher)
+    w.roi = None
+    w._still_since = None
+    w._pending_roi = None
+    w.offer_roi((1, 2, 3, 4), frame_t=10.0)  # seen while moving
+    w._apply_pending_roi(still=False, frame_t=10.2)
+    w._apply_pending_roi(still=True, frame_t=10.5)  # still epoch starts at 10.5
+    assert w.roi is None  # the moving-frame bbox was dropped
+    w.offer_roi((5, 6, 7, 8), frame_t=10.9)  # seen while still
+    w._apply_pending_roi(still=True, frame_t=11.0)
+    assert w.roi == (5, 6, 7, 8)
+    w._apply_pending_roi(still=False, frame_t=12.0)  # moved again
+    w.offer_roi((9, 9, 9, 9), frame_t=11.9)
+    w._apply_pending_roi(still=True, frame_t=12.3)
+    assert w.roi == (5, 6, 7, 8)  # the pre-epoch bbox did not apply

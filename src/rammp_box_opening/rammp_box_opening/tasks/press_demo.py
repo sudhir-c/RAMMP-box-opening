@@ -392,6 +392,10 @@ def build_place_legs(ctx, cfg, start_joints=None):
     start_joints: the lift's predicted end, when built as a lookahead
     while the lift flies (audit 2026-09-02)."""
     m = ctx.model
+    # this builder OWNS lid_at: a discarded earlier build (a lookahead
+    # thrown away by a no-motion retry) must not leave the transit and
+    # set-down planning around a lid that is still in the gripper
+    ctx.lid_at = None
     lid = ctx.lid_drop or load_lid_place(ctx.config_path)
     quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(lid.xyz[1], lid.xyz[0]))
     # the fingers grip the knob grip_clear_m ABOVE the lid plane, so the
@@ -513,29 +517,32 @@ def detect_only_report(node, watcher, ctx, cfg, runner, execute):
     print("[press_demo] DETECT-ONLY: reporting fixes for 15 s")
     t0 = time.monotonic()
     last = None
-    while time.monotonic() - t0 < 15.0:
-        _spin_detect(node)
-        got = watcher.fix()
-        if got is None:
-            continue
-        pos, yaw = got
-        key = tuple(round(float(v), 4) for v in pos)
-        if key == last:
-            continue
-        last = key
-        f = watcher.last_debug
-        print(
-            "fix: top [%.3f, %.3f, %.3f] yaw %.1f | footprint %.3fx%.3f m | %d px"
-            % (
-                pos[0],
-                pos[1],
-                pos[2],
-                math.degrees(float(yaw)),
-                f.footprint[0],
-                f.footprint[1],
-                f.n_px,
+    try:
+        while time.monotonic() - t0 < 15.0:
+            _spin_detect(node)
+            got = watcher.fix()
+            if got is None:
+                continue
+            pos, yaw = got
+            key = tuple(round(float(v), 4) for v in pos)
+            if key == last:
+                continue
+            last = key
+            f = watcher.last_debug
+            print(
+                "fix: top [%.3f, %.3f, %.3f] yaw %.1f | footprint %.3fx%.3f m | %d px"
+                % (
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    math.degrees(float(yaw)),
+                    f.footprint[0],
+                    f.footprint[1],
+                    f.n_px,
+                )
             )
-        )
+    finally:
+        watcher.active = False
     print("[press_demo] detect-only done (%s) — homing" % watcher.status())
     runner.run(
         [build_home_leg(ctx, ctx.client.joints())], execute=execute, assume_yes=True
@@ -569,23 +576,26 @@ def main():
     # 2026-09-01). The rung also owns the node's ENABLE gate: inference
     # runs only inside the mission's detect windows, because at 100 % GPU
     # duty it doubled every cuRobo solve (measured 2026-09-02).
-    impls = None
+    impls = {}
     owl = None
-    if cfg.detect_source == "vlm" and "owl" in cfg.vlm_backends:
-        from rammp_box_opening.perception.owl_source import make_topic_rung
+    watcher_holder = {}
+    if cfg.detect_source == "vlm":
         from rammp_box_opening.perception.vlm_source import fetch_box_roi
 
-        # listener starts NOW, not at detect time: the node sees the box
-        # as the arm settles and its bbox gates the depth watcher, so the
-        # fix is usually ready within a few still frames of arrival
-        owl = make_topic_rung(node, cfg, watcher_holder := {})
-        impls = {"owl": owl, "claude": fetch_box_roi}
+        impls["claude"] = fetch_box_roi  # bounded at call time, below
+        if "owl" in cfg.vlm_backends:
+            from rammp_box_opening.perception.owl_source import make_topic_rung
+
+            # listener starts NOW, not at detect time: the node sees the
+            # box as the arm settles and its bbox gates the depth watcher,
+            # so the fix is usually ready within a few still frames
+            owl = make_topic_rung(node, cfg, watcher_holder)
+            impls["owl"] = owl
     # the box found by geometry: lid plateau above the measured table.
     # No print to wear out — the press knuckles destroyed two tag prints
     # in a week (field 2026-09-01).
     watcher = BoxTopWatcher(node, cfg, model, worlds.table_top_z)
-    if impls is not None:
-        watcher_holder["watcher"] = watcher
+    watcher_holder["watcher"] = watcher
     # camera on from here to exit
     ctx = Ctx(
         model=model,
@@ -651,11 +661,14 @@ def main():
             # the cloud rung is bounded to the detect time LEFT: on the
             # no-internet target an unbounded call stalled far past the
             # budget (review 2026-09-02)
-            budget = cfg.timeout_s - (time.monotonic() - t_detect)
             bound = dict(impls)
             if "claude" in bound:
-                bound["claude"] = lambda img, c, _b=budget: fetch_box_roi(
-                    img, c, budget_s=_b
+                # budget read when the rung is CALLED (the owl rung may have
+                # waited 2 s first), never frozen early
+                bound["claude"] = lambda img, c: fetch_box_roi(
+                    img,
+                    c,
+                    budget_s=cfg.timeout_s - (time.monotonic() - t_detect),
                 )
             roi, lines = resolve_roi(watcher.grab.color, cfg, impls=bound)
             for ln in lines:
@@ -694,7 +707,16 @@ def main():
 
         # the fingers shut NOW, while the press is planned — the join lands
         # before the guarded stroke, which needs them closed
-        runner.start_gripper("press:close", GRIPPER_CMD_CLOSED, args.execute)
+        if not runner.start_gripper("press:close", GRIPPER_CMD_CLOSED, args.execute):
+            # no closed fingers = no press: a 7 Nm stroke with an open
+            # aperture strikes the lid and can still read "pressed"
+            try_home(
+                ctx,
+                runner,
+                args.execute,
+                "press:close refused or failed — the fingers are not closed",
+            )
+            sys.exit(1)
 
         if not args.press_only:
             # the box lands wherever it lands: resolve the drop spot NOW,

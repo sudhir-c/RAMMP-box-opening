@@ -71,6 +71,9 @@ def can_merge(a, b):
         and b.kind is Kind.MOTION
         and a.chain == b.chain
         and a.speed == b.speed
+        # a planned lead never merges with a lazy tail (or vice versa):
+        # merge_trajectories cannot chain a trajectory that does not exist
+        and (a.traj is None) == (b.traj is None)
         and a.guard is None
         and b.guard is None
         and a.verify is None  # a verify CLOSES its merge group

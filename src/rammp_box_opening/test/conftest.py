@@ -114,6 +114,12 @@ class FakeClient:
     def planner_execute_enabled(self):
         return self.exec_enabled
 
+    def gripper_send(self, position):
+        return ("handle", float(position))
+
+    def gripper_join(self, handle):
+        return True, float(handle[1]), False
+
     def gripper_cmd(self, position):
         return True, float(position if position is not None else 0.0), False
 

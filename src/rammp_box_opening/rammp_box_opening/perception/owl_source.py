@@ -121,7 +121,9 @@ class OwlRung:
             and self._now() - m[5] <= ROI_FRESH_S
             and w.grab.color is not None
         ):
-            w.roi = roi_from_bbox(m, w.grab.color.shape, int(self.cfg.vlm_pad_px))
+            # offered, not written: the watcher applies it only once the
+            # camera has been still since before this bbox's frame
+            w.offer_roi(roi_from_bbox(m, w.grab.color.shape, int(self.cfg.vlm_pad_px)), m[5])
 
     def __call__(self, color_rgb, cfg_):
         import time as _t

@@ -64,7 +64,14 @@ def _restore_execution_profile(leg):
             leg.guard = replace(leg.guard, rebaseline_after=None)
         else:
             leg.traj = warped
-            leg.guard = replace(leg.guard, rebaseline_after=arm_frac)
+            # arm_after rides with the rebaseline: the fresh trajectory has
+            # its own time base, and a guard armed before its NEW slow zone
+            # judges slow-zone efforts against the fast baseline — the lid-
+            # released-mid-air trip (review 2026-09-02)
+            arm_after = leg.guard.arm_after
+            if arm_after is not None:
+                arm_after = max(arm_after, arm_frac)
+            leg.guard = replace(leg.guard, rebaseline_after=arm_frac, arm_after=arm_after)
     retime = getattr(leg, "retime", None)
     if retime is not None:
         retime(leg.traj)
@@ -383,7 +390,7 @@ class Runner:
 
     # -- helpers -------------------------------------------------------------
     def _drifted(self, group):
-        if group[0].traj is None:
+        if any(g.traj is None for g in group):
             return True  # lazy: planned here, from live, for the first time
         start = group[0].traj.points[0].positions
         live = self.client.joints()
@@ -456,15 +463,18 @@ class Runner:
             if len(group) > 1
             else group[0].traj
         )
-        guard = (
-            TorqueGuard(
-                lead.guard.touch_nm,
-                rebaseline_after=lead.guard.rebaseline_after,
-                arm_after=lead.guard.arm_after,
+        def make_guard():
+            return (
+                TorqueGuard(
+                    lead.guard.touch_nm,
+                    rebaseline_after=lead.guard.rebaseline_after,
+                    arm_after=lead.guard.arm_after,
+                )
+                if lead.guard
+                else None
             )
-            if lead.guard
-            else None
-        )
+
+        guard = make_guard()
         t0 = time.monotonic()
         outcome, info = self.client.execute(
             traj, lead.speed, guard=guard, while_running=while_running
@@ -472,7 +482,18 @@ class Runner:
         if outcome == "failed" and NO_MOTION_SIGNATURE in info.get("message", ""):
             print("  no-motion fault at start — one retry from standstill")
             time.sleep(self.no_motion_retry_delay_s)
+            first = info
+            # a FRESH guard: the phantom first attempt armed the old one on
+            # a standstill baseline and ran its progress to 1.0
+            guard = make_guard()
             outcome, info = self.client.execute(traj, lead.speed, guard=guard)
+            # the hosted lookahead already planned from this leg's predicted
+            # end, which the retry still reaches: keep it (its build-time
+            # side effects on ctx are real either way)
+            if "while_running" in first:
+                info["while_running"] = first["while_running"]
+        if guard is not None:
+            info.setdefault("torque_peak", guard.peak)
         if info.get("while_running_error"):
             print("  lookahead plan failed (%s) — planning after the leg" % info["while_running_error"])
         depth = None

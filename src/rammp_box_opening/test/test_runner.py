@@ -575,3 +575,58 @@ def test_lookahead_runs_during_the_last_unguarded_motion(tmp_path):
     seen.clear()
     r.run([leg("p", Q1, Q2, guard=g, world="interaction_b")], execute=True, assume_yes=True, lookahead=lambda q: seen.append(q))
     assert seen == [] and r.lookahead_result is None
+
+
+def test_planned_lead_never_merges_with_a_lazy_tail():
+    from rammp_box_opening.runtime.legs import merge_groups
+
+    a = leg("a", Q0, Q1, chain=1)
+    b = leg("b", Q1, Q2, chain=1)
+    b.traj = None
+    assert [len(g) for g in merge_groups([a, b])] == [1, 1]
+    c = leg("c", Q1, Q2, chain=1)
+    c.traj = None
+    assert [len(g) for g in merge_groups([b, c])] == [2]  # both lazy: one group
+
+
+def test_restore_profile_moves_arm_after_with_the_rebaseline():
+    """A replanned warped set-down gets a new time base; the guard must not
+    be armed before the NEW slow zone or it judges slow-zone efforts
+    against the fast baseline (review 2026-09-02)."""
+    from rammp_box_opening.runtime.runner import _restore_execution_profile
+    from trajectory_msgs.msg import JointTrajectoryPoint
+
+    many = [[0.0 + 0.01 * i] * 7 for i in range(40)]
+    t = traj(many[0], many[-1])
+    t.points = []
+    for i, row in enumerate(many):
+        pt = JointTrajectoryPoint()
+        pt.positions = [float(v) for v in row]
+        pt.velocities = [0.0] * 7
+        pt.accelerations = [0.0] * 7
+        pt.time_from_start.sec = i
+        t.points.append(pt)
+    g = GuardSpec(touch_nm=4.0, trip="setdown", target_z=0.0, rebaseline_after=0.3, arm_after=0.5)
+    lg = leg("down", guard=g, world="interaction_x")
+    lg.speed = 1.0
+    lg.warp = (0.5, 0.35, 0.3)
+    lg.traj = t
+    _restore_execution_profile(lg)
+    assert lg.guard.rebaseline_after is not None
+    assert lg.guard.arm_after >= lg.guard.rebaseline_after
+    assert lg.guard.arm_after >= 0.5
+
+
+def test_no_motion_retry_keeps_the_hosted_lookahead(tmp_path):
+    """The retry re-executes the same trajectory to the same predicted end,
+    so the lookahead planned during the phantom first attempt still holds
+    — and its build-time ctx side effects are real either way."""
+    c = FakeClient()
+    c.exec_script = [
+        ("failed", {"message": "goal aborted: arm never left the start", "progress": 0.0, "torque_peak": None}),
+        ("arrived", {"message": "ok", "progress": 1.0, "torque_peak": None}),
+    ]
+    r = runner(c, tmp_path)
+    res = r.run([leg("a", Q0, Q1)], execute=True, assume_yes=True, lookahead=lambda q: ["next"])
+    assert res[0].ok and len(c.executed) == 2
+    assert r.lookahead_result == ["next"]

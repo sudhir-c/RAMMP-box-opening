@@ -12,6 +12,8 @@ the planner's interpreter free while it solves. The mission CLI keeps
 the raw topic — its torque guard wants efforts at full rate.
 """
 
+import time
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -19,6 +21,10 @@ from sensor_msgs.msg import JointState
 
 RELAY_HZ = 20.0
 RELAY_TOPIC = "/rammp_box_opening/joint_states"
+# a sample older than this is NOT republished: the planner keys its
+# staleness gate to receipt time, so relaying a frozen sample forever
+# would defeat it after a driver stall (review 2026-09-02)
+FRESH_S = 0.5
 
 
 class JointStateRelay(Node):
@@ -26,6 +32,7 @@ class JointStateRelay(Node):
         super().__init__("joint_state_relay")
         hz = float(self.declare_parameter("rate_hz", RELAY_HZ).value)
         self._latest = None
+        self._rx = None
         self.create_subscription(
             JointState, "/joint_states", self._on_js, qos_profile_sensor_data
         )
@@ -34,9 +41,10 @@ class JointStateRelay(Node):
 
     def _on_js(self, msg):
         self._latest = msg
+        self._rx = time.monotonic()
 
     def _tick(self):
-        if self._latest is not None:
+        if self._latest is not None and time.monotonic() - self._rx <= FRESH_S:
             self._pub.publish(self._latest)
 
 
