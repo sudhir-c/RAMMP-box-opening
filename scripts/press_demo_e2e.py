@@ -132,12 +132,10 @@ def run_scenario(tmp, cfg, table_z, mode):
         if "NO BOX" not in cli_said:
             fails.append("no NO BOX line")
         # depth found nothing in its first beat, so the ladder ran and the
-        # owl rung was consulted — the stub answers with heartbeats. (Its
-        # verdict is not asserted: the node stamps its messages as
-        # float32 seconds, which quantizes wall time to 128 s and makes
-        # the rung's freshness classification a coin flip.)
-        if "VLM owl:" not in cli_said:
-            fails.append("the owl rung was never consulted")
+        # owl rung was consulted — the stub answers with heartbeats, so a
+        # live-and-idle verdict is the only honest one
+        if "VLM owl: OWL node is live and sees no container top" not in cli_said:
+            fails.append("the owl rung did not report the node live and idle")
         # the detect wait must actually last the configured window:
         # scan + wait (10 s) + home; legs are ~1.6 s each at 0.75 — a
         # shortened wait would finish well under timeout_s + leg time

@@ -19,7 +19,7 @@ model: a cold load costs tens of seconds against a 10 s detect budget and
 parked a second OWLv2 on the planner's GPU (review 2026-09-02).
 """
 
-BBOX_TOPIC = "/rammp_box_opening/owl_bbox"
+BBOX_TOPIC = "/rammp_box_opening/owl_bbox"  # [x0,y0,x1,y1,score,frame_age_s]
 ENABLE_TOPIC = "/rammp_box_opening/owl_enable"
 TOPIC_FRESH_S = 3.0
 # a bbox may gate the depth watcher only when its FRAME is this recent:
@@ -109,6 +109,9 @@ class OwlRung:
 
     def _cb(self, msg):
         m = list(msg.data)
+        # the node sends the frame's AGE (float32-safe); keep an absolute
+        # frame time on this clock so freshness is a real subtraction
+        m[5] = self._now() - max(0.0, float(m[5]))
         self.latest = m
         w = self.watcher_holder.get("watcher")
         if (

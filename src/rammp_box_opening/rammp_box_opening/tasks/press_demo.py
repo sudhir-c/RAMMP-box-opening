@@ -262,6 +262,10 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     flight). If presses start landing off-centre, that is the reason.
     """
     st = _state(ctx.client.joints())
+    # the stroke STARTS at the last commanded pose (the scan pose) — read
+    # it before planning overwrites last_pose with the press target, or
+    # the contact expectation silently falls back to 0.9 (review 2026-09-02)
+    here = ctx.last_pose[0] if ctx.last_pose else None
     # the one guarded stroke (core.press_stroke) with the merged caller's
     # own contact expectation: once the tool has covered all but the last
     # travel_m of the descent, re-timed AFTER the warp because warping
@@ -269,7 +273,6 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
     press, st = press_stroke(ctx, st, cfg, "press:down", 0.06, 1.0)
     _apply_warp(press, cfg, cfg.press_speed)
     target_z = press.target[1][2]
-    here = ctx.last_pose[0] if ctx.last_pose else None
     total = abs((here[2] - target_z)) if here else cfg.staging_m + cfg.travel_m
     press.contact_path_frac = (
         max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9

@@ -9,7 +9,7 @@ planner's own GPU init — then runs the detector on the live colour
 stream at a gentle cadence and publishes the best bbox:
 
     /rammp_box_opening/owl_bbox   std_msgs/Float32MultiArray
-                                  [x0, y0, x1, y1, score, stamp_sec]
+                                  [x0, y0, x1, y1, score, frame_age_s]
 
 Published only when something clears vlm.owl_min_score; the stamp is the
 FRAME time so the mission can ignore stale sightings. Inference runs only
@@ -112,7 +112,7 @@ class OwlDetector(Node):
             # heartbeat only: the mission's rung must still tell "node
             # alive, idle" from "node absent"
             msg = Float32MultiArray()
-            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, self.get_clock().now().nanoseconds * 1e-9]
+            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, 0.0]
             self.pub.publish(msg)
             return
 
@@ -143,17 +143,22 @@ class OwlDetector(Node):
         )
         msg = Float32MultiArray()
         now = self.get_clock().now().nanoseconds * 1e-9
+        # slot 5 is the frame's AGE at publish, never an absolute time: a
+        # float32 at ~1.7e9 s has 128 s resolution, which made any
+        # freshness test on an absolute stamp a coin flip (review
+        # 2026-09-02). The rung rebuilds an absolute frame time on its
+        # own float64 clock. A bbox is 0.65-1.15 s old by the time it
+        # lands, and the mission must not gate a parked frame with a box
+        # seen while moving.
         if best is None:
             # heartbeat: the mission can tell "node alive, keep waiting"
             # from "node absent, fall back" (field 2026-09-01: without
             # this, one missed window cost a cold in-process model load)
-            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, now]
+            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, 0.0]
         else:
-            # stamped with the FRAME time, not publish time: a bbox is
-            # 0.65-1.15 s old by the time it lands, and the mission must
-            # not gate a parked frame with a box seen while moving
             score, (x0, y0, x1, y1) = best
-            msg.data = [float(x0), float(y0), float(x1), float(y1), float(score), frame_t]
+            age = max(0.0, now - frame_t)
+            msg.data = [float(x0), float(y0), float(x1), float(y1), float(score), age]
         self.pub.publish(msg)
 
 

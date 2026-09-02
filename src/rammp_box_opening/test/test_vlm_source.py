@@ -185,11 +185,14 @@ def test_owl_rung_gates_the_watcher_only_while_enabled_and_fresh():
     rung.latest = None
     rung.enabled = False
     rung._now = lambda: 100.0
-    msg = types.SimpleNamespace(data=[10.0, 10.0, 50.0, 50.0, 0.3, 99.5])
+    # slot 5 on the wire is the frame AGE (float32-safe); the rung keeps an
+    # absolute time on its own clock
+    msg = types.SimpleNamespace(data=[10.0, 10.0, 50.0, 50.0, 0.3, 0.5])
     rung._cb(msg)
     assert rung.watcher_holder["watcher"].roi is None  # gate closed
+    assert rung.latest[5] == 99.5
     rung.enabled = True
-    rung._cb(types.SimpleNamespace(data=[10.0, 10.0, 50.0, 50.0, 0.3, 97.0]))
+    rung._cb(types.SimpleNamespace(data=[10.0, 10.0, 50.0, 50.0, 0.3, 3.0]))
     assert rung.watcher_holder["watcher"].roi is None  # 3 s old frame
     rung._cb(msg)
     assert rung.watcher_holder["watcher"].roi == (0, 0, 70, 70)

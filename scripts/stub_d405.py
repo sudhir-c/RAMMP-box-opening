@@ -168,15 +168,16 @@ def main():
         pub_i.publish(info)
 
     def owl():
-        """The owl_detector node's contract (owl_node.py): a bbox stamped
-        with its FRAME time, or a heartbeat (score -1) when it sees
-        nothing — the mission's rung tells 'alive, idle' from 'absent'."""
+        """The owl_detector node's contract (owl_node.py): a bbox with its
+        frame AGE in slot 5 (float32-safe), or a heartbeat (score -1)
+        when it sees nothing — the mission's rung tells 'alive, idle'
+        from 'absent'."""
         msg = Float32MultiArray()
         if bbox is None or last_frame["t"] is None:
-            now = node.get_clock().now().nanoseconds * 1e-9
-            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, now]
+            msg.data = [0.0, 0.0, 0.0, 0.0, -1.0, 0.0]
         else:
-            msg.data = [*bbox, OWL_SCORE, last_frame["t"]]
+            now = node.get_clock().now().nanoseconds * 1e-9
+            msg.data = [*bbox, OWL_SCORE, max(0.0, now - last_frame["t"])]
         pub_owl.publish(msg)
 
     node.create_timer(1.0 / 15.0, publish)

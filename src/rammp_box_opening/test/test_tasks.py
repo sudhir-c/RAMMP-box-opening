@@ -324,6 +324,11 @@ def test_merged_press_is_one_continuous_motion_with_no_staging_stop(ctx):
     assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
     # continuous by construction: ONE solve, then warped fast-into-slow
     assert press.warp is not None and press.guard.rebaseline_after is not None
+    # contact expected once all but the last travel_m of the 0.35 m + travel
+    # descent is covered — read from the START pose, not the 0.9 fallback
+    total = 0.35 + cfg.travel_m
+    assert press.contact_path_frac == pytest.approx((total - cfg.travel_m) / total)
+    assert press.contact_path_frac > 0.93
     assert retreat.target[1][2] == pytest.approx(button[2] + cfg.grip_hop_m)
 
 
