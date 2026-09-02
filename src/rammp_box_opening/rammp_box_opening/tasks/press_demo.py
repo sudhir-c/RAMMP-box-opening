@@ -1,18 +1,39 @@
-"""press_demo — the camera-driven autonomous press (owner design 2026-08-24).
-
-The container pose comes from a configurable source (detect.source):
-depth (default — the lid plateau found by geometry, no print to wear
-out) or tag (the original ArUco path).
+"""press_demo — the camera-driven autonomous press-and-open (owner design
+2026-08-24).
 
     ros2 launch rammp_box_opening press_demo.launch.py execute:=true
     ros2 run rammp_box_opening press_demo --execute
 
-Flow, states logged one line each: SCAN (tool-down look pose, bench-only
-world) -> DETECT + center-the-tag servo -> CLOSE gripper + APPROACH
-staging (one phase; full world with the tag-derived container cuboid) ->
-close-range re-fix -> PRESS (ONE guarded stroke from staging to travel_m
-below the tag plane; a trip near expected contact depth or full travel =
-pressed, an early trip = honest strike failure) -> RETREAT -> HOME.
+Flow, states logged one line each:
+
+  SCAN    tool-down look pose over the bench (bench world with the
+          unseen-container keep-out band); no flight when the arm is
+          already parked tool-down there (open_box.park_tool_down).
+  DETECT  the lid-top plateau above the measured table (depth_source),
+          gated by the persistent OWL node's bbox (detect.source: vlm;
+          the ladder in vlm.backends is walked only when depth alone has
+          not answered in its first beat); origin z pinned to the
+          calibrated table. No stable fix within detect.timeout_s ->
+          home, exit 2. press:close is dispatched the moment the fix
+          commits, overlapping the press plan.
+  PRESS   ONE merged guarded stroke from the scan pose to travel_m below
+          the lid plane, fast through free air and at press speed into
+          contact (a trip near the expected contact or full travel =
+          pressed; an early trip = honest strike failure). A scan pose
+          too far off-axis falls back to a staged approach + stroke.
+          The post-press retreat to the hop is LAZY (planned from live
+          after the touch) and grip:open goes out on arrival there.
+  GRIP    guarded descent to grip_clear_m above the lid around the
+          popped knob (a trip = struck it), band-verified close, gentle
+          lift to the carry height.
+  PLACE   carry to the lid drop (configured lid_place, slid clear of the
+          detected box when it has to be), guarded set-down at
+          setdown_touch_nm (the trip IS the success), release, lazy
+          retreat to the carry hover, home — or PARK when park_tool_down.
+
+Each next phase is planned as a Runner lookahead while the previous
+phase's last unguarded motion flies. --press-only stops after the press
+(retreat to staging, home).
 
 --execute alone arms it: NO typed confirmation (owner decision
 2026-08-24 — autonomous once started, Ctrl+C stops everything via the

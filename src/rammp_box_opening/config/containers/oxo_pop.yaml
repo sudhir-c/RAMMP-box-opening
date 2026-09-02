@@ -1,15 +1,19 @@
 # OXO POP container model. Owner accepted nominal values for the press
-# demo 2026-08-25 (tag.size_m measured; dims/button_offset/travel_m are
-# NOMINAL — safe because the press target comes from the live tag, not
-# config, and the torque guard stops the stroke). Refine at the bench:
-# a caliper on the button travel is still worth 2 minutes.
+# demo 2026-08-25 (dims/button_offset/travel_m are NOMINAL — safe because
+# the press target comes from the live depth fix, not config, and the
+# torque guard stops the stroke). Refine at the bench: a caliper on the
+# button travel is still worth 2 minutes.
 measure_me: false
 
-dims: [0.075, 0.075, 0.107]       # z DERIVED from the live tag height
-                                  # 2026-08-25 (tag z 0.080 - table -0.027);
-                                  # xy still nominal — tape when convenient
+dims: [0.075, 0.075, 0.107]       # z DERIVED from the live lid-top height
+                                  # 2026-08-25 (top z 0.080 - table -0.027);
+                                  # the depth path re-checks it every run
+                                  # (top residual vs table + dims.z). xy
+                                  # still nominal — tape when convenient
 lid_dims: [0.075, 0.075, 0.03]
-button_offset: [0.0, 0.0, 0.107]  # tag sits on the button = container top
+button_offset: [0.0, 0.0, 0.107]  # the flush button top IS the container
+                                  # top: the detected lid plateau is the
+                                  # press plane
 button_diameter_m: 0.036          # the round button's diameter — NOMINAL,
                                   # caliper it when convenient. Drives the
                                   # circle-refine radius window: the press
@@ -45,7 +49,7 @@ open_box:
                                   # 0.15 it shipped at (speed pass 2026-08-28).
                                   # Unguarded, so runner._refusal exempts
                                   # "lift" alongside "retreat".
-  grip_hop_m: 0.05                # how far ABOVE the tag plane the press
+  grip_hop_m: 0.05                # how far ABOVE the lid plane the press
                                   # retreat stops before the fingers open and
                                   # re-descend. Was staging_m (0.12), making a
                                   # 253 mm rise-and-fall for a 2 mm reposition.
@@ -70,11 +74,12 @@ open_box:
                                   # solve is continuous by construction, and
                                   # the warp below supplies the slow-into-
                                   # contact profile. Only legal because the
-                                  # servo leaves the arm ALREADY ABOVE the
-                                  # tag — the descent is near-vertical, so
-                                  # the container being unmodelled above the
-                                  # reduction plane costs no real clearance.
-                                  # Guarded by merge_press_max_lateral_m.
+                                  # scan pose is already NEAR-OVERHEAD of
+                                  # the box — the descent is near-vertical,
+                                  # so the container being unmodelled above
+                                  # the reduction plane costs no real
+                                  # clearance. Guarded by
+                                  # merge_press_max_lateral_m.
   merge_press_max_lateral_m: 0.20 # refuse the merge (and fall back to the
                                   # two-leg path) when the scan pose is
                                   # further than this from the button in xy.
@@ -119,12 +124,13 @@ open_box:
                                   # (2026-09-01 — z fixes are good to ~2-3 mm,
                                   # so 2 mm of clearance had none to spare);
                                   # 5 mm still grips the 15 mm knob low.
-                                  # plane. The tag plane IS the lid top
-                                  # (tag on the flush button at scan): the
-                                  # popped-up button is grabbed at its
+                                  # The lid plane is the detected lid top
+                                  # (the button sits flush in it at scan):
+                                  # the popped-up button is grabbed at its
                                   # BASE — press depth is 15 mm INTO the
-                                  # lid and trips the guard (field
-                                  # 2026-08-26, first grip attempt)
+                                  # lid, and open fingertips sent there
+                                  # trip the guard (field 2026-08-26, first
+                                  # grip attempt)
   grip_offset_xy: [-0.003, 0.0]   # base-frame grasp trim: first grip
                                   # landed ~3 mm too far +x (measured
                                   # 2026-08-26); at 85 mm aperture around
@@ -133,16 +139,19 @@ open_box:
 
 # --- press_demo (camera-driven press flow, owner design 2026-08-24) ------
 press_demo:
-  travel_m: 0.015                 # owner 2026-08-26 (third bump; the guard
-                                  # at 6 Nm remains the force ceiling)
+  travel_m: 0.015                 # press depth below the lid plane (owner
+                                  # 2026-08-26, third bump); the guard at
+                                  # press.touch_nm remains the force ceiling
   speed: 0.35                     # press stroke speed (owner 2026-08-25)
-  staging_m: 0.12                 # full-world approach height above the tag.
-                                  # EMPIRICAL 2026-08-25: 0.08 was IK_FAIL
-                                  # live (finger spheres + err-tall + padding
-                                  # eat ~0.10); 0.10 is the measured boundary
+  staging_m: 0.12                 # approach height above the button for the
+                                  # STAGED fallback (full world) and the
+                                  # press-only retreat. EMPIRICAL 2026-08-25:
+                                  # 0.08 was IK_FAIL live (finger spheres +
+                                  # err-tall + padding eat ~0.10); 0.10 is
+                                  # the measured boundary
 scan:
   xyz: [0.42, 0.0, 0.45]          # tool-down look pose; camera sees ~0.6 x
-                                  # 0.4 m of bench around it at tag height
+                                  # 0.4 m of bench around it at lid height
 vlm:                              # detect.source: vlm — the semantic gate
   backends: [owl, claude]         # tried in order, first bbox wins. LOCAL
                                   # first: the wheelchair will not always
@@ -163,17 +172,23 @@ vlm:                              # detect.source: vlm — the semantic gate
                                   # back to plain depth, never stalls
   pad_px: 20                      # bbox padding before it gates the depth
 detect:
-  source: vlm                     # vlm | depth. vlm = ONE Claude call
-                                  # picks WHICH surface is the container
-                                  # (bbox), then the depth plateau inside it
-                                  # supplies the mm geometry; every depth
-                                  # honesty gate still stands, and any VLM
-                                  # failure falls back to depth. depth = the
-                                  # geometry alone (lid plateau above the
-                                  # measured table; refuses when ambiguous).
-                                  # No print to wear out: the press knuckles
-                                  # destroyed two ArUco prints in a week
-                                  # (field 2026-09-01) and that path is gone.
+  source: vlm                     # vlm | depth. Both find the box by depth:
+                                  # the lid plateau above the measured table
+                                  # supplies the mm geometry, and every depth
+                                  # honesty gate always stands. vlm adds the
+                                  # semantic ladder above (vlm.backends: the
+                                  # persistent OWL node first, the cloud as
+                                  # fallback) to say WHICH surface is the
+                                  # container (bbox) — its live bbox gates
+                                  # the depth watcher while the arm parks,
+                                  # and the ladder is walked only when depth
+                                  # alone has not answered in its first beat;
+                                  # every rung declining = plain depth. depth
+                                  # = the geometry alone (refuses when two
+                                  # box-sized tops are in view). No print to
+                                  # wear out: the press knuckles destroyed
+                                  # two ArUco prints in a week (field
+                                  # 2026-09-01) and that path is gone.
   timeout_s: 10.0                 # scan-pose wait for a stable fix
   min_hits: 3                     # agreeing frames before the fix commits
   tol_m: 0.015                    # pairwise agreement (stable_fix). 0.03
