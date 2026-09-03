@@ -25,8 +25,11 @@ import time
 
 from e2e_common import REPO, Shell, kill, measured_config, wait_for, workdir
 
-# pin the stub stroke: the mid-stroke SIGINT premise (~24 s at 0.25) must
-# not bend to an inherited STUB_PLAN_S from the environment
+# pin the stub stroke: the mid-stroke SIGINT premise must not bend to an
+# inherited STUB_PLAN_S from the environment. Unguarded motion is re-timed
+# client-side (retime.py) — the stub's 0.4 rad home path would take ~0.7 s
+# — so the drill runs home_arm in the operator's slow mode
+# (--speed-scale 0.1 -> ~7 s), which is also the real first-run safety knob
 SH = Shell("export STUB_PLAN_S=6.0; unset STUB_TRIP_EXEC_N STUB_GRIP_POS; ")
 
 
@@ -45,7 +48,7 @@ def main():
             sys.exit("stub never became ready:\n" + stub_log.read_text()[-2000:])
 
         cli = SH.spawn(
-            "exec ros2 run rammp_box_opening home_arm --execute --container %s" % cfg,
+            "exec ros2 run rammp_box_opening home_arm --execute --speed-scale 0.1 --container %s" % cfg,
             cli_log,
             stdin=subprocess.PIPE,
             text=True,
@@ -60,7 +63,7 @@ def main():
                 "no execution goal reached the stub:\n--- cli ---\n%s\n--- stub ---\n%s"
                 % (cli_log.read_text()[-2000:], stub_log.read_text()[-2000:])
             )
-        time.sleep(2.0)  # mid-stroke (stub stroke is ~24 s at speed 0.25)
+        time.sleep(2.0)  # mid-stroke (stub stroke is ~7 s in slow mode)
 
         print("SIGINT to the CLI, mid-stroke...")
         os.killpg(os.getpgid(cli.pid), signal.SIGINT)

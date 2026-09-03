@@ -50,9 +50,12 @@ def test_chain_break_splits():
     assert [len(g) for g in groups] == [1, 1]
 
 
-def test_speed_change_splits():
+def test_speed_change_no_longer_splits():
+    """One re-timed profile owns the group; each leg's speed is its cruise
+    fraction inside it (retime.py, 2026-09-03) — a speed change is not a
+    stop any more."""
     groups = merge_groups([leg("a", speed=0.25), leg("b", speed=0.15)])
-    assert [len(g) for g in groups] == [1, 1]
+    assert [len(g) for g in groups] == [2]
 
 
 def test_guarded_leg_always_alone():

@@ -14,12 +14,14 @@ from pathlib import Path
 from rammp_curobo.geometry import ang_diff
 
 from rammp_box_opening.constants import (
+    JOINT_VMAX,
     CONTACT_SPEED,
     DRIFT_REPLAN_RAD,
     SANITY_MARGIN_RAD,
 )
 from rammp_box_opening.runtime import confirm
 from rammp_box_opening.runtime.guards import TorqueGuard, sanity_violations
+from rammp_box_opening.runtime.retime import RetimeParams, retime_group
 from rammp_box_opening.runtime.warp import warp_trajectory
 from rammp_box_opening.runtime.legs import (
     Kind,
@@ -96,6 +98,14 @@ class Runner:
         # commit or on arrival at the hop, joined lazily before anything
         # that needs the fingers settled (audit 2026-09-02)
         self._pending = None  # (leg, handle, t0)
+        # the human-motion profile for unguarded groups (retime.py); the
+        # mission may replace it with the container's motion: block
+        self.retime = RetimeParams()
+        self.last_retime = None  # report of the most recent re-timed group
+        # whole-run slow mode (--speed-scale): dilates every motion, guarded
+        # strokes included — a first attempt at a new placement runs at a
+        # fraction of speed without touching any per-leg tuning
+        self.time_scale = 1.0
 
     # -- preview -----------------------------------------------------------
     def preview(self, legs):
@@ -458,11 +468,22 @@ class Runner:
                 "must not strand queued motion behind it" % guarded[0].name
             )
         lead = guarded[0] if guarded else group[0]
-        traj = (
-            merge_trajectories([g.traj for g in group])
-            if len(group) > 1
-            else group[0].traj
-        )
+        if lead.guard is None:
+            # unguarded: ONE profile over the whole group — ease out, cruise
+            # at each leg's speed fraction, flow through the junctions, long
+            # ease in — baked into the timestamps, flown at the 1.0 sentinel
+            params = replace(self.retime, time_scale=self.time_scale)
+            traj, self.last_retime = retime_group(
+                [g.traj for g in group], [g.speed for g in group], JOINT_VMAX, params
+            )
+            exec_speed = 1.0
+        else:
+            traj = (
+                merge_trajectories([g.traj for g in group])
+                if len(group) > 1
+                else group[0].traj
+            )
+            exec_speed = lead.speed * self.time_scale
         def make_guard():
             return (
                 TorqueGuard(
@@ -477,7 +498,7 @@ class Runner:
         guard = make_guard()
         t0 = time.monotonic()
         outcome, info = self.client.execute(
-            traj, lead.speed, guard=guard, while_running=while_running
+            traj, exec_speed, guard=guard, while_running=while_running
         )
         if outcome == "failed" and NO_MOTION_SIGNATURE in info.get("message", ""):
             print("  no-motion fault at start — one retry from standstill")
@@ -486,7 +507,7 @@ class Runner:
             # a FRESH guard: the phantom first attempt armed the old one on
             # a standstill baseline and ran its progress to 1.0
             guard = make_guard()
-            outcome, info = self.client.execute(traj, lead.speed, guard=guard)
+            outcome, info = self.client.execute(traj, exec_speed, guard=guard)
             # the hosted lookahead already planned from this leg's predicted
             # end, which the retry still reaches: keep it (its build-time
             # side effects on ctx are real either way)

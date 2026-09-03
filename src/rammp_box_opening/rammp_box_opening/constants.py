@@ -43,3 +43,8 @@ GRIPPER_CMD_OPEN = 0.0  # ~85 mm aperture
 # the mm, valid in the bench world, and PARK -> HOME plans clean.
 PARK = [0.608, 0.8905, 1.1224, -1.1386, -2.1213, 2.1767, 2.2738]
 REST_TOL_RAD = 0.05  # "already there": the server's own start gate
+
+# Joint velocity limits the planner plans against (cuRobo gen3_real.yaml, the
+# URDF's): the re-timer caps every joint below these and the executor refuses
+# a goal above them — two independent gates on the same numbers.
+JOINT_VMAX = [1.396, 1.396, 1.396, 1.396, 1.222, 1.222, 1.222]

@@ -571,6 +571,7 @@ def main():
     node, client = cli_common.init_runtime()
     worlds = WorldStore(bench)
     runner = Runner(client, worlds)
+    cli_common.apply_speed_scale(runner, args)
     # The persistent owl_detector node owns the OWL model; there is no
     # in-process copy (a second OWLv2 beside cuRobo on one GPU, field
     # 2026-09-01). The rung also owns the node's ENABLE gate: inference

@@ -1,3 +1,4 @@
+import pytest
 from trajectory_msgs.msg import JointTrajectoryPoint
 
 from conftest import Q0, Q1, Q2, FakeClient, leg, runner, traj
@@ -714,3 +715,31 @@ def test_ctrl_c_during_a_hosted_lookahead_still_cancels_the_goal():
         assert c._abort.goal_in_flight is False
     finally:
         client_mod.rclpy.spin_once = orig_spin
+
+
+def test_unguarded_groups_fly_the_retimed_profile_at_the_sentinel(tmp_path):
+    """Every unguarded motion group is re-timed (positions untouched) and
+    executed at the 1.0 sentinel; guarded strokes keep their own speed."""
+    c = FakeClient()
+    r = runner(c, tmp_path)
+    res = r.run([leg("a", Q0, Q1, chain=0), leg("b", Q1, Q2, chain=0)], execute=True, assume_yes=True)
+    assert all(x.ok for x in res)
+    assert c.executed[-1][1] == 1.0  # the profile is baked in
+    assert r.last_retime is not None and r.last_retime["n_points"] == 3  # junction de-duplicated
+    g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    r.run([leg("p", Q1, Q2, guard=g, world="interaction_b", speed=0.35)], execute=True, assume_yes=True)
+    assert c.executed[-1][1] == 0.35  # guarded: not re-timed here
+
+
+def test_speed_scale_dilates_guarded_and_unguarded_alike(tmp_path):
+    c = FakeClient()
+    r = runner(c, tmp_path)
+    r.time_scale = 0.5
+    r.run([leg("a", Q0, Q1)], execute=True, assume_yes=True)
+    assert c.executed[-1][1] == 1.0  # profile baked in (dilated inside it)
+    assert r.last_retime is not None
+    g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
+    r.run([leg("p", Q1, Q2, guard=g, world="interaction_b", speed=0.35)], execute=True, assume_yes=True)
+    assert c.executed[-1][1] == pytest.approx(0.175)  # guarded: speed x scale

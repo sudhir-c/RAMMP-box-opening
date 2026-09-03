@@ -57,6 +57,13 @@ def make_parser(desc):
         default=None,
         help="bench world YAML (default: installed world_bench.yaml)",
     )
+    ap.add_argument(
+        "--speed-scale",
+        type=float,
+        default=1.0,
+        help="whole-run slow mode: dilate every motion by 1/x (0 < x <= 1), "
+        "guarded strokes included — a first attempt at a new placement",
+    )
     return ap
 
 
@@ -101,8 +108,18 @@ def build_ctx(args):
     return ctx, runner
 
 
+def apply_speed_scale(runner, args):
+    scale = float(getattr(args, "speed_scale", 1.0))
+    if not 0.0 < scale <= 1.0:
+        sys.exit("--speed-scale must be in (0, 1]")
+    runner.time_scale = scale
+    if scale < 1.0:
+        print("[runner] SLOW MODE: every motion dilated by 1/%.2f" % scale)
+
+
 def run_task(args, build_legs):
     ctx, runner = build_ctx(args)
+    apply_speed_scale(runner, args)
     try:
         legs = build_legs(ctx)
     except RuntimeError as e:
