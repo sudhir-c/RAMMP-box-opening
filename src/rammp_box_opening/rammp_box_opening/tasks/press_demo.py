@@ -704,6 +704,16 @@ def main():
                 math.degrees(ctx.cpose.yaw),
             )
         )
+        runner.note(
+            "fix",
+            top_xyz=[round(float(v), 4) for v in pos],
+            origin_xyz=[round(float(v), 4) for v in ctx.cpose.xyz],
+            yaw_deg=round(math.degrees(ctx.cpose.yaw), 2),
+            top_residual_mm=round((pos[2] - (watcher.table_z + model.dims[2])) * 1000, 1),
+            roi=list(watcher.roi) if watcher.roi is not None else None,
+            status=watcher.status(),
+            detect_s=round(time.monotonic() - t_detect, 2),
+        )
 
         # the fingers shut NOW, while the press is planned — the join lands
         # before the guarded stroke, which needs them closed
@@ -766,6 +776,7 @@ def main():
         # its stop and its re-fix — whenever the guard-rail says the run
         # through the reduced world would be too lateral.
         merged, lateral = merged_press_ok(ctx, cfg)
+        runner.note("press_plan", merged=bool(merged), lateral_mm=None if lateral is None else round(lateral * 1000, 1))
         declined_why = None
         merged_legs = None
         if merged:

@@ -560,6 +560,17 @@ class Runner:
             ok, detail = leg.verify(VerifyCtx(outcome=outcome, gripper_pos=pos))
         return LegResult(leg.name, outcome, ok, detail, t_wall=time.monotonic() - t0)
 
+    def note(self, kind, **fields):
+        """A non-leg row in the run log (the detected fix, the press
+        lateral): a missed press is diagnosable from disk, not from a
+        terminal paste (bench 2026-09-03)."""
+        self._log_dir.mkdir(parents=True, exist_ok=True)
+        if self._log_path is None:
+            self._log_path = self._log_dir / time.strftime("run-%Y%m%d-%H%M%S.jsonl")
+        row = {"t": time.time(), "leg": kind, "kind": "note", **fields}
+        with open(self._log_path, "a") as f:
+            f.write(json.dumps(row) + "\n")
+
     def _log(self, res, leg):
         self._log_dir.mkdir(parents=True, exist_ok=True)
         if self._log_path is None:
