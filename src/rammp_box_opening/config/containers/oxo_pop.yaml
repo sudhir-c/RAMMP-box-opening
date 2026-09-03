@@ -144,7 +144,12 @@ open_box:
                                   # set x negative by that much. +/-0.02 max —
                                   # a bigger trim means the fix or the camera
                                   # mount is wrong, not the pads.
-  grip_offset_xy: [-0.003, 0.0]   # base-frame grasp trim: first grip
+  grip_offset_xy: [0.0, 0.0]      # base-frame grasp trim, on top of the
+                                  # button circle. ZEROED 2026-09-03: the
+                                  # -3 mm was measured when the pose came
+                                  # from the TAG; the aim is the circle
+                                  # OpenCV segments now, and the fingers
+                                  # go to its centre. Old note: first grip
                                   # landed ~3 mm too far +x (measured
                                   # 2026-08-26); at 85 mm aperture around
                                   # a 75 mm box there is only 5 mm of
@@ -185,6 +190,20 @@ vlm:                              # detect.source: vlm — the semantic gate
                                   # back to plain depth, never stalls
   pad_px: 20                      # bbox padding before it gates the depth
 detect:
+  require_button_circle: true     # only a sighting whose BUTTON CIRCLE was
+                                  # segmented (OpenCV Hough on the button's
+                                  # seam) may commit a fix — that circle's
+                                  # centre IS the aim point for the press and
+                                  # the grip. The plateau centroid finds the
+                                  # LID: on the bench capture it sat a median
+                                  # 5.9 mm (max 15.4) off the circle and its
+                                  # 3-sample medians scattered 8.4 x 13.3 mm
+                                  # against the circle's 2.9 x 1.8, so one
+                                  # centroid sample in the window could win
+                                  # the median and walk the press off the
+                                  # button (field 2026-09-03). 97 % of
+                                  # plateau frames yield a circle; false
+                                  # falls back to centroid-or-circle.
   source: vlm                     # vlm | depth. Both find the box by depth:
                                   # the lid plateau above the measured table
                                   # supplies the mm geometry, and every depth

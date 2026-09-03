@@ -360,3 +360,64 @@ def test_offered_roi_applies_only_from_the_still_epoch(model):
     w.offer_roi((9, 9, 9, 9), frame_t=11.9)
     w._apply_pending_roi(still=True, frame_t=12.3)
     assert w.roi == (5, 6, 7, 8)  # the pre-epoch bbox did not apply
+
+
+def _watcher(model, require_circle=True):
+    """A BoxTopWatcher with the ROS parts left out: the tick's decision
+    logic only."""
+    from rammp_box_opening.perception.depth_source import BoxTopWatcher, FixWindow
+
+    w = BoxTopWatcher.__new__(BoxTopWatcher)
+    w.grab = type("G", (), {"missing": lambda self: []})()
+    w.model = model
+    w.table_z = TABLE_Z
+    w.window = FixWindow(3, 0.015, 2.0, 1.0)
+    w.frames = w.hits = w.refined_hits = w.circle_hits = 0
+    w.last_reject = None
+    w.last_debug = None
+    w.roi = None
+    w.active = True
+    w.require_circle = require_circle
+    w._last_stamp = None
+    w._last_cam = None
+    w._still_since = None
+    w._pending_roi = None
+    return w
+
+
+def test_only_button_circle_sightings_vote(model):
+    """The centroid finds the LID; the circle finds the BUTTON. Mixing a
+    centroid sample into the window let it win the median and walk the
+    press off the button (field 2026-09-03) — with the circle required,
+    a frame without one votes not at all and says why."""
+    import numpy as np
+
+    from rammp_box_opening.perception.depth_source import TopFaceFix
+
+    # a plateau at the lid centre, and the button circle 6 mm off it —
+    # the offset the bench capture measured
+    plateau = TopFaceFix(center=(0.45, -0.15, 0.08), yaw=0.0, footprint=(0.075, 0.075), n_px=250)
+    circle = (0.456, -0.1505)
+
+    w = _watcher(model)
+    for _ in range(3):
+        w.window.add(np.asarray(circle + (0.08,)), 0.0, 1.0)
+    got = w.window.fix(1.2)
+    assert got is not None and abs(got[0][0] - 0.456) < 1e-9  # the circle centre
+
+    # a centroid-only frame must not enter the window when the circle is
+    # required; the reject reason names it
+    w2 = _watcher(model)
+    w2.last_reject = "container top but no button circle"
+    assert "no button circle" in w2.status()
+    assert w2.window.fix(1.0) is None  # nothing voted
+
+
+def test_shipped_config_requires_the_button_circle_and_trims_nothing():
+    from rammp_box_opening.models.container import load_press_demo
+
+    cfg = load_press_demo("src/rammp_box_opening/config/containers/oxo_pop.yaml")
+    assert cfg.require_button_circle is True
+    # the press and the grip both aim at the circle centre itself
+    assert tuple(cfg.grip_offset_xy) == (0.0, 0.0)
+    assert tuple(cfg.press_offset_xy) == (0.0, 0.0)

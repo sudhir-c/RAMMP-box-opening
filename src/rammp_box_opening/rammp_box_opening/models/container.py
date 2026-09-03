@@ -98,6 +98,7 @@ class PressDemoCfg:
     setdown_speed: float  # guarded set-down; the trip IS the success
     setdown_touch_nm: float  # set-down trip threshold (gentler than the press)
     park_tool_down: bool  # rest at the scan pose between runs, not factory HOME
+    require_button_circle: bool  # only button-circle sightings may commit a fix
     press_offset_xy: tuple  # base-frame trim of the press target (m)
     merge_press: bool  # one continuous motion instead of approach+stop+press
     merge_press_max_lateral_m: float  # xy limit for allowing the merge
@@ -139,6 +140,9 @@ def load_press_demo(path):
         setdown_speed=float(raw["open_box"].get("setdown_speed", 0.15)),
         setdown_touch_nm=float(raw["open_box"].get("setdown_touch_nm", 4.0)),
         park_tool_down=bool(raw["open_box"].get("park_tool_down", False)),
+        require_button_circle=bool(
+            raw["detect"].get("require_button_circle", True)
+        ),
         press_offset_xy=tuple(
             float(v) for v in raw["open_box"].get("press_offset_xy", [0.0, 0.0])
         ),

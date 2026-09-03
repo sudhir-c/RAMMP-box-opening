@@ -413,6 +413,15 @@ class BoxTopWatcher:
         self.cfg = cfg
         self.model = model
         self.table_z = float(table_z)
+        # Only sightings whose BUTTON CIRCLE was found may vote. The
+        # plateau centroid finds the lid, not the button: on the bench
+        # capture it sits a median 5.9 mm (max 15.4) from the circle and
+        # its 3-sample medians scatter 8.4 x 13.3 mm against the circle's
+        # 2.9 x 1.8 — so a single centroid sample in the window can win
+        # the median and walk the press off the button (field 2026-09-03).
+        # 97 % of plateau frames yield a circle, so this costs almost
+        # nothing; when it does refuse, it refuses honestly.
+        self.require_circle = bool(getattr(cfg, "require_button_circle", True))
         self.grab = D405Grabber(node, need_depth=True)
         self.window = FixWindow(cfg.min_hits, cfg.tol_m, cfg.window_s, cfg.fresh_s)
         self.frames = 0
@@ -503,6 +512,11 @@ class BoxTopWatcher:
                 n_px=fix.n_px,
             )
             self.circle_hits += 1
+        elif self.require_circle:
+            # the lid is there but the button is not readable in this
+            # frame: the centroid must not stand in for it
+            self.last_reject = "container top but no button circle"
+            return
         self.last_debug = fix
         self.window.add(np.asarray(fix.center), fix.yaw, time.monotonic())
 
@@ -536,7 +550,7 @@ class BoxTopWatcher:
         if missing:
             return "camera streams missing: %s" % ", ".join(missing)
         why = " (last reject: %s)" % self.last_reject if self.last_reject else ""
-        return "%d/%d frames found a container top, %d button-circle%s" % (
+        return "%d/%d frames found a container top, %d button-circle (the aim)%s" % (
             self.hits,
             self.frames,
             self.circle_hits,
