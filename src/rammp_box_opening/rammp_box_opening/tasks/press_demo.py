@@ -51,6 +51,9 @@ import rclpy
 
 
 from rammp_box_opening.constants import (
+    FINGERTIP_FRAMES,
+    TCP_OFFSET_M,
+    TIP_TO_TOOL_M,
     PARK,
     REST_TOL_RAD,
     GRIPPER_CMD_CLOSED,
@@ -69,6 +72,7 @@ from rammp_box_opening.models.container import (
 from rammp_box_opening.perception.depth_source import BoxTopWatcher
 from rammp_box_opening.perception.vlm_source import resolve_roi
 from rammp_box_opening.primitives.core import (
+    press_push,
     tcp_z,
     SETDOWN_OVERDRIVE_M,
     Ctx,
@@ -172,22 +176,32 @@ def build_press_legs(ctx, cfg, include_home=True):
     AFTER the approach so the close-range re-fix can update cpose).
     include_home=False when the open-box tail continues from staging."""
     st = _state(ctx.client.joints())
+    # the TOUCH only: the push, retreat and what follows are built from the
+    # contact the touch measures (build_push_legs)
     press_legs, st = PressFixed(cfg).plan(ctx, st)
-    # retreat at TRANSIT speed (owner: everything fast EXCEPT the press
-    # stroke) — with home appended they merge into one continuous motion.
-    #
-    # How FAR up depends on what comes next. The open-box tail re-descends
-    # immediately, so it stops at grip_hop_m and saves a 253 mm round trip
-    # for a 2 mm reposition. press-only continues to HOME, which is planned
-    # in the FULL world where the finger spheres need the taller staging
-    # clearance (staging_m 0.12 is the measured boundary, not a guess).
+    return list(press_legs)
+
+
+def build_push_legs(ctx, cfg, contact_xyz, include_home=True):
+    """After the touch: the bounded push from the measured contact, then
+    the retreat, then home (press-only) or grip:open on arrival at the hop.
+
+    Retreat at TRANSIT speed (owner: everything fast EXCEPT the press
+    stroke). How FAR up depends on what comes next: the open-box tail
+    re-descends immediately, so it stops at grip_hop_m; press-only
+    continues to HOME, planned in the FULL world where the finger spheres
+    need the taller staging clearance (staging_m 0.12 is the measured
+    boundary, not a guess). The retreat is LAZY: the push may stop on a
+    trip, so its start is unknown until then — the Runner plans it (and
+    home) from live, once."""
+    st = _state(ctx.client.joints())
+    world = ctx.last_world or _full_world(ctx)
+    push, st = press_push(ctx, st, cfg, contact_xyz, world)
     up_to = cfg.staging_m if include_home else cfg.grip_hop_m
-    # LAZY: the press stops on a touch, so the retreat's start is unknown
-    # until then — the Runner plans it (and home) from live, once
     retreat_legs, st = Retreat(
-        up_to + cfg.travel_m, speed=TRANSIT_SPEED, lazy=True
+        up_to + cfg.button_travel_m, speed=TRANSIT_SPEED, lazy=True
     ).plan(ctx, st)
-    legs = [*press_legs, *retreat_legs]
+    legs = [push, *retreat_legs]
     if include_home:
         home_legs, st = Home(rest_joints(cfg)).plan(ctx, st)
         legs += home_legs
@@ -249,7 +263,7 @@ def merged_press_ok(ctx, cfg):
     return lateral <= cfg.merge_press_max_lateral_m, lateral
 
 
-def build_merged_press_legs(ctx, cfg, include_home=False):
+def build_merged_press_legs(ctx, cfg, include_home=False):  # include_home: kept for callers; the tail is build_push_legs'
     """Close the fingers, then ONE continuous descent to the button.
 
     Replaces [transit to staging] STOP [guarded press]. There is no seam
@@ -279,20 +293,9 @@ def build_merged_press_legs(ctx, cfg, include_home=False):
         max(0.0, (total - cfg.travel_m)) / total if total > 0 else 0.9
     )
     press.retime(press.traj)
-    # retreat height mirrors build_press_legs: the open-box tail re-descends
-    # at once, so the hop suffices; press-only continues to HOME, planned in
-    # the FULL world where the finger spheres need the staging clearance.
-    up_to = cfg.staging_m if include_home else cfg.grip_hop_m
-    retreat_legs, st = Retreat(
-        up_to + cfg.travel_m, speed=TRANSIT_SPEED, lazy=True
-    ).plan(ctx, st)
-    legs = [press, *retreat_legs]
-    if include_home:
-        home_legs, st = Home(rest_joints(cfg)).plan(ctx, st)
-        legs += home_legs
-    else:
-        legs.append(_grip_open_after_retreat(ctx, st))
-    return legs
+    # the TOUCH only: the push and everything after it are built from the
+    # contact this stroke measures (build_push_legs)
+    return [press]
 
 
 def build_grip_legs(ctx, cfg, start_joints=None):
@@ -450,36 +453,93 @@ def build_place_legs(ctx, cfg, start_joints=None):
 
 
 
+def predicted_contact(ctx):
+    """Where the fingertip TF WOULD read if the touch met the button exactly
+    at the camera's estimate — the offline stand-in for a measured contact
+    (the tip-link origin sits TIP_TO_TOOL_M + TCP_OFFSET_M above the pad
+    face)."""
+    button = from_container(ctx.cpose, ctx.model.button_offset)
+    return [button[0], button[1], button[2] + TCP_OFFSET_M + TIP_TO_TOOL_M]
+
+
 def build_demo_legs(ctx, cfg):
-    """The one-shot composition (offline tests); main runs it in phases."""
+    """The one-shot composition (offline tests); main runs it in phases,
+    and its push starts from the contact the touch actually measured."""
     return [
         *build_close_and_approach(ctx, cfg),
         *build_press_legs(ctx, cfg, include_home=False),
+        *build_push_legs(ctx, cfg, predicted_contact(ctx), include_home=False),
         *build_grip_legs(ctx, cfg),
         *build_place_legs(ctx, cfg),
     ]
 
 
-def report_press_depth(runner, press, ctx, model):
+def run_push(ctx, cfg, runner, args, touch):
+    """The push stage from the touch's measured contact, then the retreat
+    and what follows; the grip phase is planned while the retreat flies.
+    Exits honestly when the arm could not measure its contact."""
+    if not args.execute:
+        # dry-run: the touch never ran, so there is no contact to push from
+        return []
+    contact = touch[-1].contact_xyz if touch else None
+    if contact is None:
+        try_home(
+            ctx,
+            runner,
+            args.execute,
+            "the touch tripped but no fingertip TF was readable — cannot "
+            "bound the push (are %s in the tree?)" % (FINGERTIP_FRAMES[0],),
+        )
+        sys.exit(1)
+    legs = build_push_legs(ctx, cfg, contact, include_home=args.press_only)
+    res = runner.run(
+        legs,
+        execute=args.execute,
+        assume_yes=True,
+        lookahead=None
+        if args.press_only
+        else (lambda q: build_grip_legs(ctx, cfg, start_joints=q)),
+    )
+    if any(not r.ok for r in res):
+        sys.exit(1)
+    return res
+
+
+def report_press_depth(runner, touch, press, ctx, model):
     """How deep the press actually went, measured by the arm.
 
-    When the guard trips the fingertips ARE on the button, so TF gives the
-    button's true top height in the frame the arm is commanded in — no
-    camera, no dims.z, no TCP constant. Printed against what the camera
-    predicted, and logged, so 'it pressed too low' becomes a number."""
-    if not press or press[-1].contact_xyz is None:
+    The touch's fingertip TF is the button's true top height in the frame
+    the arm is commanded in — no camera, no dims.z, no TCP constant. It is
+    printed against what the camera predicted, with the push's depth, and
+    logged, so 'it pressed too low' is a number."""
+    if not touch or touch[-1].contact_xyz is None:
         return
-    contact_z = float(press[-1].contact_xyz[2])
+    tip_z = float(touch[-1].contact_xyz[2])
+    surface = tip_z - TIP_TO_TOOL_M - TCP_OFFSET_M  # the pad face, base z
     predicted = from_container(ctx.cpose, model.button_offset)[2]
+    pushed = None
+    if press:
+        end = press[-1].contact_xyz
+        pushed = (tip_z - float(end[2])) * 1000 if end is not None else None
     runner.note(
         "press_depth",
-        contact_z=round(contact_z, 4),
+        surface_z=round(surface, 4),
         predicted_button_z=round(predicted, 4),
-        contact_vs_predicted_mm=round((contact_z - predicted) * 1000, 1),
+        surface_vs_predicted_mm=round((surface - predicted) * 1000, 1),
+        pushed_mm=None if pushed is None else round(pushed, 1),
+        push_outcome=press[-1].outcome if press else None,
     )
     print(
-        "[press_demo] contact at z %.4f — the camera predicted the button "
-        "top at %.4f (%+.1f mm)" % (contact_z, predicted, (contact_z - predicted) * 1000)
+        "[press_demo] button surface at z %.4f by touch — the camera predicted "
+        "%.4f (%+.1f mm); push %s"
+        % (
+            surface,
+            predicted,
+            (surface - predicted) * 1000,
+            "met a stop after %.1f mm" % pushed
+            if pushed is not None
+            else ("ran its full bound" if press else "did not run"),
+        )
     )
 
 
@@ -838,24 +898,18 @@ def main():
                     math.degrees(ctx.cpose.yaw),
                 )
             )
-            res = runner.run(
-                merged_legs,
-                execute=args.execute,
-                assume_yes=True,
-                # the grip phase is planned while the retreat flies
-                lookahead=None
-                if args.press_only
-                else (lambda q: build_grip_legs(ctx, cfg, start_joints=q)),
-            )
+            res = runner.run(merged_legs, execute=args.execute, assume_yes=True)
             bad = [r for r in res if not r.ok]
             if bad:
                 sys.exit(1)
-            press = [r for r in res if r.leg_name.startswith("press:down")]
+            touch = [r for r in res if r.leg_name.startswith("press:down")]
+            res = run_push(ctx, cfg, runner, args, touch)
+            press = [r for r in res if r.leg_name.startswith("press:push")]
             print(
                 "[press_demo] PRESSED — %s"
-                % (press[-1].detail if press else "no press leg ran (dry-run)")
+                % (press[-1].detail if press else "no push ran (dry-run)")
             )
-            report_press_depth(runner, press, ctx, model)
+            report_press_depth(runner, touch, press, ctx, model)
         else:
             if declined_why is not None:
                 print(
@@ -931,19 +985,18 @@ def main():
                 build_press_legs(ctx, cfg, include_home=args.press_only),
                 execute=args.execute,
                 assume_yes=True,
-                lookahead=None
-                if args.press_only
-                else (lambda q: build_grip_legs(ctx, cfg, start_joints=q)),
             )
             bad = [r for r in res if not r.ok]
             if bad:
                 sys.exit(1)
-            press = [r for r in res if r.leg_name.startswith("press")]
+            touch = [r for r in res if r.leg_name.startswith("press")]
+            res = run_push(ctx, cfg, runner, args, touch)
+            press = [r for r in res if r.leg_name.startswith("press:push")]
             print(
                 "[press_demo] PRESSED — %s"
-                % (press[-1].detail if press else "no press leg ran (dry-run)")
+                % (press[-1].detail if press else "no push ran (dry-run)")
             )
-            report_press_depth(runner, press, ctx, model)
+            report_press_depth(runner, touch, press, ctx, model)
         if args.press_only:
             runner.finish()
             sys.exit(0)

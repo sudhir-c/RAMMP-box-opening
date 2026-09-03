@@ -66,7 +66,15 @@ class StubPlanner(Node):
         self.q = list(START)
         self.plan_goals = 0
         self.exec_goals = 0
-        self.spike = False  # STUB_TRIP_EXEC_N: efforts spike mid-goal
+        # STUB_TRIP_EXEC_N: the wrist efforts. A trip adds a 9 Nm load that
+        # PERSISTS while the arm holds against what it hit (a real arm on
+        # a button keeps its load through the cancel) and releases when a
+        # later goal runs to completion, i.e. the arm moved away. The
+        # two-stage press depends on this: the push's guard baselines on
+        # the in-contact load, and a load that vanished at the cancel read
+        # as a 9 Nm drop and tripped the push at once (2026-09-03).
+        self.level = 0.0
+        self.injected = False  # one injection per goal
         self.grip_state = 0.0
         # RELIABLE depth 10, like the real joint_state_broadcaster (the
         # client subscribes RELIABLE; sensor-data QoS would never connect)
@@ -116,7 +124,7 @@ class StubPlanner(Node):
         m.name = NAMES + ["robotiq_85_left_knuckle_joint"]
         m.position = list(self.q) + [self.grip_state]
         m.velocity = [0.0] * 8
-        m.effort = [9.0 if self.spike else 0.0] * 8
+        m.effort = [self.level] * 8
         self.pub.publish(m)
 
     def _set_world(self, req, resp):
@@ -193,19 +201,21 @@ class StubPlanner(Node):
         t0 = time.monotonic()
         k = 0
         goal_n = self.exec_goals
+        self.injected = False
         while time.monotonic() - t0 < dur:
             el = time.monotonic() - t0
             while k < len(times) - 1 and times[k] < el:
                 k += 1
             self.q = list(pts[k].positions)
-            if goal_n in TRIP_EXEC_NS and el / dur > 0.88 and not self.spike:
+            if goal_n in TRIP_EXEC_NS and el / dur > 0.88 and not self.injected:
                 print("EFFORT SPIKE injected (goal #%d)" % goal_n, flush=True)
-                self.spike = True
+                self.level += 9.0
+                self.injected = True
             fb = ExecuteTrajectory.Feedback()
             fb.progress = float(el / dur)
             gh.publish_feedback(fb)
             if gh.is_cancel_requested:
-                self.spike = False
+                # the load stays: the arm holds against what it hit
                 print("STOPPED at %.1f of %.1f s" % (el, dur), flush=True)
                 gh.canceled()
                 res = ExecuteTrajectory.Result()
@@ -213,7 +223,7 @@ class StubPlanner(Node):
                 res.message = "cancelled — controller stops and holds"
                 return res
             time.sleep(0.05)
-        self.spike = False
+        self.level = 0.0  # the arm moved away: the load releases
         self.q = list(pts[-1].positions)
         print("RAN TO COMPLETION", flush=True)
         gh.succeed()

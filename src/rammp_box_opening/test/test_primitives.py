@@ -77,7 +77,10 @@ def test_press_fixed_single_stroke_from_staging(ctx):
     press = legs[0]
     button = from_container(c.cpose, c.model.button_offset)
     assert press.kind is Kind.MOTION and press.world.startswith("interaction")
-    assert press.guard is not None and press.guard.trip == "press"
+    # the TOUCH stage: a light threshold that finds the surface; the push
+    # from the measured contact is press_push (2026-09-03)
+    assert press.guard is not None and press.guard.trip == "touch"
+    assert press.guard.touch_nm == pytest.approx(cfg.contact_nm)
     assert press.speed == pytest.approx(cfg.press_speed)
     assert press.target[1][2] == pytest.approx(tcp_z(button[2] - cfg.travel_m))
     assert st.chain == press.chain + 1  # contact breaks the chain
@@ -93,13 +96,14 @@ def test_press_fixed_verify_expected_depth_semantics(ctx):
     expected = cfg.staging_m / (cfg.staging_m + cfg.travel_m)
     # trip near the expected contact depth = pressed
     ok, detail = press.verify(VerifyCtx(outcome="touch", progress=expected))
-    assert ok and "pressed" in detail
+    assert ok and "surface found" in detail
     # trip far ABOVE the button = struck something else, honest failure
     ok, detail = press.verify(VerifyCtx(outcome="touch", progress=0.3))
     assert not ok and "EARLY" in detail
-    # full travel with no trip = pressed
+    # full travel with no trip: the touch found NOTHING — the fix is high
+    # or the box moved. Not a press.
     ok, detail = press.verify(VerifyCtx(outcome="arrived"))
-    assert ok and "no trip" in detail
+    assert not ok and "no surface" in detail
     ok, _ = press.verify(VerifyCtx(outcome="failed"))
     assert not ok
 
@@ -138,3 +142,32 @@ def test_contact_sets_the_container_pad_for_later_full_worlds(ctx):
     assert c.contact_pad == CONTACT_SHIFT_PAD_M
     _full_world(c)
     assert c.worlds.pushes[-1][1]["container_pad_xy"] == CONTACT_SHIFT_PAD_M
+
+
+def test_press_push_is_bounded_from_the_measured_contact(ctx):
+    """The push drives button_travel_m past the contact the fingertip TF
+    measured, in the frame the planner is commanded in; arriving at the
+    bound IS the press, and the old threshold is only a backstop."""
+    import pytest
+
+    from rammp_box_opening.constants import TIP_TO_TOOL_M
+    from rammp_box_opening.models.container import load_press_demo
+    from rammp_box_opening.primitives.core import press_push
+
+    c = ctx
+    cfg = load_press_demo(CFG)
+    tip = [0.45, -0.15, 0.1024]  # what the run of 2026-09-03 15:05 read
+    c.last_pose = ([0.451, -0.151, 0.09], [0.0, 1.0, 0.0, 0.0])
+    push, st = press_push(c, state(), cfg, tip, ("interaction_button", "/tmp/interaction_button.yaml"))
+    assert push.name == "press:push" and push.kind is Kind.MOTION
+    assert push.target[1][2] == pytest.approx(tip[2] - TIP_TO_TOOL_M - cfg.button_travel_m)
+    assert push.target[1][:2] == pytest.approx([0.451, -0.151])  # the touch's own xy
+    assert push.guard.trip == "press"
+    assert push.guard.touch_nm == pytest.approx(c.model.touch_nm - cfg.contact_nm)
+    assert push.speed == pytest.approx(cfg.press_speed)
+    ok, d = push.verify(VerifyCtx(outcome="arrived"))
+    assert ok and "full" in d
+    ok, d = push.verify(VerifyCtx(outcome="touch", torque_peak=4.1))
+    assert ok and "stop" in d
+    ok, _ = push.verify(VerifyCtx(outcome="failed"))
+    assert not ok

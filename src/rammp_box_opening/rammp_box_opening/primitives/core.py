@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from rammp_box_opening.constants import (
     TCP_OFFSET_M,
+    TIP_TO_TOOL_M,
     CONTACT_SPEED,
     GRIPPER_CMD_OPEN,
     HOME,
@@ -448,9 +449,15 @@ def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
     # comes from directly overhead
     world = _interaction_world(ctx, button, button[2], cfg.travel_m, "button", ring=False)
     ctx.last_world = world
+    # The TOUCH stage: a light threshold that stops at first contact. The
+    # press is then completed by press_push, a bounded distance from the
+    # contact the arm's own fingertip TF measured. A single 7 Nm stroke
+    # pressed the button flush and then compressed the container until
+    # the torque built up (video, 2026-09-03): a force the button can only
+    # produce by bottoming out must not be what ends the stroke.
     guard = GuardSpec(
-        touch_nm=m.touch_nm,
-        trip="press",
+        touch_nm=cfg.contact_nm,
+        trip="touch",
         depth_window=(0.0, cfg.travel_m),
         target_z=button[2],
     )
@@ -466,12 +473,13 @@ def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
                     % (v.progress * 100, expected * 100)
                 )
             peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
-            return True, "guard stopped the stroke%s — pressed" % peak
+            return True, "surface found%s" % peak
         if v.outcome == "arrived":
-            return True, "full travel %.1f mm, no trip — pressed" % (
-                cfg.travel_m * 1000
+            return False, (
+                "no surface within %.0f mm below the estimated button — the "
+                "fix is high or the box moved" % (cfg.travel_m * 1000)
             )
-        return False, "press %s" % v.outcome
+        return False, "touch %s" % v.outcome
 
     # press_offset_xy: a base-frame trim for where the closed pads actually
     # meet the lid relative to the tool axis (a jammed-and-freed gripper can
@@ -503,6 +511,54 @@ def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
     press.retime = retime
     retime(press.traj)
     return press, state
+
+
+def press_push(ctx, state, cfg, contact_xyz, world, name="press:push"):
+    """The PUSH stage: from the measured first contact, drive the
+    fingertips button_travel_m further — position-bounded — with the
+    old trip threshold left only as a backstop.
+
+    contact_xyz is the fingertip TF the runner read when the touch
+    tripped: the arm's own measurement of where the button top is, in
+    the frame it is commanded in (via TIP_TO_TOOL_M) — no camera, no
+    dims.z, no TCP constant in this chain. Arriving at the bound IS the
+    press (the button latches inside its travel); a trip means the push
+    met a stop early, which is also a press.
+    """
+    m = ctx.model
+    button = from_container(ctx.cpose, m.button_offset)
+    quat = attitude_quat(m.press_attitude_rpy_deg, math.atan2(button[1], button[0]))
+    tip_z = float(contact_xyz[2])
+    tool_at_contact = tip_z - TIP_TO_TOOL_M
+    bottom = tool_at_contact - cfg.button_travel_m
+    xy = ctx.last_pose[0][:2] if ctx.last_pose else [button[0], button[1]]
+    guard = GuardSpec(
+        touch_nm=max(0.5, m.touch_nm - cfg.contact_nm),
+        trip="press",
+        depth_window=(0.0, cfg.button_travel_m),
+        target_z=tool_at_contact,
+    )
+
+    def verify(v):
+        mm = cfg.button_travel_m * 1000
+        if v.outcome == "touch":
+            peak = "" if v.torque_peak is None else " at %.1f Nm" % v.torque_peak
+            return True, "pressed — met a stop%s inside the %.0f mm push" % (peak, mm)
+        if v.outcome == "arrived":
+            return True, "pressed — full %.0f mm push from the measured contact" % mm
+        return False, "push %s" % v.outcome
+
+    return _plan_motion(
+        ctx,
+        state,
+        name,
+        ("pose", [float(xy[0]), float(xy[1]), float(bottom)], quat, 0.0),
+        world,
+        cfg.press_speed,
+        guard=guard,
+        invalidates=True,
+        verify=verify,
+    )
 
 
 class PressFixed:

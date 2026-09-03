@@ -84,3 +84,10 @@ FINGERTIP_FRAMES = (
     "robotiq_85_left_finger_tip_link",
     "robotiq_85_right_finger_tip_link",
 )
+
+# The finger-tip LINK origin sits this far above tool_frame along the tool
+# axis (real URDF: tip link at EE + 0.1118 m closed, tool_frame at
+# EE + 0.120; cross-checked on two bench runs where the tip TF at the
+# trip and the replayed tool_frame differed by 8.0-8.3 mm). Converts a
+# fingertip TF reading into the frame the planner is commanded in.
+TIP_TO_TOOL_M = 0.008

@@ -15,7 +15,7 @@ off the camera axis at a 30 deg yaw, so wrong deprojection or rotation
 composition moves the recovered origin and FAILS the 5 mm / 3 deg
 checks (yaw mod 90: the box is square and the depth path says so).
 
-  box:    full flow — exit 0, 8 exec goals, 4 gripper goals, one cancel
+  box:    full flow — exit 0, 9 exec goals, 4 gripper goals, two cancels
           (the guarded set-down trips by design), origin within 5 mm and
           yaw within 3 deg of the geometry the synthetic camera encoded,
           origin z pinned to the calibrated table.
@@ -71,10 +71,15 @@ def run_scenario(tmp, cfg, table_z, mode):
     # scenario also trips the press stroke. A tripped PRESS inserts one
     # extra execution — the reflex recoil off the button (runner.py) — so
     # the set-down is goal 8 there and goal 7 without it.
+    # The press is two stages now: the TOUCH (goal 2) must trip in every
+    # scenario — that trip is how the arm finds the surface — and the PUSH
+    # (goal 3) is position-bounded. In the trip scenario the push meets its
+    # backstop too, which inserts the reflex recoil (one extra goal), so the
+    # set-down is goal 9 there and goal 8 otherwise.
     stub_env = (
-        "export STUB_TRIP_EXEC_N=2,8; "
+        "export STUB_TRIP_EXEC_N=2,3,9; "
         if mode == "trip"
-        else "export STUB_TRIP_EXEC_N=7; "
+        else "export STUB_TRIP_EXEC_N=2,8; "
     )
     stub = cam = cli = None
     try:
@@ -152,10 +157,10 @@ def run_scenario(tmp, cfg, table_z, mode):
     # box and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
-    # scan, press, [recoil], retreat, grip:down, lift, place transit,
-    # place:down, place-retreat+home (merged) — the recoil runs only when
-    # the press TRIPS, which is the trip scenario's whole point
-    want_execs = 9 if mode == "trip" else 8
+    # scan, press:touch, press:push, [recoil], retreat, grip:down, lift,
+    # place transit, place:down, place-retreat+home (merged) — the recoil
+    # runs only when the PUSH trips, which is the trip scenario's point
+    want_execs = 10 if mode == "trip" else 9
     if execs != want_execs:
         fails.append("exec goals %d != %d" % (execs, want_execs))
     if said.count("GRIPPER GOAL") != 4:
@@ -199,19 +204,19 @@ def run_scenario(tmp, cfg, table_z, mode):
             fails.append("yaw error %.1f deg > 3" % yerr)
 
     if mode == "box":
-        if cancels != 1:  # the guarded set-down trips (by design)
-            fails.append("cancels %d != 1 (set-down trip)" % cancels)
-        if "full travel" not in cli_said:
-            fails.append("press did not report full-travel outcome")
+        if cancels != 2:  # the touch finds the surface; the set-down trips
+            fails.append("cancels %d != 2 (touch + set-down)" % cancels)
+        if "pressed — full" not in cli_said:
+            fails.append("the push did not report running its full bound")
     if mode == "trip":
-        if cancels != 2:  # press trip + set-down trip
-            fails.append("cancels %d != 2 (press + set-down)" % cancels)
+        if cancels != 3:  # touch + push backstop + set-down
+            fails.append("cancels %d != 3 (touch + push + set-down)" % cancels)
         if "recoil" not in cli_said:
-            fails.append("the press trip did not recoil off the button")
+            fails.append("the push's trip did not recoil off the button")
         if "EFFORT SPIKE" not in said:
             fails.append("stub never injected the spike")
-        if "guard stopped the stroke" not in cli_said:
-            fails.append("CLI did not report pressed-via-trip")
+        if "met a stop" not in cli_said:
+            fails.append("CLI did not report the push meeting its backstop")
     return fails
 
 

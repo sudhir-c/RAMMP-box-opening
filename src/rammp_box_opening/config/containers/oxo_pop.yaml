@@ -33,7 +33,27 @@ button_diameter_m: 0.036          # the round button's diameter — NOMINAL,
                                   # not the lid centroid (2026-09-01: the
                                   # centroid pressed slightly off-centre)
 press:
-  touch_nm: 7.0                   # torque-guard trip threshold (spec §6).
+  contact_nm: 3.0                 # the TOUCH stage: a light guarded descent
+                                  # that stops at first contact with the
+                                  # button. The arm then knows the surface
+                                  # from its own fingertip TF, and the push
+                                  # below is measured from THAT — not from
+                                  # the camera's lid height, which swings
+                                  # +/-6 mm run to run (2026-09-03).
+  button_travel_m: 0.004          # the PUSH stage: how far past first contact
+                                  # to drive, position-bounded. The button
+                                  # latches within its own travel; the video
+                                  # of 2026-09-03 showed the old single
+                                  # 7 Nm stroke pressing it flush and then
+                                  # compressing the whole container until the
+                                  # torque built up. Caliper the travel; if
+                                  # the knob does not pop, raise this by 1 mm.
+  touch_nm: 7.0                   # now the push's BACKSTOP: the push trips at
+                                  # (touch_nm - contact_nm) above its own
+                                  # in-contact baseline, i.e. the same ~7 Nm
+                                  # total as before, but reaching it is the
+                                  # exception, not how the press ends.
+                                  # Old note: torque-guard trip threshold (spec §6).
                                   # Bisected at the bench: 6.1 Nm stopped
                                   # short of releasing the seal at the crisp
                                   # 0.02 s executor poll; 8.1 released it but
@@ -169,7 +189,11 @@ open_box:
 
 # --- press_demo (camera-driven press flow, owner design 2026-08-24) ------
 press_demo:
-  travel_m: 0.010                 # press depth below the lid plane. This is
+  travel_m: 0.010                 # how far below the ESTIMATED button the
+                                  # touch stage may search before reporting
+                                  # "no surface" — it must cover the camera's
+                                  # run-to-run lid-height spread (+/-6 mm).
+                                  # Old note: press depth below the lid plane. This is
                                   # the HARD bound on how deep the stroke can
                                   # go — the guard normally stops it first,
                                   # but nothing else limits it, so 15 mm of

@@ -81,7 +81,9 @@ def load_lid_place(path):
 class PressDemoCfg:
     """Knobs of the camera-driven press flow (owner design 2026-08-24)."""
 
-    travel_m: float  # press depth below the lid plane
+    travel_m: float  # how far below the estimated button the TOUCH may search
+    contact_nm: float  # first-contact threshold of the touch stage
+    button_travel_m: float  # the bounded push from the measured contact
     press_speed: float
     staging_m: float  # full-world approach height above the button
     scan_xyz: tuple
@@ -124,6 +126,8 @@ def load_press_demo(path):
     pd = raw["press_demo"]
     cfg = PressDemoCfg(
         travel_m=float(pd["travel_m"]),
+        contact_nm=float(raw["press"].get("contact_nm", 3.0)),
+        button_travel_m=float(raw["press"].get("button_travel_m", 0.004)),
         press_speed=float(pd["speed"]),
         staging_m=float(pd["staging_m"]),
         scan_xyz=tuple(raw["scan"]["xyz"]),
@@ -179,6 +183,13 @@ def load_press_demo(path):
             "open_box.press_offset_xy must be two values within +/-0.02 m — a "
             "bigger trim means the fix or the mount is wrong, not the pads"
         )
+    if not 0.5 <= cfg.contact_nm < float(raw["press"]["touch_nm"]):
+        raise ValueError(
+            "press.contact_nm must be at least 0.5 Nm and below press.touch_nm "
+            "(the touch finds the surface; touch_nm is the push's backstop)"
+        )
+    if not 0.001 <= cfg.button_travel_m <= 0.015:
+        raise ValueError("press.button_travel_m must be 1-15 mm (the button's own travel)")
     if not 0.0 <= cfg.grip_clear_m <= 0.02:
         raise ValueError(
             "open_box.grip_clear_m must be in [0, 0.02] m — 0 puts the "

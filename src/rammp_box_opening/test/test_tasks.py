@@ -55,9 +55,11 @@ def test_press_demo_full_composition(ctx):
     legs = press_demo.build_demo_legs(c, cfg)
     seq = names(legs)
     # press:close is no longer a leg: main() dispatches it at fix commit
-    assert seq[:4] == ["approach:staging", "press:down", "retreat", "grip:open"]
-    assert seq[4:7] == ["grip:down", "grip:close", "lift"]
-    assert seq[7:] == [
+    # two-stage press: the touch finds the surface, the push is bounded
+    # from the measured contact (offline: the predicted one)
+    assert seq[:5] == ["approach:staging", "press:down", "press:push", "retreat", "grip:open"]
+    assert seq[5:8] == ["grip:down", "grip:close", "lift"]
+    assert seq[8:] == [
         "place:lid:transit",
         "place:lid:down",
         "place:lid:open",
@@ -68,9 +70,9 @@ def test_press_demo_full_composition(ctx):
     staging = legs[0]
     assert staging.world.startswith("full") and staging.speed == TRANSIT_SPEED
     assert staging.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
-    retreat = legs[2]
-    assert retreat.traj is None  # lazy: planned from live after the touch
-    assert legs[3].defer_join  # the fingers open on arrival at the hop
+    retreat = legs[3]  # after approach, touch, push
+    assert retreat.traj is None  # lazy: planned from live after the push
+    assert legs[4].defer_join  # the fingers open on arrival at the hop
     assert retreat.world.startswith("interaction")
     assert retreat.speed == pytest.approx(TRANSIT_SPEED)  # fast up
     # the OPEN-BOX composition re-descends straight away, so the retreat
@@ -318,12 +320,16 @@ def test_merged_press_is_one_continuous_motion_with_no_staging_stop(ctx):
     assert ok and lateral == pytest.approx(0.0, abs=1e-9)
 
     legs = press_demo.build_merged_press_legs(c, cfg)
-    assert names(legs) == ["press:down", "retreat", "grip:open"]
+    assert names(legs) == ["press:down"]  # the touch; the rest follows the contact
     assert "approach:staging" not in names(legs)  # the stop is gone
-    press, retreat, open_leg = legs
-    assert retreat.traj is None  # lazy: planned from live after the touch
+    press = legs[0]
+    tail = press_demo.build_push_legs(c, cfg, press_demo.predicted_contact(c), include_home=False)
+    assert names(tail) == ["press:push", "retreat", "grip:open"]
+    push, retreat, open_leg = tail
+    assert push.guard is not None and push.guard.trip == "press"
+    assert retreat.traj is None  # lazy: planned from live after the push
     assert open_leg.defer_join and open_leg.gripper_cmd == 0.0  # opens at the hop
-    assert press.guard is not None and press.guard.trip == "press"
+    assert press.guard is not None and press.guard.trip == "touch"
     assert press.target[1][2] == pytest.approx(tcp_z(button[2] - cfg.travel_m))
     # continuous by construction: ONE solve, then warped fast-into-slow
     assert press.warp is not None and press.guard.rebaseline_after is not None
@@ -383,11 +389,15 @@ def test_merged_press_press_only_keeps_full_retreat_and_home(ctx):
     button = from_container(c.cpose, c.model.button_offset)
     c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
     legs = press_demo.build_merged_press_legs(c, cfg, include_home=True)
-    assert names(legs) == ["press:down", "retreat", "home"]
-    retreat = legs[1]
-    assert retreat.target[1][2] == pytest.approx(tcp_z(button[2] + cfg.staging_m))
-    assert legs[2].world.startswith("full")
-    assert legs[2].traj is None  # lazy, chained after the lazy retreat
+    assert names(legs) == ["press:down"]
+    tail = press_demo.build_push_legs(c, cfg, press_demo.predicted_contact(c), include_home=True)
+    assert names(tail) == ["press:push", "retreat", "home"]
+    retreat = tail[1]
+    # the retreat climbs from the push's bound back to the staging height
+    # above the (measured = predicted, offline) button
+    assert retreat.target[1][2] == pytest.approx(tcp_z(button[2]) + cfg.staging_m)
+    assert tail[2].world.startswith("full")
+    assert tail[2].traj is None  # lazy, chained after the lazy retreat
 
 
 def test_merged_press_accepts_a_realistic_off_axis_box(ctx):

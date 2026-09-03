@@ -137,7 +137,23 @@ def main():
     q = mat_to_quat_xyzw(r_ee)
     tf.transform.rotation.x, tf.transform.rotation.y = float(q[0]), float(q[1])
     tf.transform.rotation.z, tf.transform.rotation.w = float(q[2]), float(q[3])
-    StaticTransformBroadcaster(node).sendTransform([tf])
+    # The fingertip links the mission reads at a guard trip (contact_xyz):
+    # static here, parked where the fingers would be touching the synthetic
+    # button — the tip-link origin sits TIP_TO_TOOL + TCP above the pad
+    # face, i.e. 19 mm above the surface (real URDF). The stub arm has no
+    # FK, so this is the one honest place the harness can put them.
+    tips = []
+    for name, dx in (("robotiq_85_left_finger_tip_link", -0.025), ("robotiq_85_right_finger_tip_link", 0.025)):
+        t = TransformStamped()
+        t.header.stamp = node.get_clock().now().to_msg()
+        t.header.frame_id = "base_link"
+        t.child_frame_id = name
+        t.transform.translation.x = float(a.box_x + dx)
+        t.transform.translation.y = float(a.box_y)
+        t.transform.translation.z = float(top_z + 0.019)
+        t.transform.rotation.w = 1.0
+        tips.append(t)
+    StaticTransformBroadcaster(node).sendTransform([tf, *tips])
 
     last_frame = {"t": None}
 
