@@ -89,7 +89,10 @@ the wrist-flat lore: the wrist-flat TRANSIT family fails inside ~0.5 m
 radius, while TOOL-DOWN work covers the whole band — which is why every
 mission pose uses the tool-down family. The configured scan pose
 (0.42, 0, 0.45) and the `lid_place` (0.45, −0.25) carry hover both plan
-from HOME.
+from HOME — and with `open_box.park_tool_down` on (the default), the
+scan pose is also where the arm RESTS, so a run that starts there skips
+the scan flight and the mission ends there instead of flipping the wrist
+back to the factory HOME.
 
 For the mission, the practical zone is tighter than the reach band: the
 wrist camera at the scan pose sees roughly 0.6 × 0.4 m of bench around

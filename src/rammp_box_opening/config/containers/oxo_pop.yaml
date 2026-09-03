@@ -112,12 +112,16 @@ open_box:
                                   # (arm_after 0.5, and never before the
                                   # warp's slow zone): a fast-segment trip
                                   # released the lid 110 mm up (2026-09-02).
-  park_tool_down: false           # true: the arm RESTS tool-down at the scan
-                                  # pose between runs instead of the factory
-                                  # HOME. Saves the 2.4-2.9 rad wrist flip
-                                  # twice per run (~5-7 s) — but the arm then
-                                  # hovers 0.45 m over the bench where the box
-                                  # is placed. home_arm still returns to HOME.
+  park_tool_down: true            # the arm RESTS tool-down at the scan pose
+                                  # between runs instead of the factory HOME:
+                                  # every mission pose is tool-down, so the
+                                  # 2.4-2.9 rad wrist flip HOME<->scan was
+                                  # paid twice a run (~5-7 s) and is the most
+                                  # mechanical-looking motion in it. The arm
+                                  # then hovers 0.45 m over the bench where
+                                  # the box is placed — clear it before
+                                  # reaching in. `home_arm` still returns to
+                                  # the factory HOME; false restores it.
   setdown_touch_nm: 4.0           # set-down trip threshold — a lid on a
                                   # table loads the wrist far less than a
                                   # press pops a seal; 7.0 stayed blind

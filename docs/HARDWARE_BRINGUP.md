@@ -97,8 +97,8 @@ With the container at its bench spot, lid on:
     /d405/d405/aligned_depth_to_color/image_raw` (driver up, aligned
     depth on?), then the status line's last reject reason, then
     `scan.xyz` — the camera sees ~0.6 × 0.4 m of bench around it at lid
-    height. The default [0.42, 0, 0.45] plans from HOME. A failed detect
-    always parks the arm home.
+    height. The default [0.42, 0, 0.45] plans from HOME (and IS the
+    parked pose — see §4.7). A failed detect always parks the arm.
 
 ## 3. Every-session preflight
 
@@ -156,10 +156,14 @@ everything; the abort drill above is the proof it does).
 6. Repeat from different container positions in the band. Exit
    criterion: repeatable pressed-and-opened runs, verified in
    `~/.ros/rammp_box_opening/runs/run-*.jsonl`.
-7. Optional: `open_box.park_tool_down: true` rests the arm tool-down at
-   the scan pose between runs (saves the wrist flip twice per run; the
-   arm then hovers over the bench where the box is placed). `home_arm`
-   still returns to HOME.
+7. `open_box.park_tool_down` is ON: the arm rests tool-down at the scan
+   pose between runs instead of the factory HOME, which saves the
+   2.4-2.9 rad wrist flip twice per run. **It therefore parks 0.45 m over
+   the bench** — clear the box out from under it before reaching in, and
+   expect a run that starts there to skip the scan flight entirely
+   ("parked at the scan pose — no scan flight"). `home_arm` still returns
+   to the factory HOME, and `park_tool_down: false` restores the old
+   resting pose.
 
 ## 5. Retired: the Phase-1 primitive ladder
 

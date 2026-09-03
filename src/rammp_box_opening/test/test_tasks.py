@@ -534,9 +534,10 @@ def test_park_tool_down_rests_at_the_scan_pose(ctx):
 
     c = ctx
     cfg = _demo_cfg()
-    assert cfg.park_tool_down is False
-    assert press_demo.rest_joints(cfg) == list(HOME)
-    on = replace(cfg, park_tool_down=True)
+    assert cfg.park_tool_down is True  # shipped ON since 2026-09-03
+    off = replace(cfg, park_tool_down=False)
+    assert press_demo.rest_joints(off) == list(HOME)  # the switch still works
+    on = cfg
     assert press_demo.rest_joints(on) == list(PARK)
     legs = press_demo.build_place_legs(c, on)
     assert legs[-1].name == "home" and legs[-1].target == ("joints", list(PARK))
