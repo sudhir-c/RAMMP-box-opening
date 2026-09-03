@@ -5,15 +5,27 @@
 # button travel is still worth 2 minutes.
 measure_me: false
 
-dims: [0.075, 0.075, 0.107]       # z DERIVED from the live lid-top height
-                                  # 2026-08-25 (top z 0.080 - table -0.027);
-                                  # the depth path re-checks it every run
-                                  # (top residual vs table + dims.z). xy
+dims: [0.075, 0.075, 0.112]       # z = the closed box's TOP height above
+                                  # the table. RE-DERIVED 2026-09-03 from
+                                  # depth: 39 parked capture frames put the
+                                  # button top at 0.0851 (std 1.4 mm) and the
+                                  # lid plateau at 0.0844, i.e. 0.112 above
+                                  # the table -0.027. The old 0.107 came from
+                                  # a TAG fix (2026-08-25) — the printed tag
+                                  # sat ON the button and carried its own PnP
+                                  # z error, so every aim built from it was
+                                  # ~5 mm LOW: the press went deep and the
+                                  # grip's 5 mm clearance became zero, so the
+                                  # fingers landed on the lid instead of
+                                  # straddling the knob (field 2026-09-03).
+                                  # The depth path re-checks this every run —
+                                  # watch the "[depth] measured top" line. xy
                                   # still nominal — tape when convenient
 lid_dims: [0.075, 0.075, 0.03]
-button_offset: [0.0, 0.0, 0.107]  # the flush button top IS the container
+button_offset: [0.0, 0.0, 0.112]  # the flush button top IS the container
                                   # top: the detected lid plateau is the
-                                  # press plane
+                                  # press plane. Moves with dims.z — they are
+                                  # the same surface, re-derived 2026-09-03.
 button_diameter_m: 0.036          # the round button's diameter — NOMINAL,
                                   # caliper it when convenient. Drives the
                                   # circle-refine radius window: the press

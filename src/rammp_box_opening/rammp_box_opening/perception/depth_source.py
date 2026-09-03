@@ -46,6 +46,9 @@ BAND_TOL_M = 0.035
 # travel_m (15 mm) so a committed fix always reaches real material;
 # field residuals to date: -3 mm, +8 mm.
 TOP_RESIDUAL_MAX_M = 0.012
+# a residual this big is not noise: dims.z (or table_z) needs re-deriving.
+# Well inside the refusal above, so it warns long before it refuses.
+CALIBRATION_DRIFT_MM = 6.0
 # a real surface is locally SMOOTH; passive-stereo speckle on the blank
 # table is locally wild. Local z-std above this is not a surface.
 SURFACE_STD_M = 0.006
@@ -539,9 +542,18 @@ class BoxTopWatcher:
     def to_container_pose(self, got):
         pos, yaw = got
         top_residual_mm = (pos[2] - (self.table_z + self.model.dims[2])) * 1000
+        # This line IS the calibration check: dims.z is what every aim is
+        # built from, and a persistent residual means it (or table_z) is
+        # wrong — a 5 mm one had the press going deep and the fingers
+        # landing on the lid (field 2026-09-03).
+        drift = (
+            "  <-- CALIBRATION: re-derive dims.z if this persists"
+            if abs(top_residual_mm) > CALIBRATION_DRIFT_MM
+            else ""
+        )
         print(
             "[depth] measured top %.1f mm from nominal — origin z pinned "
-            "to the table" % top_residual_mm
+            "to the table%s" % (top_residual_mm, drift)
         )
         return container_pose_from_top(pos, float(yaw), self.model, self.table_z)
 

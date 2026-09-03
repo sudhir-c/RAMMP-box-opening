@@ -73,13 +73,13 @@ def _cfg_variant(tmp_path, old, new):
 def test_loader_validates_staging_against_real_container_geometry(tmp_path):
     from rammp_box_opening.models.container import load_press_demo
 
-    # recessed button: dims.z 0.107, button_offset.z 0.05 -> staging
-    # must clear 0.107 - 0.05 + 0.10 = 0.157; the shipped 0.12 fails
+    # recessed button: dims.z 0.112, button_offset.z 0.05 -> staging
+    # must clear 0.112 - 0.05 + 0.10 = 0.162; the shipped 0.12 fails
     with pytest.raises(ValueError, match="staging_m"):
         load_press_demo(
             _cfg_variant(
                 tmp_path,
-                "button_offset: [0.0, 0.0, 0.107]",
+                "button_offset: [0.0, 0.0, 0.112]",
                 "button_offset: [0.0, 0.0, 0.05]",
             )
         )
