@@ -460,6 +460,9 @@ def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
         trip="touch",
         depth_window=(0.0, cfg.travel_m),
         target_z=button[2],
+        # a light threshold must not judge the launch transient; a warped
+        # caller raises this to its slow-zone rebaseline (_apply_warp)
+        arm_after=0.25,
     )
     expect = {"frac": 1.0}  # TIME fraction; set by retime below
 

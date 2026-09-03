@@ -219,6 +219,13 @@ def _grip_open_after_retreat(ctx, st):
     return _gripper_leg(ctx, st, "grip:open", GRIPPER_CMD_OPEN, world, defer_join=True)
 
 
+# time fraction the warp's speed ramp needs to settle after the rebaseline
+# before a guard may judge efforts against the new baseline
+WARP_SETTLE_FRAC = 0.05
+# a guard is never armed later than this fraction of its stroke
+ARM_AFTER_CAP = 0.95
+
+
 def _apply_warp(leg, cfg, slow_speed):
     """Run a guarded descent fast through free air and slow into contact.
 
@@ -238,7 +245,21 @@ def _apply_warp(leg, cfg, slow_speed):
     leg.traj = warped
     leg.speed = 1.0  # the profile is baked in; do not dilate it again
     leg.warp = (cfg.warp_fast_speed, slow_speed, cfg.warp_slow_frac)
-    leg.guard = replace(leg.guard, rebaseline_after=arm_frac)
+    # A warped guard OBSERVES the whole stroke but may only TRIP once the
+    # slow-zone rebaseline has settled: in the fast segment the arm's own
+    # dynamics swing the wrist torques by several Nm, and the 3 Nm touch
+    # threshold tripped there at 42 % of the stroke — "struck something
+    # above the button" with nothing struck (bench 2026-09-03). The
+    # runner keeps this rule on every replan (_restore_execution_profile).
+    # capped: a degenerate warp (no real slow zone) must still leave the
+    # guard able to trip at the very end, never disable it outright
+    leg.guard = replace(
+        leg.guard,
+        rebaseline_after=arm_frac,
+        arm_after=min(
+            max(leg.guard.arm_after or 0.0, arm_frac + WARP_SETTLE_FRAC), ARM_AFTER_CAP
+        ),
+    )
     return leg
 
 

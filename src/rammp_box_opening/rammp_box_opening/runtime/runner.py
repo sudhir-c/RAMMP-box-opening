@@ -84,7 +84,7 @@ def _restore_execution_profile(leg):
             # released-mid-air trip (review 2026-09-02)
             arm_after = leg.guard.arm_after
             if arm_after is not None:
-                arm_after = max(arm_after, arm_frac)
+                arm_after = min(max(arm_after, arm_frac + 0.05), 0.95)  # settle, capped
             leg.guard = replace(leg.guard, rebaseline_after=arm_frac, arm_after=arm_after)
     retime = getattr(leg, "retime", None)
     if retime is not None:

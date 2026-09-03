@@ -615,3 +615,31 @@ def test_press_offset_trims_the_press_target_only(ctx):
     # the grip keeps its own trim
     grip = press_demo.build_grip_legs(c, trimmed)
     assert grip[0].target[1][0] == pytest.approx(button[0] + trimmed.grip_offset_xy[0])
+
+
+def test_warped_touch_cannot_trip_before_its_rebaseline_settles(ctx):
+    """Bench 2026-09-03: the 3 Nm touch tripped at 42 % of the stroke, in
+    the FAST segment, on the arm's own dynamics. A warped guard arms only
+    after the slow-zone rebaseline plus a settle margin."""
+    import pytest
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+    from rammp_box_opening.tasks.press_demo import WARP_SETTLE_FRAC
+
+    c = ctx
+    cfg = _demo_cfg()
+    button = from_container(c.cpose, c.model.button_offset)
+    c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
+    (press,) = press_demo.build_merged_press_legs(c, cfg)
+    g = press.guard
+    from rammp_box_opening.tasks.press_demo import ARM_AFTER_CAP
+
+    assert g.trip == "touch" and g.rebaseline_after is not None
+    assert g.arm_after == pytest.approx(
+        min(g.rebaseline_after + WARP_SETTLE_FRAC, ARM_AFTER_CAP)
+    )
+    assert g.arm_after <= ARM_AFTER_CAP  # never disabled outright
+    # the un-warped staged touch at least sits out the launch transient
+    staged = press_demo.build_press_legs(c, cfg)[-1]
+    assert staged.guard.arm_after >= 0.25
