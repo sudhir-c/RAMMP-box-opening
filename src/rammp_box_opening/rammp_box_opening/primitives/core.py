@@ -460,7 +460,15 @@ def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
             )
         return False, "press %s" % v.outcome
 
-    target = [button[0], button[1], button[2] - cfg.travel_m]
+    # press_offset_xy: a base-frame trim for where the closed pads actually
+    # meet the lid relative to the tool axis (a jammed-and-freed gripper can
+    # leave a few mm of offset — the 2026-09-03 miss and hit were the same
+    # stroke aimed 1.5 mm apart). Zero by default; dialled at the bench.
+    target = [
+        button[0] + cfg.press_offset_xy[0],
+        button[1] + cfg.press_offset_xy[1],
+        button[2] - cfg.travel_m,
+    ]
     press, state = _plan_motion(
         ctx,
         state,

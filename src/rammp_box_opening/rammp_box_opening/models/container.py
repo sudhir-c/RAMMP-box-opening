@@ -98,6 +98,7 @@ class PressDemoCfg:
     setdown_speed: float  # guarded set-down; the trip IS the success
     setdown_touch_nm: float  # set-down trip threshold (gentler than the press)
     park_tool_down: bool  # rest at the scan pose between runs, not factory HOME
+    press_offset_xy: tuple  # base-frame trim of the press target (m)
     merge_press: bool  # one continuous motion instead of approach+stop+press
     merge_press_max_lateral_m: float  # xy limit for allowing the merge
     warp_fast_speed: float  # free-air scale of a warped descent
@@ -138,6 +139,9 @@ def load_press_demo(path):
         setdown_speed=float(raw["open_box"].get("setdown_speed", 0.15)),
         setdown_touch_nm=float(raw["open_box"].get("setdown_touch_nm", 4.0)),
         park_tool_down=bool(raw["open_box"].get("park_tool_down", False)),
+        press_offset_xy=tuple(
+            float(v) for v in raw["open_box"].get("press_offset_xy", [0.0, 0.0])
+        ),
         merge_press=bool(raw["open_box"].get("merge_press", False)),
         merge_press_max_lateral_m=float(
             raw["open_box"].get("merge_press_max_lateral_m", 0.05)
@@ -165,6 +169,11 @@ def load_press_demo(path):
         raise ValueError(
             "open_box.grip_band must be (lo, hi) with hi < 0.8 — 0.8 is the "
             "closed-on-air feedback and can never mean 'holding the button'"
+        )
+    if len(cfg.press_offset_xy) != 2 or any(abs(v) > 0.02 for v in cfg.press_offset_xy):
+        raise ValueError(
+            "open_box.press_offset_xy must be two values within +/-0.02 m — a "
+            "bigger trim means the fix or the mount is wrong, not the pads"
         )
     if not 0.0 <= cfg.grip_clear_m <= 0.02:
         raise ValueError(

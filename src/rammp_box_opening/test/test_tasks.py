@@ -576,3 +576,26 @@ def test_home_arm_falls_back_to_the_bare_table_when_the_band_refuses_the_start(c
     assert legs[0].name == "home" and legs[0].world == "bench_bare"
     kinds = [kw.get("model") is None for kind, kw in c.worlds.pushes if kind == "bench"]
     assert kinds == [False, True]  # guarded band first, then the bare table
+
+
+def test_press_offset_trims_the_press_target_only(ctx):
+    """A base-frame trim for where the closed pads meet the lid relative to
+    the tool axis; zero by default, bounded to 2 cm."""
+    import pytest
+
+    from rammp_box_opening.models.container import from_container
+    from rammp_box_opening.tasks import press_demo
+
+    c = ctx
+    cfg = _demo_cfg()
+    assert tuple(cfg.press_offset_xy) == (0.0, 0.0)
+    button = from_container(c.cpose, c.model.button_offset)
+    c.last_pose = ([button[0], button[1], button[2] + 0.35], [0.0, 1.0, 0.0, 0.0])
+    trimmed = replace(cfg, press_offset_xy=(-0.004, 0.002))
+    legs = press_demo.build_merged_press_legs(c, trimmed)
+    press = legs[0]
+    assert press.target[1][0] == pytest.approx(button[0] - 0.004)
+    assert press.target[1][1] == pytest.approx(button[1] + 0.002)
+    # the grip keeps its own trim
+    grip = press_demo.build_grip_legs(c, trimmed)
+    assert grip[0].target[1][0] == pytest.approx(button[0] + trimmed.grip_offset_xy[0])

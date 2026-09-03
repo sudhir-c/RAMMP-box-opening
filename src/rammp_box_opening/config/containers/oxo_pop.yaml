@@ -134,6 +134,12 @@ open_box:
                                   # lid, and open fingertips sent there
                                   # trip the guard (field 2026-08-26, first
                                   # grip attempt)
+  press_offset_xy: [0.0, 0.0]     # base-frame trim of where the CLOSED pads
+                                  # land on the button (m). Dial at the bench:
+                                  # if the pads land +x of the button centre,
+                                  # set x negative by that much. +/-0.02 max —
+                                  # a bigger trim means the fix or the camera
+                                  # mount is wrong, not the pads.
   grip_offset_xy: [-0.003, 0.0]   # base-frame grasp trim: first grip
                                   # landed ~3 mm too far +x (measured
                                   # 2026-08-26); at 85 mm aperture around
