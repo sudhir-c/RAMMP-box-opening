@@ -511,7 +511,8 @@ def test_start_gripper_dispatches_now_and_joins_lazily(tmp_path):
     g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
     c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
     r.run([leg("press:down", Q0, Q1, guard=g, world="interaction_b")], execute=True, assume_yes=True)
-    assert c.events == ["send", "join", "execute"]
+    # the trailing execute is the reflex recoil off the button
+    assert c.events == ["send", "join", "execute", "execute"]
     assert r.finish() is None  # nothing left pending
 
 
@@ -742,4 +743,57 @@ def test_speed_scale_dilates_guarded_and_unguarded_alike(tmp_path):
     g = GuardSpec(touch_nm=3.0, trip="press", target_z=0.09)
     c.exec_script = [("touch", {"message": "contact", "progress": 0.9})]
     r.run([leg("p", Q1, Q2, guard=g, world="interaction_b", speed=0.35)], execute=True, assume_yes=True)
-    assert c.executed[-1][1] == pytest.approx(0.175)  # guarded: speed x scale
+    # [-1] is the recoil (re-timed, 1.0 sentinel); the guarded stroke is [-2]
+    assert c.executed[-2][1] == pytest.approx(0.175)  # guarded: speed x scale
+    assert c.executed[-1][1] == 1.0
+
+
+def _press_leg(**kw):
+    g = GuardSpec(touch_nm=7.0, trip="press", target_z=0.09, depth_window=(0.0, 0.015))
+    return leg("press:down", Q0, Q1, guard=g, world="interaction_button", **kw)
+
+
+def test_press_trip_recoils_before_the_next_leg_is_planned(tmp_path):
+    """A guard trip leaves the arm on the button; the recoil reverses the
+    descent's own path at once and the considered leg is planned from the
+    recoil's end while it flies (2026-09-03)."""
+    c = FakeClient()
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.8, "torque_peak": 7.1})]
+    res = runner(c, tmp_path).run(
+        [_press_leg(chain=0), leg("retreat", Q1, Q2, chain=1, world="interaction_button")],
+        execute=True,
+        assume_yes=True,
+    )
+    assert [r.leg_name for r in res] == ["press:down", "recoil", "retreat"]
+    assert all(r.ok for r in res)
+    assert len(c.executed) == 3  # press, recoil, retreat
+    # the retreat was planned ONCE, from the recoil's end — not replanned
+    # again from live afterwards
+    assert len(c.joint_starts) == 1
+
+
+def test_a_set_down_trip_never_recoils(tmp_path):
+    """The trip IS the success there and the lid must be released while it
+    rests on the table — recoiling would drop it from 20 mm up."""
+    c = FakeClient()
+    g = GuardSpec(touch_nm=4.0, trip="setdown", target_z=0.0, arm_after=0.5)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.9, "torque_peak": 4.2})]
+    res = runner(c, tmp_path).run(
+        [leg("place:lid:down", Q0, Q1, guard=g, world="interaction_place", chain=0)],
+        execute=True,
+        assume_yes=True,
+    )
+    assert [r.leg_name for r in res] == ["place:lid:down"]
+    assert len(c.executed) == 1
+
+
+def test_a_failed_press_trip_holds_where_it_struck(tmp_path):
+    """An early trip means the stroke hit something above the button: the
+    arm holds so the operator can see it, no recoil."""
+    c = FakeClient()
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.1, "torque_peak": 7.0})]
+    press = _press_leg(chain=0)
+    press.verify = lambda v: (False, "guard tripped EARLY at 10% of the stroke")
+    res = runner(c, tmp_path).run([press], execute=True, assume_yes=True)
+    assert [r.leg_name for r in res] == ["press:down"] and not res[0].ok
+    assert len(c.executed) == 1

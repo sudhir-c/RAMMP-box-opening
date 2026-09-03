@@ -15,16 +15,24 @@ from rammp_curobo.geometry import ang_diff
 
 from rammp_box_opening.constants import (
     JOINT_VMAX,
+    RECOIL_ARC_RAD,
+    RECOIL_SPEED,
     CONTACT_SPEED,
     DRIFT_REPLAN_RAD,
     SANITY_MARGIN_RAD,
 )
 from rammp_box_opening.runtime import confirm
 from rammp_box_opening.runtime.guards import TorqueGuard, sanity_violations
-from rammp_box_opening.runtime.retime import RetimeParams, retime_group
+from rammp_box_opening.runtime.retime import (
+    RetimeParams,
+    positions_to_traj,
+    retime_group,
+    reverse_tail,
+)
 from rammp_box_opening.runtime.warp import warp_trajectory
 from rammp_box_opening.runtime.legs import (
     Kind,
+    Leg,
     VerifyCtx,
     merge_groups,
     merge_trajectories,
@@ -200,7 +208,9 @@ class Runner:
                 # Retreat already runs at TRANSIT_SPEED here, so a 0.35
                 # lift is the milder of the two.
                 and not (
-                    leg.name.startswith(("retreat", "lift"))
+                    # a recoil reverses the corridor just descended — the
+                    # same case as retreat/lift, by construction
+                    leg.name.startswith(("retreat", "lift", "recoil"))
                     and leg.world.startswith("interaction")
                 )
             ):
@@ -263,7 +273,7 @@ class Runner:
                 if g[0].kind is Kind.MOTION and all(x.guard is None for x in g):
                     host = g
                     break
-        for group in groups:
+        for gi, group in enumerate(groups):
             lead = group[0]
             # Worlds are pushed at PLAN time (core._plan_motion) and by the
             # replan path per leg; execution itself never consults the
@@ -363,6 +373,24 @@ class Runner:
                     % (res.leg_name, res.outcome, res.detail)
                 )
                 return results
+            if (
+                after_touch
+                and lead.kind is Kind.MOTION
+                and lead.guard is not None
+                and lead.guard.trip == "press"
+            ):
+                # a good press leaves the arm pressed on the button while
+                # the next leg is planned: recoil along the descent first.
+                # A FAILED trip is left holding where it struck — the
+                # operator needs to see that.
+                nxt = next(
+                    (g for g in groups[gi + 1 :] if g[0].kind is Kind.MOTION), None
+                )
+                handled, next_chain = self._reflex_recoil(
+                    lead, res, nxt, next_chain, results
+                )
+                if handled:
+                    after_touch = False  # nxt was planned from the recoil's end
         # a pending gripper command deliberately OUTLIVES the run: the next
         # phase's planning is what it overlaps with (finish() collects it)
         return results
@@ -427,9 +455,93 @@ class Runner:
         live = self.client.joints()
         return max(abs(ang_diff(a, b)) for a, b in zip(live, start)) > DRIFT_REPLAN_RAD
 
-    def _replan_group(self, group, next_chain):
-        """Re-plan each leg of the group from live state, same targets."""
-        live = self.client.joints()
+    def _reflex_recoil(self, leg, res, next_group, next_chain, results):
+        """Back off a press contact along the path just flown, at once.
+
+        The guard stops the arm ON the button and the considered retreat
+        then takes 0.5-1.3 s to plan; a person recoils in about a tenth of
+        a second. Reversing the descent's own executed tail needs no
+        planner and no new collision check — that path was flown
+        milliseconds ago, in this world, and it leads directly away from
+        what was touched. The considered leg is planned WHILE the recoil
+        flies, from the recoil's own end, so the arm is off the button
+        before the planner is even asked.
+
+        Returns (next_group was planned from the recoil's end, next_chain).
+        """
+        if leg.traj is None or res.progress is None:
+            return False, next_chain
+        path = reverse_tail(
+            leg.traj, res.progress, self.client.joints(), RECOIL_ARC_RAD
+        )
+        if path is None:
+            return False, next_chain
+        traj, _info = retime_group(
+            [positions_to_traj(leg.traj.joint_names, path)],
+            [RECOIL_SPEED],
+            JOINT_VMAX,
+            replace(self.retime, time_scale=self.time_scale),
+        )
+        reflex = Leg(
+            name="recoil",
+            kind=Kind.MOTION,
+            traj=traj,
+            speed=1.0,  # the profile is baked in
+            guard=None,
+            world=leg.world,
+            world_path=leg.world_path,
+            chain=next_chain,
+            target=None,
+            goal_joints=[float(v) for v in path[-1]],
+        )
+        why = self._refusal(reflex)
+        if why:
+            print("REFUSED recoil — %s" % why)
+            return False, next_chain
+        hook = None
+        if next_group is not None:
+            def hook(_end=list(reflex.goal_joints)):
+                return self._replan_group(next_group, next_chain + 1, start=_end)
+
+        t0 = time.monotonic()
+        outcome, info = self.client.execute(traj, 1.0, guard=None, while_running=hook)
+        ok = outcome == "arrived"
+        rres = LegResult(
+            reflex.name,
+            outcome,
+            ok,
+            info.get("message", ""),
+            progress=info.get("progress"),
+            t_wall=time.monotonic() - t0,
+        )
+        planned = False
+        if ok and next_group is not None:
+            regroup, _chain = info.get("while_running") or (None, None)
+            planned = regroup is not None
+        self._log(rres, reflex)
+        if ok:
+            results.append(rres)
+            print(
+                "  recoil — off the contact in %.2f s%s"
+                % (
+                    rres.t_wall or 0.0,
+                    " (next leg planned during it)" if planned else "",
+                )
+            )
+        else:
+            # not fatal: the arm is somewhere along a path it just flew and
+            # the next leg replans from live, exactly as without a recoil
+            print(
+                "  recoil did not complete (%s) — the next leg replans from live"
+                % (rres.detail or outcome)
+            )
+        return (ok and planned), (next_chain + 2 if planned else next_chain + 1)
+
+    def _replan_group(self, group, next_chain, start=None):
+        """Re-plan each leg of the group from live state (or from `start`:
+        a recoil plans the next leg from its own predicted end while it is
+        still flying), same targets."""
+        live = self.client.joints() if start is None else list(start)
         for leg in group:
             # Push THIS leg's world before re-planning it. Without this the
             # replan used whatever world happened to be loaded — for the

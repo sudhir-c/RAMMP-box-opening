@@ -49,6 +49,7 @@ class FakeClient:
         self.exec_script = []  # scripted execute outcomes (FIFO)
         self.tool_z = 0.08
         self.approach_offsets = []  # per plan_to_pose call
+        self.joint_starts = []  # per plan_to_joints call
 
     def joints(self):
         return list(self.live)
@@ -77,6 +78,7 @@ class FakeClient:
         return self._plan(Q1, start_joints)
 
     def plan_to_joints(self, q7, start_joints):
+        self.joint_starts.append(list(start_joints))
         if self.plans:
             return self.plans.pop(0)
         return self._plan(list(q7), start_joints)

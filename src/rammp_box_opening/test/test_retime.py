@@ -221,3 +221,30 @@ def test_executed_acceleration_at_a_crowded_junction_stays_under_amax():
     peak, _ = peak_accel(out)
     print("junction %.2f rad/s, executed peak %.1f rad/s^2" % (info["junction_speeds"][0], peak))
     assert peak <= 25.0, peak
+
+
+def test_reverse_tail_starts_at_the_live_stop_and_never_goes_deeper():
+    """The walk back begins at the sample NEAREST the stop, not at the
+    deepest planned one — stepping to that would drive into the contact."""
+    from rammp_box_opening.runtime.retime import reverse_tail
+
+    down = _line([0] * 7, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5], 50)
+    src = _traj(down)
+    live = np.asarray(down[30])  # the guard stopped here, short of the plan
+    path = reverse_tail(src, progress=0.62, live=live, arc_rad=0.09)
+    assert np.allclose(path[0], live)  # the executor's start gate
+    depth = [float(q[6]) for q in path]
+    assert all(b <= a + 1e-9 for a, b in zip(depth, depth[1:]))  # only back out
+    assert depth[0] - depth[-1] >= 0.09 - 1e-6  # the arc was covered
+    # a trip at the very start has nothing to reverse
+    assert reverse_tail(src, progress=0.0, live=np.asarray(down[0]), arc_rad=0.09) is None
+
+
+def test_reverse_tail_covers_the_cancel_overshoot():
+    """Cancel latency carries the arm past the last fully elapsed point;
+    the retrace must include it."""
+    from rammp_box_opening.runtime.retime import reverse_tail
+
+    down = _line([0] * 7, [0.4, 0, 0, 0, 0, 0, 0], 20)
+    path = reverse_tail(_traj(down), progress=0.5, live=np.asarray(down[10]), arc_rad=0.05)
+    assert path is not None and len(path) >= 3

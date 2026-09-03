@@ -20,8 +20,10 @@ checks (yaw mod 90: the box is square and the depth path says so).
           yaw within 3 deg of the geometry the synthetic camera encoded,
           origin z pinned to the calibrated table.
   trip:   efforts spike late in the press (STUB_TRIP_EXEC_N=2) — the guard
-          cancels the stroke, the CLI reports pressed-via-trip, retreat
-          and home replan from the stop, exit 0. Exactly two cancels.
+          cancels the stroke, the CLI reports pressed-via-trip, the arm
+          recoils along the descent it just flew (one extra exec goal,
+          9 in all) while the retreat is planned from the recoil's end,
+          exit 0. Exactly two cancels.
   no-box: an empty table — scan, the owl rung is consulted (the stub
           heartbeats), a detect wait that provably lasts timeout_s, home,
           exit 2, exactly 2 exec goals.
@@ -65,10 +67,12 @@ def run_scenario(tmp, cfg, table_z, mode):
         cam_args += " --no-box"
     else:
         cam_args += " --box-x %g --box-y %g --box-yaw-deg %g" % (BOX_XY + (BOX_YAW_DEG,))
-    # the guarded set-down (place:lid:down) must always trip; the trip
-    # scenario also trips the press stroke
+    # The guarded set-down (place:lid:down) must always trip; the trip
+    # scenario also trips the press stroke. A tripped PRESS inserts one
+    # extra execution — the reflex recoil off the button (runner.py) — so
+    # the set-down is goal 8 there and goal 7 without it.
     stub_env = (
-        "export STUB_TRIP_EXEC_N=2,7; "
+        "export STUB_TRIP_EXEC_N=2,8; "
         if mode == "trip"
         else "export STUB_TRIP_EXEC_N=7; "
     )
@@ -148,10 +152,12 @@ def run_scenario(tmp, cfg, table_z, mode):
     # box and trip scenarios share the flow assertions
     if code != 0:
         fails.append("exit %s != 0" % code)
-    if execs != 8:
-        # scan, press, retreat, grip:down, lift, place transit, place:down,
-        # place-retreat+home (merged)
-        fails.append("exec goals %d != 8" % execs)
+    # scan, press, [recoil], retreat, grip:down, lift, place transit,
+    # place:down, place-retreat+home (merged) — the recoil runs only when
+    # the press TRIPS, which is the trip scenario's whole point
+    want_execs = 9 if mode == "trip" else 8
+    if execs != want_execs:
+        fails.append("exec goals %d != %d" % (execs, want_execs))
     if said.count("GRIPPER GOAL") != 4:
         fails.append("gripper goals %d != 4" % said.count("GRIPPER GOAL"))
     if "LID PULLED" not in cli_said:
@@ -200,6 +206,8 @@ def run_scenario(tmp, cfg, table_z, mode):
     if mode == "trip":
         if cancels != 2:  # press trip + set-down trip
             fails.append("cancels %d != 2 (press + set-down)" % cancels)
+        if "recoil" not in cli_said:
+            fails.append("the press trip did not recoil off the button")
         if "EFFORT SPIKE" not in said:
             fails.append("stub never injected the spike")
         if "guard stopped the stroke" not in cli_said:

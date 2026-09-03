@@ -48,3 +48,14 @@ REST_TOL_RAD = 0.05  # "already there": the server's own start gate
 # URDF's): the re-timer caps every joint below these and the executor refuses
 # a goal above them — two independent gates on the same numbers.
 JOINT_VMAX = [1.396, 1.396, 1.396, 1.396, 1.222, 1.222, 1.222]
+
+# Reflex recoil after a press trip: how much of the descent's own path to
+# reverse, and at what cruise fraction. Measured with the real planner and
+# FK at two bench placements (2026-09-03): 0.085 rad of joint arc lifts
+# the tool 20.7-21.0 mm, 0.05 rad lifts 13.3-13.9 mm — the mapping barely
+# moves with the box, so a joint-arc budget is a fair stand-in for the
+# Cartesian lift this TF tree cannot measure. 0.09 rad ~ 22 mm: enough to
+# unload the contact while the considered retreat is planned.
+# A reflex, not a considered move: brisk, short, no planning.
+RECOIL_ARC_RAD = 0.09
+RECOIL_SPEED = 0.5

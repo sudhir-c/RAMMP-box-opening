@@ -337,6 +337,71 @@ def retime_group(trajs, speeds, vmax, params=RetimeParams()):
     return to_message(trajs[0].joint_names, positions, t, v), info
 
 
+def positions_to_traj(joint_names, positions):
+    """A bare position path as a JointTrajectory (times are placeholders —
+    retime_group reads positions only)."""
+    msg = JointTrajectory()
+    msg.joint_names = list(joint_names)
+    for k, q in enumerate(positions):
+        pt = JointTrajectoryPoint()
+        pt.positions = [float(v) for v in q]
+        pt.velocities = [0.0] * len(q)
+        pt.accelerations = [0.0] * len(q)
+        pt.time_from_start.sec = int((k + 1) * 0.02)
+        pt.time_from_start.nanosec = int(round((((k + 1) * 0.02) % 1.0) * 1e9))
+        msg.points.append(pt)
+    return msg
+
+
+def reverse_tail(traj, progress, live, arc_rad, min_ds=2e-4):
+    """The executed tail of a descent, reversed, starting at `live`.
+
+    A guard trip leaves the arm pressed against what it touched. The way
+    out that needs no planner and no new collision check is the path it
+    just flew, reversed — it was validated for this world and it leads
+    directly away from the contact.
+
+    The walk back starts at the sample NEAREST the live stop, never at
+    the deepest planned one: the arm stopped short of that, and stepping
+    "back" to it would drive INTO the contact (the 2026-09-02 re-press).
+    `live` is then the first point, which is also what the executor's
+    start gate wants. Returns None when there is nothing to reverse.
+    """
+    pts = list(traj.points)
+    if len(pts) < 2:
+        return None
+    end = pts[-1].time_from_start
+    total = end.sec + end.nanosec * 1e-9
+    cut = total * max(0.0, min(1.0, float(progress)))
+    done = [
+        p
+        for p in pts
+        if p.time_from_start.sec + p.time_from_start.nanosec * 1e-9 <= cut
+    ]
+    # cancel latency carries the arm past the last fully elapsed point
+    if len(done) < len(pts):
+        done.append(pts[len(done)])
+    if len(done) < 2:
+        return None
+    q = np.asarray([[float(v) for v in p.positions] for p in done])
+    live = np.asarray([float(v) for v in live], dtype=float)
+    i = int(np.argmin(np.linalg.norm(q - live[None, :], axis=1)))
+    out, arc = [q[i]], 0.0
+    for k in range(i, 0, -1):
+        arc += float(np.linalg.norm(q[k] - q[k - 1]))
+        out.append(q[k - 1])
+        if arc >= arc_rad:
+            break
+    if len(out) < 2:
+        return None
+    out = np.asarray(out)
+    if np.linalg.norm(out[0] - live) > min_ds:
+        out = np.vstack([live, out])  # the stop itself is the first point
+    else:
+        out[0] = live
+    return out
+
+
 def check_like_executor(msg, vmax, continuity_slack=3.0):
     """The executor's own gates, mirrored: velocity limits, monotonic time,
     per-interval continuity. Returns a list of problems (empty = go)."""
