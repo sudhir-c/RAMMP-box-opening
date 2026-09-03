@@ -5,6 +5,7 @@ from pathlib import Path
 from conftest import FakeClient
 
 from rammp_box_opening.models.container import ContainerPose
+from rammp_box_opening.primitives.core import tcp_z
 from rammp_box_opening.runtime.legs import Kind
 
 CFG = "src/rammp_box_opening/config/containers/oxo_pop.yaml"
@@ -75,7 +76,7 @@ def test_press_demo_full_composition(ctx):
     # the OPEN-BOX composition re-descends straight away, so the retreat
     # stops at the hop height instead of climbing back to staging — a
     # 253 mm round trip for a 2 mm reposition (speed pass 2026-08-28)
-    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.grip_hop_m)
+    assert retreat.target[1][2] == pytest.approx(tcp_z(button[2] + cfg.grip_hop_m))
     assert cfg.grip_hop_m < cfg.staging_m
 
 
@@ -112,7 +113,9 @@ def test_open_box_grip_and_place_legs(ctx):
     button = from_container(c.cpose, c.model.button_offset)
     # ABOVE the tag/lid plane (press depth = into the lid — field
     # 2026-08-26), with the bench-measured lateral trim applied
-    assert down.target[1][2] == pytest.approx(button[2] + cfg.grip_clear_m)
+    # the FINGERTIPS land grip_clear_m above the button; the frame the
+    # planner is commanded in goes tcp_z higher (constants.TCP_OFFSET_M)
+    assert down.target[1][2] == pytest.approx(tcp_z(button[2] + cfg.grip_clear_m))
     assert down.target[1][0] == pytest.approx(button[0] + cfg.grip_offset_xy[0])
     assert down.target[1][1] == pytest.approx(button[1] + cfg.grip_offset_xy[1])
     assert down.guard is not None and down.guard.trip == "obstruction"
@@ -127,7 +130,7 @@ def test_open_box_grip_and_place_legs(ctx):
     ok, _ = close.verify(VerifyCtx(outcome="arrived", gripper_pos=0.387))
     assert ok
     assert lift.speed == pytest.approx(cfg.lift_speed)  # "slowly lift"
-    assert lift.target[1][2] == pytest.approx(button[2] + cfg.grip_clear_m + cfg.lift_m)
+    assert lift.target[1][2] == pytest.approx(tcp_z(button[2] + cfg.grip_clear_m) + cfg.lift_m)
 
     place_legs = press_demo.build_place_legs(c, cfg)
     assert names(place_legs) == [
@@ -321,15 +324,17 @@ def test_merged_press_is_one_continuous_motion_with_no_staging_stop(ctx):
     assert retreat.traj is None  # lazy: planned from live after the touch
     assert open_leg.defer_join and open_leg.gripper_cmd == 0.0  # opens at the hop
     assert press.guard is not None and press.guard.trip == "press"
-    assert press.target[1][2] == pytest.approx(button[2] - cfg.travel_m)
+    assert press.target[1][2] == pytest.approx(tcp_z(button[2] - cfg.travel_m))
     # continuous by construction: ONE solve, then warped fast-into-slow
     assert press.warp is not None and press.guard.rebaseline_after is not None
     # contact expected once all but the last travel_m of the 0.35 m + travel
     # descent is covered — read from the START pose, not the 0.9 fallback
-    total = 0.35 + cfg.travel_m
+    from rammp_box_opening.constants import TCP_OFFSET_M
+
+    total = 0.35 + cfg.travel_m - TCP_OFFSET_M
     assert press.contact_path_frac == pytest.approx((total - cfg.travel_m) / total)
     assert press.contact_path_frac > 0.93
-    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.grip_hop_m)
+    assert retreat.target[1][2] == pytest.approx(tcp_z(button[2] + cfg.grip_hop_m))
 
 
 def test_merged_press_is_declined_when_the_arm_is_off_axis(ctx):
@@ -380,7 +385,7 @@ def test_merged_press_press_only_keeps_full_retreat_and_home(ctx):
     legs = press_demo.build_merged_press_legs(c, cfg, include_home=True)
     assert names(legs) == ["press:down", "retreat", "home"]
     retreat = legs[1]
-    assert retreat.target[1][2] == pytest.approx(button[2] + cfg.staging_m)
+    assert retreat.target[1][2] == pytest.approx(tcp_z(button[2] + cfg.staging_m))
     assert legs[2].world.startswith("full")
     assert legs[2].traj is None  # lazy, chained after the lazy retreat
 
@@ -489,7 +494,7 @@ def test_place_accounts_for_grip_height_and_gentle_touch(ctx):
     from rammp_box_opening.tasks.press_demo import load_lid_place
 
     lid = load_lid_place(CFG)
-    want = lid.xyz[2] + c.model.lid_dims[2] + cfg.grip_clear_m - SETDOWN_OVERDRIVE_M
+    want = tcp_z(lid.xyz[2] + c.model.lid_dims[2] + cfg.grip_clear_m) - SETDOWN_OVERDRIVE_M
     assert down.target[1][2] == pytest.approx(want)
     assert down.guard.touch_nm == pytest.approx(cfg.setdown_touch_nm)
     assert cfg.setdown_touch_nm < c.model.touch_nm  # gentler than the press

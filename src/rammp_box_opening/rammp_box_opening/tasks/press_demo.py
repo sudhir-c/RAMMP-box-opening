@@ -69,6 +69,7 @@ from rammp_box_opening.models.container import (
 from rammp_box_opening.perception.depth_source import BoxTopWatcher
 from rammp_box_opening.perception.vlm_source import resolve_roi
 from rammp_box_opening.primitives.core import (
+    tcp_z,
     SETDOWN_OVERDRIVE_M,
     Ctx,
     Home,
@@ -318,7 +319,7 @@ def build_grip_legs(ctx, cfg, start_joints=None):
     target = [
         button[0] + cfg.grip_offset_xy[0],
         button[1] + cfg.grip_offset_xy[1],
-        button[2] + cfg.grip_clear_m,
+        tcp_z(button[2] + cfg.grip_clear_m),
     ]
     # obstruction semantics: a trip on the way down = the open fingers
     # STRUCK the knob/rim instead of straddling it — honest failure
@@ -406,7 +407,9 @@ def build_place_legs(ctx, cfg, start_joints=None):
     target = [
         lid.xyz[0],
         lid.xyz[1],
-        lid.xyz[2] + m.lid_dims[2] + cfg.grip_clear_m,
+        # the same fingertip correction as the grip: the lid hangs from
+        # where the fingers took it, so both ends must shift together
+        tcp_z(lid.xyz[2] + m.lid_dims[2] + cfg.grip_clear_m),
     ]
     st = _state(ctx.client.joints() if start_joints is None else start_joints)
     hover = Place.hover_for(ctx, target)

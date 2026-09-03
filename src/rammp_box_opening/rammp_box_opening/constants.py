@@ -59,3 +59,19 @@ JOINT_VMAX = [1.396, 1.396, 1.396, 1.396, 1.222, 1.222, 1.222]
 # A reflex, not a considered move: brisk, short, no planning.
 RECOIL_ARC_RAD = 0.09
 RECOIL_SPEED = 0.5
+
+# The planner is commanded in tool_frame, but the FINGERTIPS reach past it.
+# Measured two independent ways (2026-09-03), agreeing to 0.7 mm:
+#   - cuRobo's own model: the *_inner_finger_pad link sits 10.3 mm beyond
+#     tool_frame (sphere index API on robot_gen3_2f85.yaml);
+#   - the arm's own contact event: replaying run-20260903-123629's press,
+#     tool_frame was at z 0.0941 when the guard tripped on a button top the
+#     depth had measured at 0.0831 -> 11.0 mm.
+# Nothing accounted for it, so every fingertip-referenced target was that
+# much too deep: grip:down, commanded to button + 5 mm, put the pads at
+# button - 6 mm — INSIDE the lid (its logged peak torque was 1.5-1.7 Nm
+# where free air reads ~0), so the fingers could not close on the knob.
+# Note the real robot's description does not even define tool_frame once a
+# gripper is attached; it is cuRobo's own frame. Command tool_frame this
+# much HIGHER than where the fingertips should land.
+TCP_OFFSET_M = 0.011

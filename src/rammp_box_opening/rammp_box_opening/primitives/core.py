@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass
 
 from rammp_box_opening.constants import (
+    TCP_OFFSET_M,
     CONTACT_SPEED,
     GRIPPER_CMD_OPEN,
     HOME,
@@ -63,6 +64,18 @@ class Ctx:
 class PlanState:
     joints: list  # predicted joints the next leg plans from; None = lazy
     chain: int  # bumped by every contact leg: nothing merges across it
+
+
+def tcp_z(z):
+    """Commanded tool_frame z for a FINGERTIP target z.
+
+    The fingertips reach TCP_OFFSET_M beyond the frame the planner is
+    commanded in, so a target meant for them is commanded that much
+    higher. Everything fingertip-referenced goes through here: the press
+    stroke, the grip descent, the lid set-down and the carry hover — they
+    must shift TOGETHER, or the geometry between grabbing the lid and
+    putting it down stops matching."""
+    return float(z) + TCP_OFFSET_M
 
 
 def hover_above(xyz, standoff):
@@ -274,7 +287,7 @@ class Place:
         m = ctx.model
         hover = hover_above(list(target_xyz), m.hover_standoff + m.lid_dims[2])
         carry_floor = ctx.cpose.xyz[2] + m.dims[2] + m.lid_dims[2] + CARRY_CLEAR_M
-        hover[2] = max(hover[2], carry_floor)
+        hover[2] = max(hover[2], tcp_z(carry_floor))
         return hover
 
     def plan(self, ctx, state):
@@ -467,7 +480,7 @@ def press_stroke(ctx, state, cfg, name, approach_offset_m, contact_path_frac):
     target = [
         button[0] + cfg.press_offset_xy[0],
         button[1] + cfg.press_offset_xy[1],
-        button[2] - cfg.travel_m,
+        tcp_z(button[2] - cfg.travel_m),
     ]
     press, state = _plan_motion(
         ctx,
