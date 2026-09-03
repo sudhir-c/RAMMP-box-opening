@@ -44,22 +44,37 @@ class RetimeParams:
     v_floor: float = 0.02  # rad/s: never divide by a smaller average speed
     smooth_pts: int = 4  # the profile's tops are rounded over this many samples
     first_dt: float = 0.02  # point 0 sits one step in the future (planner convention)
+    # the robot's own acceleration limit: bounds the LOCAL turn at a kink
+    # (two chained legs meet inside one sample interval)
+    amax: float = 25.0
+    # samples closer than this along the path are merged into a neighbour:
+    # cuRobo's float32 output carries one-ulp near-duplicates (2e-7 rad)
+    # that would otherwise become nanosecond intervals on the wire
+    min_ds: float = 2e-4
     # uniform time dilation applied AFTER profiling (1.0 = as profiled): the
     # operator's whole-run slow mode (--speed-scale), not a per-leg speed
     time_scale: float = 1.0
 
 
-def _dedup(positions, tol=1e-9):
-    """Drop consecutive duplicate samples (the planner's terminal hold, and
-    the shared junction point when legs are chained)."""
+def _dedup(positions, min_ds):
+    """Drop samples closer than min_ds (joint-space) to the last kept one:
+    the planner's terminal hold, float32 one-ulp near-duplicates, and the
+    shared junction point when legs are chained. The final sample is
+    always kept (the goal); a sample is only ever DROPPED, never moved."""
+    n = len(positions)
     keep = [0]
-    for k in range(1, len(positions)):
-        if np.max(np.abs(positions[k] - positions[keep[-1]])) > tol:
+    for k in range(1, n):
+        if np.linalg.norm(positions[k] - positions[keep[-1]]) >= min_ds:
             keep.append(k)
+    if keep[-1] != n - 1:
+        if len(keep) > 1 and np.linalg.norm(positions[n - 1] - positions[keep[-1]]) < min_ds:
+            keep[-1] = n - 1  # replace the near-duplicate with the true goal
+        else:
+            keep.append(n - 1)
     return np.asarray(keep)
 
 
-def concat_paths(trajs):
+def concat_paths(trajs, min_ds=2e-4):
     """Chained trajectories -> (positions (N,dof), segment index per sample).
     Junction duplicates are dropped; the shared sample belongs to the
     EARLIER segment (its speed is the min of both, see cruise_per_sample)."""
@@ -69,7 +84,7 @@ def concat_paths(trajs):
         parts.append(q)
         seg.extend([i] * len(q))
     q = np.vstack(parts)
-    keep = _dedup(q)
+    keep = _dedup(q, min_ds)
     return q[keep], np.asarray(seg)[keep]
 
 
@@ -89,41 +104,64 @@ def velocity_caps(positions, vmax, margin):
 
 
 def corner_caps(positions, ds, params):
-    """Per-sample speed cap from the direction change at that sample: the
-    turning acceleration 2 v sin(theta/2) / (L / v) must stay under
-    corner_accel over the corner's length L; a reversal is a stop.
+    """Per-sample speed cap from the direction change at that sample, and
+    which samples are genuine stops (reversal apexes).
 
-    The turn is measured over a fixed PATH window on each side, not the
-    two adjacent samples: a planner's samples crowd together near a leg's
-    end (it decelerates to rest), so adjacent-sample directions there are
-    noise and their length is microscopic — every junction read as a
-    hairpin (found on the real retreat+home pair, 2026-09-03)."""
+    Two bounds, the lower wins:
+      - the turn measured over a fixed PATH window on each side (a
+        planner's samples crowd together near a leg's end, so adjacent-
+        sample directions there are noise) against the COMFORT turning
+        acceleration corner_accel over the window's length;
+      - the turn between the two ADJACENT intervals against the robot's
+        own amax over their length — at a chained junction the kink is
+        executed inside one sample interval, and a window-sized cap there
+        commanded ~300 rad/s^2 (review 2026-09-03).
+    A reversal (> reversal_deg) stops — only at its apex (the local
+    maximum of the turn), never across its whole neighbourhood.
+    Returns (cap, stop_mask)."""
     n = len(positions)
     cap = np.full(n, np.inf)
+    turn = np.zeros(n)
     cum = np.concatenate([[0.0], np.cumsum(ds)])
     w = params.corner_window
     rev = math.radians(params.reversal_deg)
+
+    def angle(a, b):
+        na, nb = np.linalg.norm(a), np.linalg.norm(b)
+        if na < 1e-12 or nb < 1e-12:
+            return 0.0
+        return math.acos(float(np.clip(np.dot(a, b) / (na * nb), -1.0, 1.0)))
+
+    def bound(theta, L, a):
+        s_ = math.sin(theta / 2.0)
+        return np.inf if s_ < 1e-6 else math.sqrt(a * L / (2.0 * s_))
+
     for k in range(1, n - 1):
         i = int(np.searchsorted(cum, cum[k] - w, side="right")) - 1
         i = max(0, min(i, k - 1))
         j = int(np.searchsorted(cum, cum[k] + w, side="left"))
         j = min(n - 1, max(j, k + 1))
-        d_in = positions[k] - positions[i]
-        d_out = positions[j] - positions[k]
-        n_in, n_out = np.linalg.norm(d_in), np.linalg.norm(d_out)
-        if n_in < 1e-9 or n_out < 1e-9:
-            continue
-        c = float(np.clip(np.dot(d_in, d_out) / (n_in * n_out), -1.0, 1.0))
-        theta = math.acos(c)
-        if theta >= rev:
-            cap[k] = 0.0
-            continue
-        s = math.sin(theta / 2.0)
-        if s < 1e-6:
-            continue
-        L = cum[j] - cum[i]
-        cap[k] = math.sqrt(params.corner_accel * L / (2.0 * s))
-    return cap
+        theta_w = angle(positions[k] - positions[i], positions[j] - positions[k])
+        theta_l = angle(positions[k] - positions[k - 1], positions[k + 1] - positions[k])
+        turn[k] = theta_l
+        cap[k] = min(
+            bound(theta_w, cum[j] - cum[i], params.corner_accel),
+            bound(theta_l, ds[k - 1] + ds[k], params.amax),
+        )
+    stop = np.zeros(n, dtype=bool)
+    k = 1
+    while k < n - 1:
+        if turn[k] >= rev:
+            j = k
+            while j + 1 < n - 1 and turn[j + 1] >= rev:
+                j += 1
+            apex = k + int(np.argmax(turn[k : j + 1]))
+            stop[apex] = True
+            cap[apex] = 0.0
+            k = j + 1
+        else:
+            k += 1
+    return cap, stop
 
 
 def cruise_per_sample(seg, speeds):
@@ -140,28 +178,37 @@ def cruise_per_sample(seg, speeds):
 def speed_profile(positions, cruise, vmax, params, v_start=0.0, v_end=0.0):
     """Path speed at every sample (rad/s of joint-space arc length)."""
     cap, ds = velocity_caps(positions, vmax, params.vmax_margin)
-    target = np.minimum(np.asarray(cruise) * cap, corner_caps(positions, ds, params))
+    ccap, _stop = corner_caps(positions, ds, params)
+    target = np.minimum(np.minimum(np.asarray(cruise) * cap, ccap), cap)
     n = len(positions)
-    v = np.minimum(target, cap)
+    if params.smooth_pts > 0 and n > 2 * params.smooth_pts + 2:
+        # round the tops of the TARGET (its lower envelope with a moving
+        # average only ever lowers it); the bounded passes below then
+        # guarantee the accel/decel envelope on the rounded target
+        w = 2 * params.smooth_pts + 1
+        finite = np.where(np.isfinite(target), target, cap)
+        avg = np.convolve(finite, np.ones(w) / w, mode="same")
+        inner = slice(params.smooth_pts, n - params.smooth_pts)
+        target[inner] = np.minimum(target[inner], avg[inner])
+    v = np.array(target, dtype=float)
     v[0] = min(v_start, cap[0])
     v[-1] = min(v_end, cap[-1])
     for k in range(1, n):  # ease out: bounded acceleration along the path
         v[k] = min(v[k], math.sqrt(v[k - 1] ** 2 + 2.0 * params.accel * ds[k - 1]))
     for k in range(n - 2, -1, -1):  # ease in: bounded (gentler) deceleration
         v[k] = min(v[k], math.sqrt(v[k + 1] ** 2 + 2.0 * params.decel * ds[k]))
-    if params.smooth_pts > 0 and n > 2 * params.smooth_pts + 2:
-        # round the tops: the lower envelope of the profile and its moving
-        # average keeps every cap (it only ever lowers) and pins the ends
-        w = 2 * params.smooth_pts + 1
-        avg = np.convolve(v, np.ones(w) / w, mode="same")
-        inner = slice(params.smooth_pts, n - params.smooth_pts)
-        v[inner] = np.minimum(v[inner], avg[inner])
-        v[0], v[-1] = min(v_start, cap[0]), min(v_end, cap[-1])
     return v, ds
 
 
 def times_from_profile(v, ds, params):
     dt = ds / np.maximum(0.5 * (v[:-1] + v[1:]), params.v_floor)
+    # an interval between two rest samples (a 2-point path, the two sides
+    # of a reversal apex) is a triangle profile, not a crawl at v_floor
+    both_rest = (v[:-1] < 1e-9) & (v[1:] < 1e-9)
+    if both_rest.any():
+        a, d = params.accel, params.decel
+        vpk = np.sqrt(2.0 * ds[both_rest] * a * d / (a + d))
+        dt[both_rest] = vpk / a + vpk / d
     dt = dt / max(float(params.time_scale), 1e-3)
     t = np.empty(len(v))
     t[0] = params.first_dt
@@ -169,13 +216,19 @@ def times_from_profile(v, ds, params):
     return t
 
 
-def to_message(joint_names, positions, t):
-    """Positions as given; velocities/accelerations by central differences on
-    the new time base; rest at both ends."""
+def to_message(joint_names, positions, t, v=None):
+    """Positions as given; velocities from the profile along the local
+    tangent (never the central difference of a micro-interval);
+    accelerations by central differences of those; rest at both ends."""
     n = len(positions)
     vel = np.zeros_like(positions)
     if n > 2:
-        vel[1:-1] = (positions[2:] - positions[:-2]) / (t[2:] - t[:-2])[:, None]
+        chord = positions[2:] - positions[:-2]
+        if v is None:
+            vel[1:-1] = chord / (t[2:] - t[:-2])[:, None]
+        else:
+            norm = np.maximum(np.linalg.norm(chord, axis=1), 1e-12)
+            vel[1:-1] = chord / norm[:, None] * np.asarray(v)[1:-1, None]
     acc = np.zeros_like(positions)
     if n > 2:
         acc[1:-1] = (vel[2:] - vel[:-2]) / (t[2:] - t[:-2])[:, None]
@@ -199,7 +252,7 @@ def retime_group(trajs, speeds, vmax, params=RetimeParams()):
     (trajectory, info) with info = {duration_s, junction_speeds (rad/s at
     each chained junction), stops (junctions taken at rest), n_points}.
     """
-    positions, seg = concat_paths(trajs)
+    positions, seg = concat_paths(trajs, params.min_ds)
     if len(positions) < 2:
         return trajs[0], {"duration_s": 0.0, "junction_speeds": [], "stops": 0, "n_points": len(positions)}
     cruise = cruise_per_sample(seg, speeds)
@@ -213,7 +266,7 @@ def retime_group(trajs, speeds, vmax, params=RetimeParams()):
         "stops": int(sum(1 for s in jspeeds if s < params.v_floor * 2)),
         "n_points": int(len(positions)),
     }
-    return to_message(trajs[0].joint_names, positions, t), info
+    return to_message(trajs[0].joint_names, positions, t, v), info
 
 
 def check_like_executor(msg, vmax, continuity_slack=3.0):

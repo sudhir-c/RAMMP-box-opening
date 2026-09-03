@@ -122,3 +122,55 @@ def test_time_scale_is_a_uniform_dilation_after_profiling():
     slow, i2 = retime_group([src], [0.75], JOINT_VMAX, RetimeParams(time_scale=0.25))
     assert i2["duration_s"] == pytest.approx(4 * (i1["duration_s"] - 0.02) + 0.02, rel=1e-6)
     assert check_like_executor(slow, JOINT_VMAX) == []
+
+
+def test_two_point_path_is_a_triangle_not_a_crawl():
+    """An interval between two rest samples is timed accelerate-then-
+    decelerate, not at the 0.02 rad/s floor (13 s for 0.26 rad)."""
+    src = _traj([[0.0] * 7, [0.1] * 7])
+    out, info = retime_group([src], [0.75], JOINT_VMAX)
+    assert info["duration_s"] < 1.0
+    assert check_like_executor(out, JOINT_VMAX) == []
+
+
+def test_reversal_stops_only_at_its_apex():
+    a = _line([0] * 7, [0.4, 0, 0, 0, 0, 0, 0], 30)
+    back = _line([0.4, 0, 0, 0, 0, 0, 0], [0.0] * 7, 30)
+    out, info = retime_group([_traj(a), _traj(back)], [0.75, 0.75], JOINT_VMAX)
+    q, v, t = _arrays(out)
+    s = np.linalg.norm(np.diff(q, axis=0), axis=1) / np.diff(t)
+    assert info["stops"] == 1
+    assert info["duration_s"] < 3.0  # no multi-second crawl around the apex
+    assert (s < 0.05).sum() <= 2  # only the intervals touching the apex are slow
+
+
+def test_float32_near_duplicates_are_merged():
+    """cuRobo emits float32 positions: one-ulp near-duplicates (2e-7 rad)
+    must not become nanosecond intervals and 1e5 rad/s^2 on the wire."""
+    q = _line([0] * 7, [0.5, 0, 0, 0, 0, 0, 0], 40)
+    q.insert(20, q[20] + np.array([0, 0, 0, 0, 0, 2.4e-7, 0]))
+    out, info = retime_group([_traj(q)], [0.75], JOINT_VMAX)
+    assert info["n_points"] == 40
+    _, _, t = _arrays(out)
+    assert np.diff(t).min() > 1e-4
+    acc = np.asarray([p.accelerations for p in out.points])
+    assert np.abs(acc).max() < 30.0
+
+
+def test_kink_between_chained_legs_is_bounded_by_the_robot_accel():
+    """Two legs meeting at a kink inside one sample interval: the cap must
+    come from the LOCAL geometry and amax, not from a wide window."""
+    from rammp_box_opening.runtime.retime import corner_caps
+
+    # dense samples near the junction, as a planner's deceleration tail has
+    a = _line([0] * 7, [0.3, 0, 0, 0, 0, 0, 0], 20) + _line([0.3, 0, 0, 0, 0, 0, 0], [0.302, 0, 0, 0, 0, 0, 0], 6)[1:]
+    b = _line([0.302, 0, 0, 0, 0, 0, 0], [0.302, 0.002, 0, 0, 0, 0, 0], 6)[1:] + _line([0.302, 0.002, 0, 0, 0, 0, 0], [0.302, 0.3, 0, 0, 0, 0, 0], 20)[1:]
+    q = np.asarray(a + b)
+    from rammp_box_opening.runtime.retime import RetimeParams
+    p = RetimeParams()
+    ds = np.linalg.norm(np.diff(q, axis=0), axis=1)
+    cap, stop = corner_caps(q, ds, p)
+    k = 24  # the kink sample
+    L_local = ds[k - 1] + ds[k]
+    assert cap[k] <= math.sqrt(p.amax * L_local / (2 * math.sin(math.pi / 4))) + 1e-9
+    assert not stop.any()
