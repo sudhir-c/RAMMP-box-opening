@@ -50,6 +50,10 @@ class LegResult:
     torque_peak: float = None
     progress: float = None
     t_wall: float = None
+    # where the FINGERTIPS were when a guard tripped (TF, base frame): the
+    # arm measuring the surface it touched, independent of the camera and
+    # of every model constant
+    contact_xyz: list = None
     lookahead: object = field(default=None, compare=False, repr=False)
 
 
@@ -650,6 +654,7 @@ class Runner:
             info.setdefault("torque_peak", guard.peak)
         if info.get("while_running_error"):
             print("  lookahead plan failed (%s) — planning after the leg" % info["while_running_error"])
+        contact = self.client.contact_xyz() if outcome == "touch" else None
         depth = None
         if outcome == "touch" and lead.guard and lead.guard.needs_depth:
             # gated on needs_depth: the lookup blocks for its full timeout
@@ -679,6 +684,7 @@ class Runner:
             torque_peak=info.get("torque_peak"),
             progress=info.get("progress"),
             t_wall=time.monotonic() - t0,
+            contact_xyz=contact,
             lookahead=info.get("while_running"),
         )
 

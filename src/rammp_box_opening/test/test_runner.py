@@ -797,3 +797,23 @@ def test_a_failed_press_trip_holds_where_it_struck(tmp_path):
     res = runner(c, tmp_path).run([press], execute=True, assume_yes=True)
     assert [r.leg_name for r in res] == ["press:down"] and not res[0].ok
     assert len(c.executed) == 1
+
+
+def test_a_trip_records_where_the_fingertips_were(tmp_path):
+    """The arm measures the surface it touched: at a trip the fingertip TF
+    is the contact height, independent of the camera and of every model
+    constant (2026-09-03)."""
+    c = FakeClient()
+    c.contact_at = [0.44, -0.16, 0.0837]
+    g = GuardSpec(touch_nm=7.0, trip="press", target_z=0.09)
+    c.exec_script = [("touch", {"message": "contact", "progress": 0.85})]
+    res = runner(c, tmp_path).run(
+        [leg("press:down", Q0, Q1, guard=g, world="interaction_button")],
+        execute=True,
+        assume_yes=True,
+    )
+    assert res[0].contact_xyz == [0.44, -0.16, 0.0837]
+    # an untripped leg has nothing to report
+    c.exec_script = []
+    res2 = runner(c, tmp_path).run([leg("a", Q0, Q1)], execute=True, assume_yes=True)
+    assert res2[0].contact_xyz is None

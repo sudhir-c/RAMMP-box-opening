@@ -50,6 +50,7 @@ class FakeClient:
         self.tool_z = 0.08
         self.approach_offsets = []  # per plan_to_pose call
         self.joint_starts = []  # per plan_to_joints call
+        self.contact_at = [0.45, 0.0, 0.085]  # fingertip TF at a guard trip
 
     def joints(self):
         return list(self.live)
@@ -59,6 +60,9 @@ class FakeClient:
 
     def efforts_present(self):
         return self.efforts
+
+    def contact_xyz(self, timeout_s=0.25):
+        return list(self.contact_at) if self.contact_at is not None else None
 
     def tool_xyz(self, timeout_s=1.5):
         return [0.45, 0.0, self.tool_z]

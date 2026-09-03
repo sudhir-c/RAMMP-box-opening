@@ -460,6 +460,29 @@ def build_demo_legs(ctx, cfg):
     ]
 
 
+def report_press_depth(runner, press, ctx, model):
+    """How deep the press actually went, measured by the arm.
+
+    When the guard trips the fingertips ARE on the button, so TF gives the
+    button's true top height in the frame the arm is commanded in — no
+    camera, no dims.z, no TCP constant. Printed against what the camera
+    predicted, and logged, so 'it pressed too low' becomes a number."""
+    if not press or press[-1].contact_xyz is None:
+        return
+    contact_z = float(press[-1].contact_xyz[2])
+    predicted = from_container(ctx.cpose, model.button_offset)[2]
+    runner.note(
+        "press_depth",
+        contact_z=round(contact_z, 4),
+        predicted_button_z=round(predicted, 4),
+        contact_vs_predicted_mm=round((contact_z - predicted) * 1000, 1),
+    )
+    print(
+        "[press_demo] contact at z %.4f — the camera predicted the button "
+        "top at %.4f (%+.1f mm)" % (contact_z, predicted, (contact_z - predicted) * 1000)
+    )
+
+
 def _spin_detect(node):
     try:
         rclpy.spin_once(node, timeout_sec=0.1)
@@ -832,6 +855,7 @@ def main():
                 "[press_demo] PRESSED — %s"
                 % (press[-1].detail if press else "no press leg ran (dry-run)")
             )
+            report_press_depth(runner, press, ctx, model)
         else:
             if declined_why is not None:
                 print(
@@ -919,6 +943,7 @@ def main():
                 "[press_demo] PRESSED — %s"
                 % (press[-1].detail if press else "no press leg ran (dry-run)")
             )
+            report_press_depth(runner, press, ctx, model)
         if args.press_only:
             runner.finish()
             sys.exit(0)

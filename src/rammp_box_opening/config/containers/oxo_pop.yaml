@@ -169,7 +169,18 @@ open_box:
 
 # --- press_demo (camera-driven press flow, owner design 2026-08-24) ------
 press_demo:
-  travel_m: 0.015                 # press depth below the lid plane (owner
+  travel_m: 0.010                 # press depth below the lid plane. This is
+                                  # the HARD bound on how deep the stroke can
+                                  # go — the guard normally stops it first,
+                                  # but nothing else limits it, so 15 mm of
+                                  # commanded overtravel was 15 mm the arm
+                                  # could drive into the lid if the guard was
+                                  # slow ("pressed too low", 2026-09-03). It
+                                  # must still cover the button's own travel
+                                  # (~4 mm) PLUS the run-to-run spread of the
+                                  # measured lid height (+/-6 mm), so 10 mm is
+                                  # the floor until the contact heights now
+                                  # logged say otherwise. Old note: (owner
                                   # 2026-08-26, third bump); the guard at
                                   # press.touch_nm remains the force ceiling
   speed: 0.35                     # press stroke speed (owner 2026-08-25)

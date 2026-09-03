@@ -75,3 +75,12 @@ RECOIL_SPEED = 0.5
 # gripper is attached; it is cuRobo's own frame. Command tool_frame this
 # much HIGHER than where the fingertips should land.
 TCP_OFFSET_M = 0.011
+
+# The fingertip links, for measuring a contact with the arm's own
+# kinematics. These EXIST in the live TF tree; tool_frame does not once a
+# gripper is attached (kortex_robot.xacro defines it only in the
+# gripper-less branch — which is also why tool_xyz never resolved).
+FINGERTIP_FRAMES = (
+    "robotiq_85_left_finger_tip_link",
+    "robotiq_85_right_finger_tip_link",
+)

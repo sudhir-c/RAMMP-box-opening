@@ -25,7 +25,12 @@ from rammp_curobo_interfaces.action import (
 )
 from rammp_curobo_interfaces.srv import SetWorld
 
-from rammp_box_opening.constants import GRIPPER_ACTION, JOINTS, NODE_NAMESPACE
+from rammp_box_opening.constants import (
+    FINGERTIP_FRAMES,
+    GRIPPER_ACTION,
+    JOINTS,
+    NODE_NAMESPACE,
+)
 
 _GRIPPER_JOINT_HINTS = ("robotiq", "knuckle", "finger")
 
@@ -122,6 +127,31 @@ class PlannerClient:
     def efforts_present(self):
         self.joints()  # ensure at least one message arrived
         return self._eff is not None
+
+    def contact_xyz(self, timeout_s=0.25):
+        """Where the FINGERTIPS are right now, from TF: the midpoint of the
+        two finger-tip links, or None.
+
+        Called the instant a guard trips, this is the arm measuring the
+        surface it just touched with its own kinematics — no camera, no
+        model constant. Unlike tool_frame these frames exist in the live
+        tree, so the lookup resolves instead of stalling."""
+        if getattr(self, "_tip_frames_missing", False):
+            return None
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout_s:
+            try:
+                pts = []
+                for frame in FINGERTIP_FRAMES:
+                    tf = self._tf.lookup_transform("base_link", frame, Time())
+                    tr = tf.transform.translation
+                    pts.append([tr.x, tr.y, tr.z])
+                return [sum(c) / len(pts) for c in zip(*pts)]
+            except Exception:
+                rclpy.spin_once(self.node, timeout_sec=0.05)
+        self._tip_frames_missing = True
+        print("[client] no %s in TF — contact heights unavailable" % (FINGERTIP_FRAMES[0],))
+        return None
 
     def tool_xyz(self, timeout_s=0.5):
         """Live base_link -> tool_frame translation via TF, or None.
