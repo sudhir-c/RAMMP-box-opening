@@ -72,7 +72,7 @@ def test_shallow_corner_flows_and_reversal_stops():
     a = _line([0] * 7, [0.4, 0, 0, 0, 0, 0, 0], 30)
     b = _line([0.4, 0, 0, 0, 0, 0, 0], [0.4, 0.4, 0, 0, 0, 0, 0], 30)  # 90 deg corner
     out, info = retime_group([_traj(a), _traj(b)], [0.75, 0.75], JOINT_VMAX)
-    assert info["n_points"] == 59  # the shared junction sample de-duplicated
+    assert 50 <= info["n_points"] <= 59  # junction de-duplicated, neighbours thinned
     assert info["stops"] == 0
     assert 0.15 < info["junction_speeds"][0] < 1.0  # slowed, not stopped
     assert check_like_executor(out, JOINT_VMAX) == []
@@ -174,3 +174,50 @@ def test_kink_between_chained_legs_is_bounded_by_the_robot_accel():
     L_local = ds[k - 1] + ds[k]
     assert cap[k] <= math.sqrt(p.amax * L_local / (2 * math.sin(math.pi / 4))) + 1e-9
     assert not stop.any()
+
+
+def test_long_rest_to_rest_interval_respects_the_joint_cap():
+    """A 2-point path longer than the triangle can cover under the cap
+    becomes a trapezoid at the cap, never a peak above 0.9 x the limit."""
+    src = _traj([[0.0] * 7, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])  # 1 rad on joint_7
+    out, info = retime_group([src], [0.75], JOINT_VMAX)
+    _, v, t = _arrays(out)
+    # velocities on the wire are zero at both samples; check the implied
+    # average speed against the cap instead
+    assert 1.0 / (t[-1] - t[0]) < 0.9 * JOINT_VMAX[6]
+    assert check_like_executor(out, JOINT_VMAX) == []
+    # the crawl is gone but the cap held: duration bounded below by ds/cap
+    assert info["duration_s"] > 1.0 / (0.9 * JOINT_VMAX[6])
+
+
+def test_executed_acceleration_at_a_crowded_junction_stays_under_amax():
+    """The real defect: two legs meeting at a kink with the planner's
+    crowded end samples. The JTC's quintic must not be asked for more
+    than the robot's 25 rad/s^2 anywhere — measured on the spline, not
+    on the cap formula (review 2026-09-03)."""
+    from jtc_model import peak_accel
+
+    def crowded_tail(a, b, n_far=20, n_near=12, tail=0.02):
+        a, b = np.asarray(a, float), np.asarray(b, float)
+        d = (b - a) / np.linalg.norm(b - a)
+        far = _line(a, b - d * tail, n_far)
+        near = _line(b - d * tail, b, n_near)[1:]  # 12 samples over the last 2 cm
+        return far + near
+
+    def crowded_head(a, b, n_near=12, n_far=20, head=0.02):
+        a, b = np.asarray(a, float), np.asarray(b, float)
+        d = (b - a) / np.linalg.norm(b - a)
+        near = _line(a, a + d * head, n_near)
+        far = _line(a + d * head, b, n_far)[1:]
+        return near + far
+
+    P0 = [0.0] * 7
+    P1 = [0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    P2 = [0.4 + 0.4 * math.cos(math.radians(60)), 0.4 * math.sin(math.radians(60)), 0, 0, 0, 0, 0]
+    legs = [_traj(crowded_tail(P0, P1)), _traj(crowded_head(P1, P2))]
+    out, info = retime_group(legs, [0.75, 0.75], JOINT_VMAX)
+    assert check_like_executor(out, JOINT_VMAX) == []
+    assert info["junction_speeds"][0] > 0.15  # it flows
+    peak, _ = peak_accel(out)
+    print("junction %.2f rad/s, executed peak %.1f rad/s^2" % (info["junction_speeds"][0], peak))
+    assert peak <= 25.0, peak

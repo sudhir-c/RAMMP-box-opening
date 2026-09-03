@@ -44,9 +44,23 @@ class RetimeParams:
     v_floor: float = 0.02  # rad/s: never divide by a smaller average speed
     smooth_pts: int = 4  # the profile's tops are rounded over this many samples
     first_dt: float = 0.02  # point 0 sits one step in the future (planner convention)
+    # around a chained junction the planner's samples crowd together (each
+    # leg decelerated to rest there); the spline executes the kink's turn
+    # inside the two adjacent intervals, so those must be real chords —
+    # samples within junction_window of the kink are thinned to at least
+    # junction_chord apart (dropped, never moved; the tail of a planned leg
+    # is straight to well under a milliradian over such a chord)
+    junction_chord: float = 0.015
+    junction_window: float = 0.06
     # the robot's own acceleration limit: bounds the LOCAL turn at a kink
     # (two chained legs meet inside one sample interval)
     amax: float = 25.0
+    # the JTC's quintic concentrates a turn: its peak acceleration runs
+    # ~3x the mean over the interval and lands mostly in the shorter of the
+    # two adjacent intervals, so the local bound budgets amax/5
+    # (measured on the spline model: 39 rad/s^2 at a 60 deg junction
+    # without it, review 2026-09-03)
+    spline_peak_factor: float = 5.0
     # samples closer than this along the path are merged into a neighbour:
     # cuRobo's float32 output carries one-ulp near-duplicates (2e-7 rad)
     # that would otherwise become nanosecond intervals on the wire
@@ -74,18 +88,60 @@ def _dedup(positions, min_ds):
     return np.asarray(keep)
 
 
-def concat_paths(trajs, min_ds=2e-4):
+def _thin_junctions(q, seg, chord, window):
+    """Keep samples near each chained junction at least `chord` apart (within
+    `window` of path on both sides). A planner crowds its samples where a
+    leg decelerates to rest; the JTC's quintic turns the kink inside the
+    two intervals adjacent to it, and 1e-3 rad intervals made that a
+    230-300 rad/s^2 kick (review 2026-09-03). Segment ends are never
+    dropped."""
+    n = len(q)
+    if n < 3:
+        return np.arange(n)
+    ds = np.linalg.norm(np.diff(q, axis=0), axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(ds)])
+    keep = np.ones(n, dtype=bool)
+    for k in range(1, n):
+        if seg[k] == seg[k - 1]:
+            continue
+        j = k - 1  # the kink: last sample of the earlier segment
+        last = j
+        m = j - 1
+        while m > 0 and seg[m] == seg[j] and cum[j] - cum[m] <= window:
+            if cum[last] - cum[m] < chord:
+                keep[m] = False
+            else:
+                last = m
+            m -= 1
+        last = j
+        m = k
+        while m < n - 1 and seg[m] == seg[k] and cum[m] - cum[j] <= window:
+            if cum[m] - cum[last] < chord:
+                keep[m] = False
+            else:
+                last = m
+            m += 1
+    return np.flatnonzero(keep)
+
+
+def concat_paths(trajs, min_ds=2e-4, junction_chord=0.0, junction_window=0.0):
     """Chained trajectories -> (positions (N,dof), segment index per sample).
     Junction duplicates are dropped; the shared sample belongs to the
-    EARLIER segment (its speed is the min of both, see cruise_per_sample)."""
+    EARLIER segment (its speed is the min of both, see cruise_per_sample);
+    the samples around each junction are thinned to real chords."""
     parts, seg = [], []
     for i, tr in enumerate(trajs):
         q = np.asarray([[float(v) for v in pt.positions] for pt in tr.points])
         parts.append(q)
         seg.extend([i] * len(q))
     q = np.vstack(parts)
+    seg = np.asarray(seg)
     keep = _dedup(q, min_ds)
-    return q[keep], np.asarray(seg)[keep]
+    q, seg = q[keep], seg[keep]
+    if junction_chord > 0 and len(trajs) > 1:
+        keep = _thin_junctions(q, seg, junction_chord, junction_window)
+        q, seg = q[keep], seg[keep]
+    return q, seg
 
 
 def velocity_caps(positions, vmax, margin):
@@ -146,7 +202,7 @@ def corner_caps(positions, ds, params):
         turn[k] = theta_l
         cap[k] = min(
             bound(theta_w, cum[j] - cum[i], params.corner_accel),
-            bound(theta_l, ds[k - 1] + ds[k], params.amax),
+            bound(theta_l, ds[k - 1] + ds[k], params.amax / params.spline_peak_factor),
         )
     stop = np.zeros(n, dtype=bool)
     k = 1
@@ -200,15 +256,24 @@ def speed_profile(positions, cruise, vmax, params, v_start=0.0, v_end=0.0):
     return v, ds
 
 
-def times_from_profile(v, ds, params):
+def times_from_profile(v, ds, params, cap=None):
     dt = ds / np.maximum(0.5 * (v[:-1] + v[1:]), params.v_floor)
     # an interval between two rest samples (a 2-point path, the two sides
-    # of a reversal apex) is a triangle profile, not a crawl at v_floor
+    # of a reversal apex) is a triangle profile, not a crawl at v_floor —
+    # bounded by the interval's per-joint cap (a trapezoid when it binds)
     both_rest = (v[:-1] < 1e-9) & (v[1:] < 1e-9)
     if both_rest.any():
         a, d = params.accel, params.decel
         vpk = np.sqrt(2.0 * ds[both_rest] * a * d / (a + d))
-        dt[both_rest] = vpk / a + vpk / d
+        if cap is not None:
+            vcap = np.minimum(cap[:-1], cap[1:])[both_rest]
+            over = vpk > vcap
+            vpk = np.minimum(vpk, vcap)
+            ramp_len = vpk**2 / (2.0 * a) + vpk**2 / (2.0 * d)
+            cruise = np.where(over, (ds[both_rest] - ramp_len) / np.maximum(vpk, 1e-9), 0.0)
+            dt[both_rest] = vpk / a + vpk / d + np.maximum(cruise, 0.0)
+        else:
+            dt[both_rest] = vpk / a + vpk / d
     dt = dt / max(float(params.time_scale), 1e-3)
     t = np.empty(len(v))
     t[0] = params.first_dt
@@ -252,12 +317,15 @@ def retime_group(trajs, speeds, vmax, params=RetimeParams()):
     (trajectory, info) with info = {duration_s, junction_speeds (rad/s at
     each chained junction), stops (junctions taken at rest), n_points}.
     """
-    positions, seg = concat_paths(trajs, params.min_ds)
+    positions, seg = concat_paths(
+        trajs, params.min_ds, params.junction_chord, params.junction_window
+    )
     if len(positions) < 2:
         return trajs[0], {"duration_s": 0.0, "junction_speeds": [], "stops": 0, "n_points": len(positions)}
     cruise = cruise_per_sample(seg, speeds)
     v, ds = speed_profile(positions, cruise, vmax, params)
-    t = times_from_profile(v, ds, params)
+    cap, _ = velocity_caps(positions, vmax, params.vmax_margin)
+    t = times_from_profile(v, ds, params, cap)
     junctions = [k for k in range(1, len(seg)) if seg[k] != seg[k - 1]]
     jspeeds = [float(v[k - 1]) for k in junctions]
     info = {

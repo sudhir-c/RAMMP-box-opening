@@ -123,11 +123,32 @@ class Runner:
             )
         ]
         plan_total = solve_total = 0.0
+        # the time an UNGUARDED leg flies is its re-timed profile's, not
+        # the planner's duration over its speed: preview what will run
+        flown = {}
+        for group in merge_groups(legs):
+            if group[0].kind is Kind.MOTION and group[0].guard is None and all(
+                g.traj is not None for g in group
+            ):
+                try:
+                    _, info = retime_group(
+                        [g.traj for g in group],
+                        [g.speed for g in group],
+                        JOINT_VMAX,
+                        replace(self.retime, time_scale=self.time_scale),
+                    )
+                    per = info["duration_s"] / len(group)
+                    for g in group:
+                        flown[id(g)] = per if len(group) > 1 else info["duration_s"]
+                except Exception:
+                    pass
         for leg in legs:
             secs = "-"
-            if leg.kind is Kind.MOTION and leg.traj is not None:
+            if id(leg) in flown:
+                secs = "%.2f" % flown[id(leg)]
+            elif leg.kind is Kind.MOTION and leg.traj is not None:
                 last = leg.traj.points[-1].time_from_start
-                secs = "%.2f" % ((last.sec + last.nanosec * 1e-9) / leg.speed)
+                secs = "%.2f" % ((last.sec + last.nanosec * 1e-9) / (leg.speed * self.time_scale))
             speed_txt = "%5.2f" % leg.speed
             if leg.warp:
                 # the profile is baked into the timing; showing 1.00 would
