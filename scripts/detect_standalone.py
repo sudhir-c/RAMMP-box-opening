@@ -43,6 +43,9 @@ def main():
     ap.add_argument("--container", default=str(REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"))
     ap.add_argument("--seconds", type=float, default=30.0)
     ap.add_argument("--no-circle", action="store_true", help="let plateau-only sightings commit (diagnostic)")
+    ap.add_argument("--overlay", action="store_true",
+                    help="publish the colour image with the detection drawn on it to /detect_standalone/overlay "
+                         "(view: ros2 run rqt_image_view rqt_image_view /detect_standalone/overlay)")
     args = ap.parse_args()
 
     import rclpy
@@ -65,8 +68,63 @@ def main():
         watcher.require_circle = False
     watcher.active = True
 
+    overlay_pub = None
+    if args.overlay:
+        import cv2
+        import numpy as np
+        from sensor_msgs.msg import Image
+
+        overlay_pub = node.create_publisher(Image, "/detect_standalone/overlay", 1)
+
+        def project(p_base, rot_cam, trans_cam, k):
+            p = np.asarray(rot_cam).T @ (np.asarray(p_base, dtype=float) - np.asarray(trans_cam))
+            if p[2] <= 0.01:
+                return None, p[2]
+            return (int(k[0, 0] * p[0] / p[2] + k[0, 2]), int(k[1, 1] * p[1] / p[2] + k[1, 2])), p[2]
+
+        def draw(img, fix_pos, fix_yaw, sight, committed, status, reject):
+            out = img.copy()
+            cam = watcher._last_cam
+            k = watcher.grab.k
+            for label, pos, yaw, color in (("sight", sight, None, (0, 200, 255)), ("FIX", fix_pos, fix_yaw, (0, 255, 0))):
+                if pos is None or cam is None or k is None:
+                    continue
+                rot_cam, trans_cam = cam
+                uv, z = project(pos, rot_cam, trans_cam, k)
+                if uv is None:
+                    continue
+                r_px = max(3, int(k[0, 0] * (model.button_diameter_m / 2) / z))
+                cv2.circle(out, uv, r_px, color, 2)
+                cv2.drawMarker(out, uv, color, cv2.MARKER_CROSS, 12, 1)
+                if yaw is not None:
+                    c, s_ = math.cos(float(yaw)), math.sin(float(yaw))
+                    hx, hy = model.dims[0] / 2, model.dims[1] / 2
+                    pts = []
+                    for dx, dy in ((hx, hy), (-hx, hy), (-hx, -hy), (hx, -hy)):
+                        corner = [pos[0] + c * dx - s_ * dy, pos[1] + s_ * dx + c * dy, pos[2]]
+                        cuv, _ = project(corner, rot_cam, trans_cam, k)
+                        if cuv is not None:
+                            pts.append(cuv)
+                    if len(pts) == 4:
+                        cv2.polylines(out, [np.array(pts, dtype=np.int32)], True, color, 2)
+                cv2.putText(out, label, (uv[0] + 10, uv[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            lines = [status or "", ("reject: %s" % reject) if reject else "", "FIX committed" if committed else "no committed fix"]
+            for i, t in enumerate(l for l in lines if l):
+                cv2.putText(out, t, (8, 20 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(out, t, (8, 20 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            return out
+
+        def publish_overlay(img):
+            m = Image()
+            m.header.stamp = node.get_clock().now().to_msg()
+            m.height, m.width = img.shape[:2]
+            m.encoding = "bgr8"
+            m.step = img.shape[1] * 3
+            m.data = np.ascontiguousarray(img).tobytes()
+            overlay_pub.publish(m)
+
     t0 = time.monotonic()
-    last_fix, last_reject, last_report = None, None, 0.0
+    last_fix, last_reject, last_report, last_overlay = None, None, 0.0, 0.0
     try:
         while time.monotonic() - t0 < args.seconds and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.05)
@@ -81,6 +139,16 @@ def main():
                           % (pos[0], pos[1], pos[2], math.degrees(float(yaw)), f.footprint[0], f.footprint[1], f.n_px,
                              (pos[2] - (args.table_z + model.dims[2])) * 1000))
             now = time.monotonic()
+            if overlay_pub is not None and now - last_overlay > 0.2 and watcher.grab.color is not None:
+                last_overlay = now
+                try:
+                    sight = tuple(watcher.last_debug.center) if watcher.last_debug is not None else None
+                    fix_pos = tuple(got[0]) if got is not None else None
+                    fix_yaw = got[1] if got is not None else None
+                    publish_overlay(draw(watcher.grab.color, fix_pos, fix_yaw, sight, got is not None,
+                                         watcher.status(), watcher.last_reject))
+                except Exception as e:  # the overlay is a diagnostic; detection must not die for it
+                    print("overlay error: %s" % e)
             if now - last_report > 2.0:
                 last_report = now
                 missing = watcher.grab.missing()
