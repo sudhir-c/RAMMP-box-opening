@@ -15,7 +15,7 @@
 # The fake transform means x/y come out in a made-up frame; z is real relative to the
 # table because table_z is derived from your lens-to-table measurement. Stop this script
 # before bringing up any real TF source (the feeding launch / ros2_kortex).
-set -euo pipefail
+set -eo pipefail   # no -u: ROS setup.bash reads unset variables
 
 LENS_TO_TABLE="${1:?usage: $0 <lens_to_table_m> [seconds] [detector args...]}"
 SECONDS_RUN="${2:-120}"
@@ -35,9 +35,9 @@ source "$REPO/.venv/bin/activate"
 PIDS=()
 cleanup() {
   echo; echo "[bringup] stopping background processes"
-  for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill -INT "$p" 2>/dev/null || true; done
+  for p in "${PIDS[@]}"; do [ -n "$p" ] && kill -INT "$p" 2>/dev/null || true; done
   sleep 1
-  for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill -KILL "$p" 2>/dev/null || true; done
+  for p in "${PIDS[@]}"; do [ -n "$p" ] && kill -KILL "$p" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM
 
