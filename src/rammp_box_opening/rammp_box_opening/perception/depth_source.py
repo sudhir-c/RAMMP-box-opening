@@ -318,10 +318,16 @@ def button_circle_refine(color_rgb, depth, k, rot_cam, trans_cam, center, button
         return None
     half = int(4.0 * r_px)
     h, w = color_rgb.shape[:2]
-    x0, y0 = int(u0) - half, int(v0) - half
-    x1, y1 = int(u0) + half, int(v0) + half
-    if x0 < 0 or y0 < 0 or x1 >= w or y1 >= h:
-        return None  # crop truncated: centroid fallback beats a biased circle
+    # clamp the crop to the image instead of refusing: at short range the crop
+    # (4x the button radius) outgrows a 640x480 frame whenever the box is off
+    # centre (RCHI bench 2026-09-16: r=61-77 px -> +/-243-307 px). The nearest-
+    # to-centroid and <25 mm gates below still stand, so a clipped crop cannot
+    # promote a corner arc; it only lets the real button be seen.
+    x0, y0 = max(0, int(u0) - half), max(0, int(v0) - half)
+    x1, y1 = min(w - 1, int(u0) + half), min(h - 1, int(v0) + half)
+    if x1 - x0 < 3 * r_px or y1 - y0 < 3 * r_px:
+        return None  # less than a button-and-a-half of image around the centre: not enough to judge
+    cu, cvv = int(u0) - x0, int(v0) - y0  # the plateau centre inside the crop
     # the grabber stores BGR (verified 2026-09-02); grey from the right
     # channel order — the seam is achromatic so the Hough is insensitive,
     # but the buffer is what it is
@@ -347,7 +353,7 @@ def button_circle_refine(color_rgb, depth, k, rot_cam, trans_cam, center, button
     cx = cy = None
     best = None
     for c in circles[0]:
-        d = math.hypot(c[0] - half, c[1] - half)
+        d = math.hypot(c[0] - cu, c[1] - cvv)
         if best is None or d < best[0]:
             best = (d, c)
     d_px, c = best
