@@ -142,6 +142,35 @@ def main():
         tilt = math.degrees(math.acos(min(1.0, abs(float(n[2])))))
         return rot, trans, best_cnt / len(pts), tilt
 
+    def circle_diag(g, cam, center, button_d_m):
+        """Why button_circle_refine would return None for this sighting (mirrors its exits)."""
+        import cv2
+
+        k = np.asarray(g.k, dtype=float)
+        p = np.asarray(cam[0]).T @ (np.asarray(center, dtype=float) - np.asarray(cam[1]))
+        if p[2] <= 0.05:
+            return "range <= 5 cm"
+        u0 = k[0, 0] * p[0] / p[2] + k[0, 2]
+        v0 = k[1, 1] * p[1] / p[2] + k[1, 2]
+        r = k[0, 0] * (button_d_m / 2.0) / p[2]
+        if not 6.0 <= r <= 200.0:
+            return "button radius %.0f px outside 6..200" % r
+        half = int(4.0 * r)
+        h, w = g.color.shape[:2]
+        if int(u0) - half < 0 or int(v0) - half < 0 or int(u0) + half >= w or int(v0) + half >= h:
+            return "crop truncated: button r=%.0f px -> crop +/-%d px around (%d,%d) in %dx%d; centre the box / raise the camera" % (
+                r, half, u0, v0, w, h)
+        gray = cv2.medianBlur(cv2.cvtColor(np.ascontiguousarray(
+            g.color[int(v0) - half:int(v0) + half, int(u0) - half:int(u0) + half]), cv2.COLOR_BGR2GRAY), 3)
+        circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, dp=1, minDist=2 * r, param1=90, param2=14,
+                                   minRadius=int(0.7 * r), maxRadius=int(1.4 * r))
+        if circles is None:
+            return "Hough found no circle with r in %.0f..%.0f px (button size? contrast?)" % (0.7 * r, 1.4 * r)
+        d = min(math.hypot(c[0] - half, c[1] - half) for c in circles[0])
+        if d * p[2] / k[0, 0] > 0.025:
+            return "%d circle(s) but nearest is %.0f mm from the lid centre (> 25)" % (len(circles[0]), d * p[2] / k[0, 0] * 1000)
+        return "circle ok"
+
     class PlaneWatcher:
         """TF-free stand-in for BoxTopWatcher: same detector, same commit rules, camera pose from the
         fitted table plane instead of TF. Exposes the attributes the loop and overlay read."""
@@ -190,7 +219,7 @@ def main():
                                     footprint=fix.footprint, n_px=fix.n_px)
                 self.circle_hits += 1
             elif self.require_circle:
-                self.last_reject = "lid found but no button circle"
+                self.last_reject = "lid found but no button circle: " + circle_diag(g, (rot, trans), fix.center, self.model.button_diameter_m)
                 return
             self.last_debug = fix
             self.last_reject = None
