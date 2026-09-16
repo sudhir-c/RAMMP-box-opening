@@ -73,8 +73,10 @@ else
   PIDS+=($!)
 fi
 
-# 3. viewer
-if command -v rqt_image_view >/dev/null || ros2 pkg prefix rqt_image_view >/dev/null 2>&1; then
+# 3. viewer (skipped when the detector opens its own window)
+if [[ " $* " == *" --window "* ]]; then
+  echo "[bringup] --window requested: the detector opens its own diagnostic window; no rqt"
+elif command -v rqt_image_view >/dev/null || ros2 pkg prefix rqt_image_view >/dev/null 2>&1; then
   ros2 run rqt_image_view rqt_image_view /detect_standalone/overlay > /tmp/rchi_rqt.log 2>&1 &
   PIDS+=($!)
   echo "[bringup] rqt_image_view on /detect_standalone/overlay (pick /d405/d405/color/image_raw in its dropdown for the raw feed)"

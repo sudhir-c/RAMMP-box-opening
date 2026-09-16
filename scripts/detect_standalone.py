@@ -44,11 +44,16 @@ def main():
     ap.add_argument("--seconds", type=float, default=30.0)
     ap.add_argument("--no-circle", action="store_true", help="let plateau-only sightings commit (diagnostic)")
     ap.add_argument("--overlay", action="store_true", help="publish /detect_standalone/overlay")
+    ap.add_argument("--window", action="store_true",
+                    help="open a diagnostic window (needs the non-headless opencv-contrib-python): colour+candidate | "
+                         "height-above-table map with the search band | gate numbers. Implies --overlay rendering.")
     args = ap.parse_args()
     if args.table_z is None and not args.table_from_depth:
         sys.exit("give --table-z <m> (with a TF source) or --table-from-depth (no TF needed)")
     if args.table_from_depth:
         args.table_z = 0.0
+    if args.window:
+        args.overlay = True
 
     import numpy as np
     import rclpy
@@ -189,6 +194,10 @@ def main():
     if args.overlay:
         import cv2
         from sensor_msgs.msg import Image
+
+        if args.window and not hasattr(cv2, "imshow"):
+            sys.exit("--window needs a GUI OpenCV: pip uninstall -y opencv-contrib-python-headless && "
+                     "pip install opencv-contrib-python==4.10.0.84")
         from std_msgs.msg import Float32MultiArray
 
         pub = node.create_publisher(Image, "/detect_standalone/overlay", 1)
@@ -242,6 +251,31 @@ def main():
                                   min(1.0, fix.n_px / 400.0)))
             return dict(fix=fix, residual=residual, foot_err=foot_err, circle=circle, margin=margin), None
 
+        def height_map(g, cam):
+            """Every depth pixel's height above the table (base z), colour-mapped 0..0.25 m, with the
+            detector's search band (expected lid top +/- BAND_TOL) drawn as a bright mask."""
+            depth, k = g.depth, g.k
+            h, w = depth.shape
+            st = 2
+            vs, us = np.mgrid[0:h:st, 0:w:st]
+            z = depth[vs, us]
+            ok = (z > 0.1) & (z < 1.5)
+            x = (us - k[0, 2]) / k[0, 0] * z
+            y = (vs - k[1, 2]) / k[1, 1] * z
+            pts = np.stack([x, y, z], axis=-1) @ np.asarray(cam[0]).T + np.asarray(cam[1])
+            zb = pts[..., 2]
+            norm = np.clip(zb / 0.25, 0.0, 1.0)
+            img = cv2.applyColorMap((norm * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
+            img[~ok] = (0, 0, 0)
+            band = ok & (np.abs(zb - expected_top) < ds.BAND_TOL_M)
+            img[band] = (0.35 * img[band] + 0.65 * np.array([255, 255, 255])).astype(np.uint8)
+            img = cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST)
+            cv2.putText(img, "height above table; white = in lid band (%.0f+/-%.0f mm)" % (expected_top * 1000, ds.BAND_TOL_M * 1000),
+                        (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 3)
+            cv2.putText(img, "height above table; white = in lid band (%.0f+/-%.0f mm)" % (expected_top * 1000, ds.BAND_TOL_M * 1000),
+                        (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            return img
+
         def render(g, cam, got):
             out = g.color.copy()
             k = g.k
@@ -277,16 +311,50 @@ def main():
                 x0, y0, x1, y1 = (int(v) for v in m[:4])
                 cv2.rectangle(out, (x0, y0), (x1, y1), (255, 128, 0), 2)
                 label(out, (x0, y0 - 22), ["OWL %.2f" % m[4]], (255, 128, 0))
+
+            # ---- height-above-table map: the scene as the plateau detector sees it -------------
+            hmap = height_map(g, cam)
+            # ---- text panel ----------------------------------------------------------------
+            h_img = out.shape[0]
+            panel = np.full((h_img, 360, 3), 30, dtype=np.uint8)
+            lines = ["DETECTOR", " " + watcher.status()[:52]]
+            if getattr(watcher, "plane", None):
+                fr, tilt, hh = watcher.plane
+                lines += ["", "TABLE PLANE (from depth)", "  inliers %.0f %%   tilt %.1f deg" % (fr * 100, tilt),
+                          "  camera %.3f m above table" % hh]
+            lines += ["", "CANDIDATE (footprint gate relaxed)"]
+            if cand is None:
+                lines += ["  none: %s" % (why or "")]
+            else:
+                f = cand["fix"]
+                lines += ["  margin      %.2f" % cand["margin"],
+                          "  height      %+.0f mm   (limit +/-12)" % (cand["residual"] * 1000),
+                          "  footprint   %.0f x %.0f mm (75 x 75, +/-35)" % (f.footprint[0] * 1000, f.footprint[1] * 1000),
+                          "  pixels      %d" % f.n_px,
+                          "  circle      %s" % ("found" if cand["circle"] is not None else "not found"),
+                          "  yaw         %.0f deg" % math.degrees(float(f.yaw))]
+            lines += ["", "STRICT DETECTOR SAYS", "  " + (watcher.last_reject or "ok")[:52]]
+            lines += ["", "FIX: %s" % ("[%.3f %.3f %.3f]" % tuple(got[0]) if got is not None else "none committed")]
+            for i, t in enumerate(lines):
+                bold = t.isupper() and t.strip() != ""
+                cv2.putText(panel, t, (10, 22 + 19 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.48,
+                            (255, 255, 255) if bold else (200, 200, 200), 1)
             for i, t in enumerate(hud):
                 cv2.putText(out, t, (8, 20 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3)
                 cv2.putText(out, t, (8, 20 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            msg = Image()
-            msg.header.stamp = node.get_clock().now().to_msg()
-            msg.height, msg.width = out.shape[:2]
-            msg.encoding = "bgr8"
-            msg.step = out.shape[1] * 3
-            msg.data = np.ascontiguousarray(out).tobytes()
-            pub.publish(msg)
+            composite = np.hstack([out, hmap, panel])
+            if args.window:
+                cv2.imshow("box detector  (q quits)", composite)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    raise KeyboardInterrupt
+            if pub.get_subscription_count() > 0 or not args.window:
+                msg = Image()
+                msg.header.stamp = node.get_clock().now().to_msg()
+                msg.height, msg.width = composite.shape[:2]
+                msg.encoding = "bgr8"
+                msg.step = composite.shape[1] * 3
+                msg.data = np.ascontiguousarray(composite).tobytes()
+                pub.publish(msg)
 
         overlay = render
 
@@ -333,6 +401,12 @@ def main():
     finally:
         watcher.active = False
         print("\ndone: %s" % watcher.status())
+        if args.window:
+            try:
+                import cv2
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
         rclpy.shutdown()
 
 
