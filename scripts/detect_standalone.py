@@ -44,6 +44,12 @@ def main():
     ap.add_argument("--seconds", type=float, default=30.0)
     ap.add_argument("--no-circle", action="store_true", help="let plateau-only sightings commit (diagnostic)")
     ap.add_argument("--overlay", action="store_true", help="publish /detect_standalone/overlay")
+    ap.add_argument("--surface-std-mm", type=float, default=None,
+                    help="smoothness gate: max local depth scatter for a real surface (Chris: 6 mm for a D405 at 35 cm; "
+                         "a D435i at 40-60 cm needs ~10-15)")
+    ap.add_argument("--band-mm", type=float, default=None, help="height band around the expected lid top (Chris: 35 mm)")
+    ap.add_argument("--min-fill", type=float, default=None, help="plateau fill fraction floor (Chris: 0.35)")
+    ap.add_argument("--foot-tol-mm", type=float, default=None, help="footprint tolerance per side (Chris: 35 mm)")
     ap.add_argument("--window", action="store_true",
                     help="open a diagnostic window (needs the non-headless opencv-contrib-python): colour+candidate | "
                          "height-above-table map with the search band | gate numbers. Implies --overlay rendering.")
@@ -62,6 +68,15 @@ def main():
     from rammp_box_opening.models.container import ContainerModel, load_press_demo
     from rammp_box_opening.perception import depth_source as ds
     from rammp_box_opening.perception.depth_source import BoxTopWatcher, camera_pose_at
+
+    # gate overrides: Chris's constants are module globals read at call time
+    for arg, name, scale in (("surface_std_mm", "SURFACE_STD_M", 1e-3), ("band_mm", "BAND_TOL_M", 1e-3),
+                             ("min_fill", "MIN_FILL", 1.0), ("foot_tol_mm", "FOOT_TOL_M", 1e-3)):
+        v = getattr(args, arg)
+        if v is not None:
+            setattr(ds, name, float(v) * scale)
+    print("gates: surface std %.0f mm | band +/-%.0f mm | min fill %.2f | footprint tol %.0f mm | residual limit %.0f mm"
+          % (ds.SURFACE_STD_M * 1e3, ds.BAND_TOL_M * 1e3, ds.MIN_FILL, ds.FOOT_TOL_M * 1e3, ds.TOP_RESIDUAL_MAX_M * 1e3))
 
     model = ContainerModel.load(args.container)
     cfg = load_press_demo(args.container)
@@ -235,7 +250,7 @@ def main():
             """Relaxed pass: same detector, footprint gate widened, so a rejected
             plateau still comes back with its numbers."""
             saved = ds.FOOT_TOL_M
-            ds.FOOT_TOL_M = RELAXED_FOOT_TOL_M
+            ds.FOOT_TOL_M = max(RELAXED_FOOT_TOL_M, saved)
             try:
                 fix, why = ds.top_face_from_depth(g.depth, g.k, cam[0], cam[1], args.table_z, model)
             finally:
@@ -407,7 +422,10 @@ def main():
                 cv2.destroyAllWindows()
             except Exception:
                 pass
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

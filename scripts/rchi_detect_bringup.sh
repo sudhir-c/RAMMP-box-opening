@@ -55,8 +55,11 @@ if pgrep -f realsense2_camera_node >/dev/null; then
   echo "[bringup] RealSense driver already running; reusing it"
 else
   echo "[bringup] starting RealSense under /d405/d405 (640x480x15, aligned depth)"
+  # spatial + temporal filters: the D435i's depth on a plain white lid is 2-3x noisier than the D405
+  # Chris tuned for; these are librealsense's own denoisers and cost nothing at 640x480x15
   ros2 launch realsense2_camera rs_launch.py camera_namespace:=d405 camera_name:=d405 \
     align_depth.enable:=true rgb_camera.color_profile:=640,480,15 depth_module.depth_profile:=640,480,15 \
+    spatial_filter.enable:=true temporal_filter.enable:=true hole_filling_filter.enable:=false \
     > /tmp/rchi_realsense.log 2>&1 &
   PIDS+=($!)
 fi
