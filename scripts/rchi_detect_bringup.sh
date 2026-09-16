@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # One-command detection bring-up for the RCHI bench (Luxray), no arm motion.
 #
-#   scripts/rchi_detect_bringup.sh <lens_to_table_m> [seconds] [extra detector args]
+#   scripts/rchi_detect_bringup.sh plane [seconds] [extra detector args]      # RECOMMENDED: no TF, table plane fitted from depth
+#   scripts/rchi_detect_bringup.sh <lens_to_table_m> [seconds] [extra detector args]   # fake vertical camera pose + tape measure
 #
+#   scripts/rchi_detect_bringup.sh plane           # camera tilt + height measured from the table itself
 #   scripts/rchi_detect_bringup.sh 0.40            # lens 40 cm above the table, 120 s, overlay on
 #   scripts/rchi_detect_bringup.sh 0.40 300        # 5 minutes
 #   scripts/rchi_detect_bringup.sh 0.40 120 --no-circle
@@ -17,11 +19,18 @@
 # before bringing up any real TF source (the feeding launch / ros2_kortex).
 set -eo pipefail   # no -u: ROS setup.bash reads unset variables
 
-LENS_TO_TABLE="${1:?usage: $0 <lens_to_table_m> [seconds] [detector args...]}"
+LENS_TO_TABLE="${1:?usage: $0 plane|<lens_to_table_m> [seconds] [detector args...]}"
 SECONDS_RUN="${2:-120}"
 shift $(( $# >= 2 ? 2 : $# ))
 CAM_Z=0.45
-TABLE_Z=$(python3 -c "print(round($CAM_Z - $LENS_TO_TABLE, 4))")
+if [ "$LENS_TO_TABLE" = "plane" ]; then
+  PLANE_MODE=1
+  DETECT_ARGS=(--table-from-depth)
+else
+  PLANE_MODE=0
+  TABLE_Z=$(python3 -c "print(round($CAM_Z - $LENS_TO_TABLE, 4))")
+  DETECT_ARGS=(--table-z "$TABLE_Z")
+fi
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ROS_LOCALHOST_ONLY=1
@@ -53,7 +62,9 @@ else
 fi
 
 # 2. fake camera pose: end_effector_link CAM_Z up, tool z pointing down (180 deg about x)
-if ros2 run tf2_ros tf2_echo base_link end_effector_link 2>&1 | timeout 2 grep -q "Translation"; then
+if [ "$PLANE_MODE" = 1 ]; then
+  echo "[bringup] plane mode: no TF needed, the table plane is fitted from depth each frame"
+elif ros2 run tf2_ros tf2_echo base_link end_effector_link 2>&1 | timeout 2 grep -q "Translation"; then
   echo "[bringup] a base_link->end_effector_link transform is ALREADY published; not adding a fake one"
 else
   echo "[bringup] publishing fake base_link->end_effector_link at z=$CAM_Z looking down"
@@ -71,7 +82,7 @@ fi
 
 # give the driver a moment to open the streams
 sleep 3
-echo "[bringup] table_z = $CAM_Z - $LENS_TO_TABLE = $TABLE_Z   (lid expected at table_z + 0.112)"
+[ "$PLANE_MODE" = 1 ] || echo "[bringup] table_z = $CAM_Z - $LENS_TO_TABLE = $TABLE_Z   (lid expected at table_z + 0.112)"
 echo "[bringup] detector for ${SECONDS_RUN}s; Ctrl+C ends everything"
 cd "$REPO"
-python3 scripts/detect_standalone.py --table-z "$TABLE_Z" --seconds "$SECONDS_RUN" --overlay "$@"
+python3 scripts/detect_standalone.py "${DETECT_ARGS[@]}" --seconds "$SECONDS_RUN" --overlay "$@"

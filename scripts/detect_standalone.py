@@ -35,12 +35,20 @@ RELAXED_FOOT_TOL_M = 0.10  # draw candidates up to +/-10 cm off the model footpr
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--table-z", type=float, required=True, help="table TOP height in base_link (m)")
+    ap.add_argument("--table-z", type=float, default=None, help="table TOP height in base_link (m); needs a TF source")
+    ap.add_argument("--table-from-depth", action="store_true",
+                    help="no TF at all: fit the table plane in each depth frame (RANSAC), derive the camera's height and "
+                         "tilt from it, and detect in a table-aligned frame (table top = z 0). Prototype of runtime table "
+                         "measurement; x/y are relative to the point under the camera, not the arm base")
     ap.add_argument("--container", default=str(REPO / "src/rammp_box_opening/config/containers/oxo_pop.yaml"))
     ap.add_argument("--seconds", type=float, default=30.0)
     ap.add_argument("--no-circle", action="store_true", help="let plateau-only sightings commit (diagnostic)")
     ap.add_argument("--overlay", action="store_true", help="publish /detect_standalone/overlay")
     args = ap.parse_args()
+    if args.table_z is None and not args.table_from_depth:
+        sys.exit("give --table-z <m> (with a TF source) or --table-from-depth (no TF needed)")
+    if args.table_from_depth:
+        args.table_z = 0.0
 
     import numpy as np
     import rclpy
@@ -58,9 +66,119 @@ def main():
     print("commit rule: %d agreeing frames within %.0f mm, fresh < %.1f s%s"
           % (cfg.min_hits, cfg.tol_m * 1000, cfg.fresh_s, "" if not args.no_circle else "  (circle NOT required)"))
 
+    def table_pose_from_depth(depth, k, stride=4, iters=120, thresh=0.006, min_range=0.15, max_range=1.2):
+        """RANSAC-fit the dominant plane (the table) in the depth image; return the camera pose
+        (rot_cam, trans_cam) in a TABLE-ALIGNED base frame: +z = table normal, table top at z=0,
+        origin at the foot of the camera's perpendicular. Also the inlier fraction and tilt (deg)."""
+        h, w = depth.shape
+        vs, us = np.mgrid[0:h:stride, 0:w:stride]
+        z = depth[vs, us]
+        ok = (z > min_range) & (z < max_range) & np.isfinite(z)
+        if ok.sum() < 300:
+            return None
+        x = (us[ok] - k[0, 2]) / k[0, 0] * z[ok]
+        y = (vs[ok] - k[1, 2]) / k[1, 1] * z[ok]
+        pts = np.stack([x, y, z[ok]], axis=1)
+        rng = np.random.default_rng(0)
+        best_n, best_d, best_cnt = None, 0.0, 0
+        for _ in range(iters):
+            tri = pts[rng.choice(len(pts), 3, replace=False)]
+            n = np.cross(tri[1] - tri[0], tri[2] - tri[0])
+            nn = np.linalg.norm(n)
+            if nn < 1e-9:
+                continue
+            n /= nn
+            d = -float(n @ tri[0])
+            cnt = int((np.abs(pts @ n + d) < thresh).sum())
+            if cnt > best_cnt:
+                best_n, best_d, best_cnt = n, d, cnt
+        if best_n is None or best_cnt < 0.2 * len(pts):
+            return None
+        inl = pts[np.abs(pts @ best_n + best_d) < thresh]
+        c = inl.mean(axis=0)
+        _, _, vt = np.linalg.svd(inl - c)
+        n = vt[2]
+        d = -float(n @ c)
+        if d < 0:            # orient the normal toward the camera (camera is at the origin, above the table)
+            n, d = -n, -d
+        z_b = n
+        x_b = np.array([1.0, 0.0, 0.0]) - (n[0]) * n
+        x_b /= np.linalg.norm(x_b)
+        y_b = np.cross(z_b, x_b)
+        rot = np.stack([x_b, y_b, z_b])           # v_base = rot @ v_cam
+        trans = np.array([0.0, 0.0, d])           # camera origin sits d above the table
+        tilt = math.degrees(math.acos(min(1.0, abs(float(n[2])))))
+        return rot, trans, best_cnt / len(pts), tilt
+
+    class PlaneWatcher:
+        """TF-free stand-in for BoxTopWatcher: same detector, same commit rules, camera pose from the
+        fitted table plane instead of TF. Exposes the attributes the loop and overlay read."""
+
+        def __init__(self, node, cfg, model):
+            from rammp_curobo_ros.seek_core import D405Grabber
+
+            self.cfg, self.model, self.table_z = cfg, model, 0.0
+            self.require_circle = bool(getattr(cfg, "require_button_circle", True))
+            self.grab = D405Grabber(node, need_depth=True)
+            self.window = ds.FixWindow(cfg.min_hits, cfg.tol_m, cfg.window_s, cfg.fresh_s)
+            self.frames = self.hits = self.circle_hits = 0
+            self.last_debug = self.last_reject = self._last_stamp = self._last_cam = None
+            self.plane = None       # (inlier fraction, tilt deg, height)
+            self.active = True
+            node.create_timer(float(getattr(cfg, "detect_period_s", 0.15)), self._tick)
+
+        def _tick(self):
+            g = self.grab
+            if g.depth is None or g.k is None or g.color_stamp is None:
+                return
+            stamp = (g.color_stamp.sec, g.color_stamp.nanosec)
+            if stamp == self._last_stamp:
+                return
+            self._last_stamp = stamp
+            self.frames += 1
+            fit = table_pose_from_depth(g.depth, g.k)
+            if fit is None:
+                self.last_reject = "no table plane in the depth image"
+                return
+            rot, trans, frac, tilt = fit
+            self.plane = (frac, tilt, trans[2])
+            self._last_cam = (rot, trans)
+            fix, why = ds.top_face_from_depth(g.depth, g.k, rot, trans, 0.0, self.model)
+            if fix is None:
+                self.last_reject = why
+                return
+            bad = ds.top_residual_reject(fix.center[2], 0.0, self.model)
+            if bad is not None:
+                self.last_reject = bad
+                return
+            self.hits += 1
+            circle = ds.button_circle_refine(g.color, g.depth, g.k, rot, trans, fix.center, self.model.button_diameter_m)
+            if circle is not None:
+                fix = ds.TopFaceFix(center=(circle[0], circle[1], fix.center[2]), yaw=fix.yaw,
+                                    footprint=fix.footprint, n_px=fix.n_px)
+                self.circle_hits += 1
+            elif self.require_circle:
+                self.last_reject = "lid found but no button circle"
+                return
+            self.last_debug = fix
+            self.last_reject = None
+            self.window.add(np.asarray(fix.center), fix.yaw, time.monotonic())
+
+        def fix(self, now=None):
+            got = self.window.fix(time.monotonic() if now is None else now)
+            return None if got is None else (got[0], got[1])
+
+        def status(self):
+            missing = self.grab.missing()
+            if missing:
+                return "camera streams missing: %s" % ", ".join(missing)
+            pl = "" if self.plane is None else " | table plane: %.0f%% inliers, tilt %.1f deg, camera %.3f m up" % (
+                self.plane[0] * 100, self.plane[1], self.plane[2])
+            return "%d/%d frames found a container top, %d button-circle%s" % (self.hits, self.frames, self.circle_hits, pl)
+
     rclpy.init()
     node = Node("detect_standalone")
-    watcher = BoxTopWatcher(node, cfg, model, args.table_z)
+    watcher = PlaneWatcher(node, cfg, model) if args.table_from_depth else BoxTopWatcher(node, cfg, model, args.table_z)
     if args.no_circle:
         watcher.require_circle = False
     watcher.active = True
@@ -193,7 +311,7 @@ def main():
                 stamp = (g.color_stamp.sec, g.color_stamp.nanosec)
                 if stamp != last_stamp:
                     last_stamp = stamp
-                    cam = camera_pose_at(g)
+                    cam = watcher._last_cam if args.table_from_depth else camera_pose_at(g)
                     if cam is not None:
                         try:
                             overlay(g, cam, got)
@@ -210,7 +328,7 @@ def main():
                 elif watcher.last_reject != last_reject or got is None:
                     last_reject = watcher.last_reject
                     print("status: %s | last reject: %s" % (watcher.status(), watcher.last_reject))
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, RuntimeError):  # RuntimeError: rclpy take-during-shutdown artifact on Ctrl+C
         pass
     finally:
         watcher.active = False
