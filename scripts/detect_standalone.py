@@ -349,9 +349,14 @@ def main():
                     square(out, f.center, f.yaw, cam[0], cam[1], k, color, 2)
                     cv2.drawMarker(out, uv, color, cv2.MARKER_CROSS, 14, 1)
                     if cand["circle"] is not None:
+                        # PINK = the button circle was found in THIS frame (independent of the 3-frame commit)
                         cuv, cz = project((cand["circle"][0], cand["circle"][1], f.center[2]), cam[0], cam[1], k)
                         if cuv is not None:
-                            cv2.circle(out, cuv, max(3, int(k[0, 0] * model.button_diameter_m / 2 / cz)), color, 2)
+                            r_px = max(3, int(k[0, 0] * model.button_diameter_m / 2 / cz))
+                            cv2.circle(out, cuv, r_px, (255, 0, 255), 3)
+                            cv2.circle(out, cuv, 4, (255, 0, 255), -1)
+                            cv2.putText(out, "CIRCLE", (cuv[0] - r_px, cuv[1] - r_px - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
+                            cv2.putText(out, "CIRCLE", (cuv[0] - r_px, cuv[1] - r_px - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
                     label(out, uv, [
                         "margin %.2f" % cand["margin"],
                         "height %+.0f mm (lim 12)%s" % (cand["residual"] * 1000, "" if ok_res else "  X"),
