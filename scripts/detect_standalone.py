@@ -53,6 +53,7 @@ def main():
     ap.add_argument("--box-height-mm", type=float, default=None,
                     help="override the container's height (lid top above the table). Chris's OXO is 112 mm; ours read ~80")
     ap.add_argument("--box-side-mm", type=float, default=None, help="override the container's square side (Chris: 75 mm)")
+    ap.add_argument("--button-mm", type=float, default=None, help="override the button diameter (Chris: 36 mm); the Hough search window is built from it")
     ap.add_argument("--window", action="store_true",
                     help="open a diagnostic window (needs the non-headless opencv-contrib-python): colour+candidate | "
                          "height-above-table map with the search band | gate numbers. Implies --overlay rendering.")
@@ -82,13 +83,14 @@ def main():
           % (ds.SURFACE_STD_M * 1e3, ds.BAND_TOL_M * 1e3, ds.MIN_FILL, ds.FOOT_TOL_M * 1e3, ds.TOP_RESIDUAL_MAX_M * 1e3))
 
     model = ContainerModel.load(args.container)
-    if args.box_height_mm is not None or args.box_side_mm is not None:
+    if args.box_height_mm is not None or args.box_side_mm is not None or args.button_mm is not None:
         from dataclasses import replace
 
         side = (args.box_side_mm / 1e3) if args.box_side_mm is not None else model.dims[0]
         height = (args.box_height_mm / 1e3) if args.box_height_mm is not None else model.dims[2]
+        button = (args.button_mm / 1e3) if args.button_mm is not None else model.button_diameter_m
         model = replace(model, dims=(side, side, height), button_offset=(0.0, 0.0, height),
-                        lid_dims=(side, side, model.lid_dims[2]))
+                        lid_dims=(side, side, model.lid_dims[2]), button_diameter_m=button)
     cfg = load_press_demo(args.container)
     expected_top = args.table_z + model.dims[2]
     print("box model: %.3f x %.3f x %.3f m, button %.0f mm; table_z %.3f -> expect lid top at z %.3f"
